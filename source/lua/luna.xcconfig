@@ -1,0 +1,74 @@
+#include "../maxmspsdk.xcconfig"
+
+// -------------------------------------------------------------------------------
+
+C74_SYM_LINKER_FLAGS = @$(C74SUPPORT)/max-includes/c74_linker_flags.txt
+
+HEADER_SEARCH_PATHS = $(HEADER_SEARCH_PATHS_COMMON) "$(C74SUPPORT)/msp-includes"
+FRAMEWORK_SEARCH_PATHS = $(FRAMEWORK_SEARCH_PATHS_COMMON) "$(C74SUPPORT)/msp-includes/$(C74_FRAMEWORK_PATH_SUFFIX)"
+
+OTHER_LDFLAGS = $(C74_SYM_LINKER_FLAGS) -Wl,-U,_class_dspinit,-U,_dsp_add64,-U,_z_dsp_setup,-U,_z_dsp_free
+ARCHS = x86_64
+
+MACOSX_DEPLOYMENT_TARGET = 10.9
+// -------------------------------------------------------------------------------
+
+// Name & Version
+PRODUCT_NAME = $(TARGET_NAME)
+PRODUCT_VERSION = 8.0.2
+ARCHS = x86_64
+
+// Paths
+C74SUPPORT = $(SRCROOT)/../maxsdk/source/c74support
+HEADER_SEARCH_PATHS = "$(C74SUPPORT)/max-includes" "$(C74SUPPORT)/msp-includes" "$(C74SUPPORT)/jit-includes"
+FRAMEWORK_SEARCH_PATHS = "$(C74SUPPORT)/max-includes" "$(C74SUPPORT)/msp-includes" "$(C74SUPPORT)/jit-includes"
+DSTROOT = $(SRCROOT)/../../externals
+// (This next path is relative to DSTROOT)
+INSTALL_PATH = /
+
+// Special Files
+GCC_PREFIX_HEADER = $(C74SUPPORT)/max-includes/macho-prefix.pch
+INFOPLIST_FILE = $(SRCROOT)/../Info.plist
+
+// Architecture and Deployment
+ARCHS = x86_64
+
+// Preprocessor Defines
+GCC_PREPROCESSOR_DEFINITIONS = "DENORM_WANT_FIX = 1" "NO_TRANSLATION_SUPPORT = 1"
+
+
+// Static Configuration (don't change these)
+WRAPPER_EXTENSION = mxo;
+WARNING_CFLAGS = -Wmost -Wno-four-char-constants -Wno-unknown-pragmas
+DEPLOYMENT_LOCATION = YES
+GENERATE_PKGINFO_FILE = YES
+
+C74_SYM_LINKER_FLAGS = @$(C74SUPPORT)/max-includes/c74_linker_flags.txt
+
+OTHER_CFLAGS = -fvisibility=hidden
+
+OTHER_LDFLAGS = -framework MaxAudioAPI -framework JitterAPI $(C74_SYM_LINKER_FLAGS)
+
+
+// -------------------------------------------------------------------------------
+
+VERSION = 0.1
+
+BUILD = ${SRCROOT}/build
+LUA = $(BUILD)/lua
+
+//LUAJIT = $(BUILD)/luajit
+//LUNA_HEADERS = $(LUAJIT)/include/luajit-2.0
+//LUNA_LIBS = $(LUAJIT)/lib
+//LUNA_LDFLAGS = -lluajit -lm $(LUNA_LDFLAGS_EXTRA)
+//LUNA_LDFLAGS_EXTRA = -image_base 100000000
+//LUNA_LDFLAGS_EXTRA = -pagezero_size 10000 -image_base 100000000
+
+
+LUNA_HEADERS = $(LUA)/include
+LUNA_LIBS = $(LUA)/lib
+LUNA_LDFLAGS = -llua -lm
+
+HEADER_SEARCH_PATHS = $(inherited) $(LUNA_HEADERS)
+LIBRARY_SEARCH_PATHS = $(inherited) $(LUNA_LIBS)
+OTHER_LDFLAGS = $(inherited) $(LUNA_LDFLAGS)

@@ -1,0 +1,417 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1259247424B90A080028D774 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 12D5454B2463B03000BE010E /* CoreFoundation.framework */; };
+		1259247F24B90AFF0028D774 /* libluajit-5.1.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1259247D24B90A4E0028D774 /* libluajit-5.1.a */; };
+		1259248124B90B760028D774 /* lunar.c in Sources */ = {isa = PBXBuildFile; fileRef = 1259248024B90B760028D774 /* lunar.c */; };
+		127C5DDB24B7CD2B00527D30 /* luna.c in Sources */ = {isa = PBXBuildFile; fileRef = 128395A824B7C7C800DDE5E2 /* luna.c */; };
+		1288B71224B837B2001DF39A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1288B71124B83797001DF39A /* liblua.a */; };
+		12D5454C2463B03000BE010E /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 12D5454B2463B03000BE010E /* CoreFoundation.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		120E502724B24B9700ADD134 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1259247724B90A080028D774 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		121A8C6124A1E58000EC5F99 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = ../Info.plist; sourceTree = "<group>"; };
+		1259247B24B90A080028D774 /* lunar.mxo */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = lunar.mxo; sourceTree = BUILT_PRODUCTS_DIR; };
+		1259247D24B90A4E0028D774 /* libluajit-5.1.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "libluajit-5.1.a"; path = "build/luajit/lib/libluajit-5.1.a"; sourceTree = "<group>"; };
+		1259247E24B90A900028D774 /* lunar.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = lunar.xcconfig; sourceTree = "<group>"; };
+		1259248024B90B760028D774 /* lunar.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lunar.c; sourceTree = "<group>"; };
+		128395A824B7C7C800DDE5E2 /* luna.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = luna.c; sourceTree = "<group>"; };
+		128395A924B7C7C900DDE5E2 /* luna.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = luna.xcconfig; sourceTree = "<group>"; };
+		1288B71124B83797001DF39A /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = build/lua/lib/liblua.a; sourceTree = "<group>"; };
+		12D5454B2463B03000BE010E /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		2FBBEAE508F335360078DB84 /* luna.mxo */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = luna.mxo; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1259247324B90A080028D774 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1259247424B90A080028D774 /* CoreFoundation.framework in Frameworks */,
+				1259247F24B90AFF0028D774 /* libluajit-5.1.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2FBBEADC08F335360078DB84 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				12D5454C2463B03000BE010E /* CoreFoundation.framework in Frameworks */,
+				1288B71224B837B2001DF39A /* liblua.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		089C166AFE841209C02AAC07 /* iterator */ = {
+			isa = PBXGroup;
+			children = (
+				128395A824B7C7C800DDE5E2 /* luna.c */,
+				1259248024B90B760028D774 /* lunar.c */,
+				128395A924B7C7C900DDE5E2 /* luna.xcconfig */,
+				1259247E24B90A900028D774 /* lunar.xcconfig */,
+				121A8C6124A1E58000EC5F99 /* Info.plist */,
+				19C28FB4FE9D528D11CA2CBB /* Products */,
+				12D5454A2463B03000BE010E /* Frameworks */,
+			);
+			name = iterator;
+			sourceTree = "<group>";
+		};
+		12D5454A2463B03000BE010E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				1259247D24B90A4E0028D774 /* libluajit-5.1.a */,
+				1288B71124B83797001DF39A /* liblua.a */,
+				12D5454B2463B03000BE010E /* CoreFoundation.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		19C28FB4FE9D528D11CA2CBB /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2FBBEAE508F335360078DB84 /* luna.mxo */,
+				1259247B24B90A080028D774 /* lunar.mxo */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		1259247024B90A080028D774 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2FBBEAD708F335360078DB84 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		1259246F24B90A080028D774 /* lunar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1259247824B90A080028D774 /* Build configuration list for PBXNativeTarget "lunar" */;
+			buildPhases = (
+				1259247024B90A080028D774 /* Headers */,
+				1259247124B90A080028D774 /* Sources */,
+				1259247324B90A080028D774 /* Frameworks */,
+				1259247624B90A080028D774 /* Rez */,
+				1259247724B90A080028D774 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = lunar;
+			productName = iterator;
+			productReference = 1259247B24B90A080028D774 /* lunar.mxo */;
+			productType = "com.apple.product-type.bundle";
+		};
+		2FBBEAD608F335360078DB84 /* luna */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2FBBEAE008F335360078DB84 /* Build configuration list for PBXNativeTarget "luna" */;
+			buildPhases = (
+				2FBBEAD708F335360078DB84 /* Headers */,
+				2FBBEADA08F335360078DB84 /* Sources */,
+				2FBBEADC08F335360078DB84 /* Frameworks */,
+				2FBBEADF08F335360078DB84 /* Rez */,
+				120E502724B24B9700ADD134 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = luna;
+			productName = iterator;
+			productReference = 2FBBEAE508F335360078DB84 /* luna.mxo */;
+			productType = "com.apple.product-type.bundle";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		089C1669FE841209C02AAC07 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0610;
+				TargetAttributes = {
+					1259246F24B90A080028D774 = {
+						ProvisioningStyle = Manual;
+					};
+					2FBBEAD608F335360078DB84 = {
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = 2FBBEACF08F335010078DB84 /* Build configuration list for PBXProject "luna" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 1;
+			knownRegions = (
+				English,
+				en,
+			);
+			mainGroup = 089C166AFE841209C02AAC07 /* iterator */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2FBBEAD608F335360078DB84 /* luna */,
+				1259246F24B90A080028D774 /* lunar */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXRezBuildPhase section */
+		1259247624B90A080028D774 /* Rez */ = {
+			isa = PBXRezBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2FBBEADF08F335360078DB84 /* Rez */ = {
+			isa = PBXRezBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXRezBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1259247124B90A080028D774 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1259248124B90B760028D774 /* lunar.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2FBBEADA08F335360078DB84 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				127C5DDB24B7CD2B00527D30 /* luna.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1259247924B90A080028D774 /* Development */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1259247E24B90A900028D774 /* lunar.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				DEVELOPMENT_TEAM = "";
+				GCC_OPTIMIZATION_LEVEL = 0;
+				HEADER_SEARCH_PATHS = (
+					"\"$(C74SUPPORT)/max-includes\"",
+					"\"$(C74SUPPORT)/msp-includes\"",
+					"\"$(C74SUPPORT)/jit-includes\"",
+					"$(LUNA_HEADERS)",
+				);
+				INFOPLIST_FILE = "$(SRCROOT)/../Info.plist";
+				LIBRARY_SEARCH_PATHS = (
+					"$(LUNA_LIBS)",
+					"$(PROJECT_DIR)/build/luajit/lib",
+					"$(PROJECT_DIR)/build/lua/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				OTHER_LDFLAGS = (
+					"$(C74_SYM_LINKER_FLAGS)",
+					"$(LUNA_LDFLAGS)",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = me.org.lunar;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				VALID_ARCHS = x86_64;
+			};
+			name = Development;
+		};
+		1259247A24B90A080028D774 /* Deployment */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1259247E24B90A900028D774 /* lunar.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = YES;
+				DEVELOPMENT_TEAM = "";
+				HEADER_SEARCH_PATHS = (
+					"\"$(C74SUPPORT)/max-includes\"",
+					"\"$(C74SUPPORT)/msp-includes\"",
+					"\"$(C74SUPPORT)/jit-includes\"",
+					"$(LUNA_HEADERS)",
+				);
+				INFOPLIST_FILE = "$(SRCROOT)/../Info.plist";
+				LIBRARY_SEARCH_PATHS = (
+					"$(LUNA_LIBS)",
+					"$(PROJECT_DIR)/build/luajit/lib",
+					"$(PROJECT_DIR)/build/lua/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				OTHER_LDFLAGS = (
+					"$(C74_SYM_LINKER_FLAGS)",
+					"$(LUNA_LDFLAGS)",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = me.org.lunar;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				VALID_ARCHS = x86_64;
+			};
+			name = Deployment;
+		};
+		2FBBEAD008F335010078DB84 /* Development */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Development;
+		};
+		2FBBEAD108F335010078DB84 /* Deployment */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Deployment;
+		};
+		2FBBEAE108F335360078DB84 /* Development */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 128395A924B7C7C900DDE5E2 /* luna.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				DEVELOPMENT_TEAM = "";
+				GCC_OPTIMIZATION_LEVEL = 0;
+				HEADER_SEARCH_PATHS = (
+					"\"$(C74SUPPORT)/max-includes\"",
+					"\"$(C74SUPPORT)/msp-includes\"",
+					"\"$(C74SUPPORT)/jit-includes\"",
+					"$(LUNA_HEADERS)",
+				);
+				INFOPLIST_FILE = "$(SRCROOT)/../Info.plist";
+				LIBRARY_SEARCH_PATHS = (
+					"$(LUNA_LIBS)",
+					"$(PROJECT_DIR)/build/luajit/lib",
+					"$(PROJECT_DIR)/build/lua/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				OTHER_LDFLAGS = (
+					"$(C74_SYM_LINKER_FLAGS)",
+					"$(LUNA_LDFLAGS)",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = me.org.luna;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				VALID_ARCHS = x86_64;
+			};
+			name = Development;
+		};
+		2FBBEAE208F335360078DB84 /* Deployment */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 128395A924B7C7C900DDE5E2 /* luna.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = YES;
+				DEVELOPMENT_TEAM = "";
+				HEADER_SEARCH_PATHS = (
+					"\"$(C74SUPPORT)/max-includes\"",
+					"\"$(C74SUPPORT)/msp-includes\"",
+					"\"$(C74SUPPORT)/jit-includes\"",
+					"$(LUNA_HEADERS)",
+				);
+				INFOPLIST_FILE = "$(SRCROOT)/../Info.plist";
+				LIBRARY_SEARCH_PATHS = (
+					"$(LUNA_LIBS)",
+					"$(PROJECT_DIR)/build/luajit/lib",
+					"$(PROJECT_DIR)/build/lua/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				OTHER_LDFLAGS = (
+					"$(C74_SYM_LINKER_FLAGS)",
+					"$(LUNA_LDFLAGS)",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = me.org.luna;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				VALID_ARCHS = x86_64;
+			};
+			name = Deployment;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1259247824B90A080028D774 /* Build configuration list for PBXNativeTarget "lunar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1259247924B90A080028D774 /* Development */,
+				1259247A24B90A080028D774 /* Deployment */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Development;
+		};
+		2FBBEACF08F335010078DB84 /* Build configuration list for PBXProject "luna" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2FBBEAD008F335010078DB84 /* Development */,
+				2FBBEAD108F335010078DB84 /* Deployment */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Development;
+		};
+		2FBBEAE008F335360078DB84 /* Build configuration list for PBXNativeTarget "luna" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2FBBEAE108F335360078DB84 /* Development */,
+				2FBBEAE208F335360078DB84 /* Deployment */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Development;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 089C1669FE841209C02AAC07 /* Project object */;
+}
