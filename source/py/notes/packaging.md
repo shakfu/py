@@ -1,5 +1,411 @@
 # Packaging notes
 
+## Setup.local
+
+with configure as follows:
+
+```
+MACOSX_DEPLOYMENT_TARGET=10.13 ./configure --prefix=`pwd`/../python-min --without-doc-strings --enable-ipv6 --without-ensurepip && make altinstall &> build.log
+```
+
+
+```
+# -*- makefile -*-
+# The file Setup is used by the makesetup script to construct the files
+# Makefile and config.c, from Makefile.pre and config.c.in,
+# respectively.  Note that Makefile.pre is created from Makefile.pre.in
+# by the toplevel configure script.
+
+# (VPATH notes: Setup and Makefile.pre are in the build directory, as
+# are Makefile and config.c; the *.in files are in the source directory.)
+
+# Each line in this file describes one or more optional modules.
+# Modules configured here will not be compiled by the setup.py script,
+# so the file can be used to override setup.py's behavior.
+# Tag lines containing just the word "*static*", "*shared*" or "*disabled*"
+# (without the quotes but with the stars) are used to tag the following module
+# descriptions. Tag lines may alternate throughout this file.  Modules are
+# built statically when they are preceded by a "*static*" tag line or when
+# there is no tag line between the start of the file and the module
+# description.  Modules are built as a shared library when they are preceded by
+# a "*shared*" tag line.  Modules are not built at all, not by the Makefile,
+# nor by the setup.py script, when they are preceded by a "*disabled*" tag
+# line.
+
+# Lines have the following structure:
+#
+# <module> ... [<sourcefile> ...] [<cpparg> ...] [<library> ...]
+#
+# <sourcefile> is anything ending in .c (.C, .cc, .c++ are C++ files)
+# <cpparg> is anything starting with -I, -D, -U or -C
+# <library> is anything ending in .a or beginning with -l or -L
+# <module> is anything else but should be a valid Python
+# identifier (letters, digits, underscores, beginning with non-digit)
+#
+# (As the makesetup script changes, it may recognize some other
+# arguments as well, e.g. *.so and *.sl as libraries.  See the big
+# case statement in the makesetup script.)
+#
+# Lines can also have the form
+#
+# <name> = <value>
+#
+# which defines a Make variable definition inserted into Makefile.in
+#
+# The build process works like this:
+#
+# 1. Build all modules that are declared as static in Modules/Setup,
+#    combine them into libpythonxy.a, combine that into python.
+# 2. Build all modules that are listed as shared in Modules/Setup.
+# 3. Invoke setup.py. That builds all modules that
+#    a) are not builtin, and
+#    b) are not listed in Modules/Setup, and
+#    c) can be build on the target
+#
+# Therefore, modules declared to be shared will not be
+# included in the config.c file, nor in the list of objects to be
+# added to the library archive, and their linker options won't be
+# added to the linker options. Rules to create their .o files and
+# their shared libraries will still be added to the Makefile, and
+# their names will be collected in the Make variable SHAREDMODS.  This
+# is used to build modules as shared libraries.  (They can be
+# installed using "make sharedinstall", which is implied by the
+# toplevel "make install" target.)  (For compatibility,
+# *noconfig* has the same effect as *shared*.)
+#
+# NOTE: As a standard policy, as many modules as can be supported by a
+# platform should be present.  The distribution comes with all modules
+# enabled that are supported by most platforms and don't require you
+# to ftp sources from elsewhere.
+
+
+# Some special rules to define PYTHONPATH.
+# Edit the definitions below to indicate which options you are using.
+# Don't add any whitespace or comments!
+
+# Directories where library files get installed.
+# DESTLIB is for Python modules; MACHDESTLIB for shared libraries.
+DESTLIB=$(LIBDEST)
+MACHDESTLIB=$(BINLIBDEST)
+
+# NOTE: all the paths are now relative to the prefix that is computed
+# at run time!
+
+# Standard path -- don't edit.
+# No leading colon since this is the first entry.
+# Empty since this is now just the runtime prefix.
+DESTPATH=
+
+# Site specific path components -- should begin with : if non-empty
+SITEPATH=
+
+# Standard path components for test modules
+TESTPATH=
+
+COREPYTHONPATH=$(DESTPATH)$(SITEPATH)$(TESTPATH)
+PYTHONPATH=$(COREPYTHONPATH)
+
+
+# The modules listed here can't be built as shared libraries for
+# various reasons; therefore they are listed here instead of in the
+# normal order.
+
+# This only contains the minimal set of modules required to run the
+# setup.py script in the root of the Python source tree.
+
+posix -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal posixmodule.c # posix (UNIX) system calls
+errno errnomodule.c         # posix (UNIX) errno values
+pwd pwdmodule.c             # this is needed to find out the user's home dir
+                    # if $HOME is not set
+_sre _sre.c             # Fredrik Lundh's new regular expressions
+_codecs _codecsmodule.c         # access to the builtin codecs and codec registry
+_weakref _weakref.c         # weak references
+_functools -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal _functoolsmodule.c   # Tools for working with functions and callable objects
+_operator _operator.c               # operator.add() and similar goodies
+_collections _collectionsmodule.c   # Container types
+_abc _abc.c             # Abstract base classes
+itertools itertoolsmodule.c     # Functions creating iterators for efficient looping
+atexit atexitmodule.c           # Register functions to be run at interpreter-shutdown
+_signal -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal signalmodule.c
+_stat _stat.c               # stat.h interface
+time -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal timemodule.c  # -lm # time operations and variables
+_thread -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal _threadmodule.c    # low-level threading interface
+
+# access to ISO C locale support
+_locale -DPy_BUILD_CORE_BUILTIN _localemodule.c  # -lintl
+
+# Standard I/O baseline
+_io -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal -I$(srcdir)/Modules/_io _io/_iomodule.c _io/iobase.c _io/fileio.c _io/bytesio.c _io/bufferedio.c _io/textio.c _io/stringio.c
+
+# faulthandler module
+faulthandler faulthandler.c
+
+# debug tool to trace memory blocks allocated by Python
+#
+# bpo-35053: The module must be builtin since _Py_NewReference()
+# can call _PyTraceMalloc_NewReference().
+_tracemalloc _tracemalloc.c hashtable.c
+
+# The rest of the modules listed in this file are all commented out by
+# default.  Usually they can be detected and built as dynamically
+# loaded modules by the new setup.py script added in Python 2.1.  If
+# you're on a platform that doesn't support dynamic loading, want to
+# compile modules statically into the Python binary, or need to
+# specify some odd set of compiler switches, you can uncomment the
+# appropriate lines below.
+
+# ======================================================================
+
+# The Python symtable module depends on .h files that setup.py doesn't track
+_symtable symtablemodule.c
+
+# Uncommenting the following line tells makesetup that all following
+# modules are to be built as shared libraries (see above for more
+# detail; also note that *static* or *disabled* cancels this effect):
+
+*static*
+
+# GNU readline.  Unlike previous Python incarnations, GNU readline is
+# now incorporated in an optional module, configured in the Setup file
+# instead of by a configure script switch.  You may have to insert a
+# -L option pointing to the directory where libreadline.* lives,
+# and you may have to change -ltermcap to -ltermlib or perhaps remove
+# it, depending on your system -- see the GNU readline instructions.
+# It's okay for this to be a shared library, too.
+
+readline readline.c -lreadline -ltermcap
+
+
+# Modules that should always be present (non UNIX dependent):
+
+array arraymodule.c    # array objects
+cmath cmathmodule.c _math.c # -lm # complex math library functions
+math mathmodule.c _math.c # -lm # math library functions, e.g. sin()
+_contextvars _contextvarsmodule.c  # Context Variables
+_struct _struct.c  # binary structure packing/unpacking
+_weakref _weakref.c    # basic weak reference support
+#_testcapi _testcapimodule.c    # Python C API test module
+#_testinternalcapi _testinternalcapi.c -I$(srcdir)/Include/internal -DPy_BUILD_CORE_MODULE  # Python internal C API test module
+_random _randommodule.c    # Random number generator
+_elementtree -I$(srcdir)/Modules/expat -DHAVE_EXPAT_CONFIG_H -DUSE_PYEXPAT_CAPI _elementtree.c # elementtree accelerator
+_pickle _pickle.c  # pickle accelerator
+_datetime _datetimemodule.c    # datetime accelerator
+_bisect _bisectmodule.c    # Bisection algorithms
+_heapq _heapqmodule.c  # Heap queue algorithm
+_asyncio _asynciomodule.c  # Fast asyncio Future
+_json -I$(srcdir)/Include/internal -DPy_BUILD_CORE_BUILTIN _json.c # _json speedups
+_statistics _statisticsmodule.c # statistics accelerator
+
+unicodedata unicodedata.c    # static Unicode character database
+
+_uuid _uuidmodule.c
+_opcode _opcode.c
+_multiprocessing _multiprocessing/multiprocessing.c _multiprocessing/semaphore.c
+
+# Modules with some UNIX dependencies -- on by default:
+# (If you have a really backward UNIX, select and socket may not be
+# supported...)
+
+fcntl fcntlmodule.c    # fcntl(2) and ioctl(2)
+#spwd spwdmodule.c      # spwd(3)
+grp grpmodule.c        # grp(3)
+select selectmodule.c  # select(2); not on ancient System V
+
+# Memory-mapped files (also works on Win32).
+#mmap mmapmodule.c
+
+# CSV file helper
+_csv _csv.c
+
+_posixsubprocess _posixsubprocess.c  # POSIX subprocess module helper
+_blake2 _blake2/blake2module.c _blake2/blake2b_impl.c _blake2/blake2s_impl.c
+binascii binascii.c
+parser parsermodule.c
+
+_queue _queuemodule.c
+_md5 md5module.c
+_sha1 sha1module.c
+_sha256 sha256module.c
+_sha512 sha512module.c
+_sha3 _sha3/sha3module.c
+_socket socketmodule.c
+
+_lsprof _lsprof.o rotatingtree.c
+
+pyexpat expat/xmlparse.c \
+    expat/xmlrole.c \
+    expat/xmltok.c \
+    pyexpat.c \
+    -I$(srcdir)/Modules/expat \
+    -DHAVE_EXPAT_CONFIG_H -DUSE_PYEXPAT_CAPI -DXML_DEV_URANDOM
+
+zlib zlibmodule.c -I$(prefix)/include -lz
+
+_decimal _decimal/_decimal.c \
+    _decimal/libmpdec/basearith.c \
+    _decimal/libmpdec/constants.c \
+    _decimal/libmpdec/context.c \
+    _decimal/libmpdec/convolute.c \
+    _decimal/libmpdec/crt.c \
+    _decimal/libmpdec/difradix2.c \
+    _decimal/libmpdec/fnt.c \
+    _decimal/libmpdec/fourstep.c \
+    _decimal/libmpdec/io.c \
+    _decimal/libmpdec/memory.c \
+    _decimal/libmpdec/mpdecimal.c \
+    _decimal/libmpdec/numbertheory.c \
+    _decimal/libmpdec/sixstep.c \
+    _decimal/libmpdec/transpose.c \
+    -I$(srcdir)/Modules/_decimal/libmpdec \
+    -DCONFIG_64=1 -DANSI=1 -DHAVE_UINT128_T=1
+
+
+
+
+*disabled*
+
+# added
+
+_crypt
+
+_dbm
+_gdbm
+audioop
+mmap
+nis
+resource
+syslog
+termios
+
+_ctypes
+_tkinter 
+_curses
+_curses_panel
+
+xxlimited
+xxsubtype
+_xxsubinterpreters
+
+_multibytecodec
+_codecs_cn
+_codecs_hk
+_codecs_iso2022
+_codecs_jp 
+_codecs_kr 
+_codecs_tw
+
+_scproxy
+#_posixshmem
+_bz2
+_lzma
+_sqlite3
+
+
+```
+
+## packaging results (3.8.4)
+
+method            | size  | works  | codesign  | standalone 
+:---------------- | :---- | :----: | :-------: | :--------: 
+bin-framework-ext |       |  0c    |           |      
+bin-framework-pkg | 12+   |  1c    |           |   
+src-framework-ext |       |  0c    |           |      
+src-framework-pkg | 7.5   |  1c    | 1         |  0 
+bin-homebrew-ext  | 8.5   |  1     | 0c        |  1 (py)
+bin-homebrew-pkg  | 9.0   |  1     | 1c        |  0
+bin-homebrew-sys  | 0.0   |  1     | 1c        |  1 (py)
+src-static-ext    | 7.4   |  1     | 1         |  1 (py)
+src-static-pkg    |       |        |           | 
+src-shared-ext    |       |        |           | 
+src-shared-pkg    |       |        |           | 
+
+
+framework-ext has a build error (fix then retry) static-ext 
+
+
+
+## design
+
+The Homebrew copy of gettext leaks into the macOS build
+if it is present. Uninstall gettext to make sure that doesn't happen.
+```
+sudo brew uninstall --ignore-dependencies gettext
+```
+
+simplified as much as possible
+
+```
+$tree -L 6 -n py.mxo
+py.mxo
+└── Contents
+    ├── Frameworks
+    │   ├── Python.framework
+    │   │   ├── Python -> Versions/Current/Python
+    │   │   ├── Resources -> Versions/Current/Resources
+    │   │   └── Versions
+    │   │       ├── 3.8
+    │   │       │   ├── Python
+    │   │       │   ├── Resources
+    │   │       │   ├── include
+    │   │       │   └── lib
+    │   │       └── Current -> 3.8
+    │   └── <non-python dylibs>
+    ├── Info.plist
+    ├── MacOS
+    │   ├── <external>
+    │   └── python
+    ├── PkgInfo
+    └── Resources
+        └── lib
+            ├── python3.8
+            │   ├── lib-dynload
+            │   │   └── <python .so extensions>
+            │   └── site.py
+            └── python38.zip
+
+```
+
+
+
+based on py2app
+
+```
+$tree -L 6 -n py.mxo
+py.mxo
+└── Contents
+    ├── Frameworks
+    │   ├── Python.framework
+    │   │   ├── Python -> Versions/Current/Python
+    │   │   ├── Resources -> Versions/Current/Resources
+    │   │   └── Versions
+    │   │       ├── 3.8
+    │   │       │   ├── Python
+    │   │       │   ├── Resources
+    │   │       │   ├── include
+    │   │       │   └── lib
+    │   │       └── Current -> 3.8
+    │   └── <non-python dylibs>
+    ├── Info.plist
+    ├── MacOS
+    │   ├── <external>
+    │   └── python
+    ├── PkgInfo
+    └── Resources
+        ├── include
+        │   └── python3.8
+        │       └── <includes>
+        ├── lib
+        │   ├── python3.8
+        │   │   ├── config-3.8-darwin
+        │   │   ├── lib-dynload
+        │   │   │   └── <python .so extensions>
+        │   │   └── site.pyc -> ../../site.pyc
+        │   └── python38.zip
+        ├── site.pyc
+        └── zlib.cpython-38-darwin.so
+```
+
+
 ## py2app
 
 I have a use-case for an open-source project (https://github.com/shakfu/py-js) for a plugin which provides for arbitrary python code in [max](https://cycling74.com/products/max) and requires that I embed the python interpreter (via the c-api and cython) into a c-based plugin or 'external' in max/msp parlance.
@@ -52,20 +458,20 @@ So my question is: would it be possible to use py2app and/or macholib to address
 
 
 ```
-hello.app $ tree -L 6 -n .
-.
+$tree -L 6 -n hello.app
+hello.app
 └── Contents
     ├── Frameworks
     │   ├── Python.framework
     │   │   ├── Python -> Versions/Current/Python
     │   │   ├── Resources -> Versions/Current/Resources
     │   │   └── Versions
-    │   │       ├── 3.7
+    │   │       ├── 3.8
     │   │       │   ├── Python
     │   │       │   ├── Resources
     │   │       │   ├── include
     │   │       │   └── lib
-    │   │       └── Current -> 3.7
+    │   │       └── Current -> 3.8
     │   ├── libcrypto.1.1.dylib
     │   ├── libgdbm.6.dylib
     │   ├── liblzma.5.dylib
@@ -79,14 +485,17 @@ hello.app $ tree -L 6 -n .
         ├── PythonApplet.icns
         ├── __boot__.py
         ├── __error__.sh
+        ├── __pycache__
+        │   └── site.cpython-38.pyc
         ├── hello.py
         ├── include
-        │   └── python3.7m
+        │   └── python3.8
         │       └── pyconfig.h
         ├── lib
-        │   ├── python3.7
-        │   │   ├── config-3.7m-darwin
+        │   ├── python3.8
+        │   │   ├── config-3.8-darwin
         │   │   ├── lib-dynload
+        │   │   │   ├── _asyncio.so
         │   │   │   ├── _bisect.so
         │   │   │   ├── _blake2.so
         │   │   │   ├── _bz2.so
@@ -97,18 +506,22 @@ hello.app $ tree -L 6 -n .
         │   │   │   ├── _codecs_kr.so
         │   │   │   ├── _codecs_tw.so
         │   │   │   ├── _contextvars.so
+        │   │   │   ├── _csv.so
         │   │   │   ├── _ctypes.so
         │   │   │   ├── _datetime.so
         │   │   │   ├── _dbm.so
         │   │   │   ├── _decimal.so
+        │   │   │   ├── _elementtree.so
         │   │   │   ├── _gdbm.so
         │   │   │   ├── _hashlib.so
         │   │   │   ├── _heapq.so
         │   │   │   ├── _lzma.so
         │   │   │   ├── _md5.so
         │   │   │   ├── _multibytecodec.so
+        │   │   │   ├── _multiprocessing.so
         │   │   │   ├── _opcode.so
         │   │   │   ├── _pickle.so
+        │   │   │   ├── _posixshmem.so
         │   │   │   ├── _posixsubprocess.so
         │   │   │   ├── _queue.so
         │   │   │   ├── _random.so
@@ -120,12 +533,15 @@ hello.app $ tree -L 6 -n .
         │   │   │   ├── _socket.so
         │   │   │   ├── _ssl.so
         │   │   │   ├── _struct.so
+        │   │   │   ├── _testcapi.so
+        │   │   │   ├── _tkinter.so
         │   │   │   ├── _uuid.so
         │   │   │   ├── array.so
         │   │   │   ├── binascii.so
         │   │   │   ├── fcntl.so
         │   │   │   ├── grp.so
         │   │   │   ├── math.so
+        │   │   │   ├── mmap.so
         │   │   │   ├── pyexpat.so
         │   │   │   ├── resource.so
         │   │   │   ├── select.so
@@ -133,9 +549,9 @@ hello.app $ tree -L 6 -n .
         │   │   │   ├── unicodedata.so
         │   │   │   └── zlib.so
         │   │   └── site.pyc -> ../../site.pyc
-        │   └── python37.zip
+        │   └── python38.zip
         ├── site.pyc
-        └── zlib.cpython-37m-darwin.so
+        └── zlib.cpython-38-darwin.so
 ```
 
 ## codesigning and notarization
@@ -152,9 +568,9 @@ see:
 - https://developer.apple.com/forums/thread/129546
 - https://developer.apple.com/forums/thread/129045
 - https://developer.apple.com/documentation/macos-release-notes/macos-catalina-10_15-release-notes?preferredLanguage=occ
+- https://github.com/pyinstaller/pyinstaller/wiki/Recipe-OSX-Code-Signing-Qt
 
-
-## packaging results
+## packaging results (3.7.7)
 
 method            | size  | works  | codesign  | standalone 
 :---------------- | :---- | :----: | :-------: | :--------: 

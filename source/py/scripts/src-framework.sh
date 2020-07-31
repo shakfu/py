@@ -1,46 +1,44 @@
 #!/usr/bin/env bash
 
-source "scripts/common.sh"
+source "scripts/build.sh"
 
-PREFIX=${FRAMEWORKS}/Python.framework/Versions/${VERSION}
+FRAMEWORKS=${SUPPORT}/Frameworks
+# PREFIX=${SUPPORT}/Frameworks/Python.framework/Versions/${PYTHON_VER}
+PREFIX=${SUPPORT}/Frameworks
 BIN=${PREFIX}/bin
-LIB=${PREFIX}/lib/python${VERSION}
+LIB=${PREFIX}/lib/python${PYTHON_VER}
 
-FWK_TARGET=Frameworks/Python.Framework/Versions/${VERSION}/lib/${DYLIB}
+FWK_TARGET=Frameworks/Python.Framework/Versions/${PYTHON_VER}/lib/${DYLIB}
 
-configure_python() {
-	./configure MACOSX_DEPLOYMENT_TARGET=${MAC_DEP_TARGET} \
-	 	--with-openssl=$SSL \
-	 	--enable-framework=$FRAMEWORKS
+install_python_pkg() {
+	install_dependencies
+	build_python_framework $PREFIX
+	fix_python_dylib_for_pkg
+}
+
+install_python_ext() {
+	install_dependencies
+	build_python_framework $PREFIX
+	fix_python_dylib_for_ext
 }
 
 fix_python_dylib_for_pkg() {
-	cd $PREFIX/lib
+	cd ${SUPPORT}/Frameworks/Python.Framework/Versions/${PYTHON_VER}/lib
 	chmod 777 ${DYLIB}
 	install_name_tool -id @loader_path/../../../../support/${FWK_TARGET} ${DYLIB}
 	cd $ROOT
 }
 
 fix_python_dylib_for_ext() {
-	cd $PREFIX/lib
+	cd ${SUPPORT}/Frameworks/Python.Framework/Versions/${PYTHON_VER}/lib
 	chmod 777 ${DYLIB}
 	install_name_tool -id @loader_path/../${FWK_TARGET} ${DYLIB}
-	cp -rf ${FRAMEWORKS} $PY_EXTERNAL/Contents
+	#cp -rf ${FRAMEWORKS} $PY_EXTERNAL/Contents
 	cd $ROOT
 }
 
-fix() {
-	cp -rf ${FRAMEWORKS} $PY_EXTERNAL/Contents
-	cd $PY_EXTERNAL/Contents/${FWK_TARGET}/lib
-	chmod 777 ${DYLIB}
-	install_name_tool -id @loader_path/../${FWK_TARGET} ${DYLIB}
-	cd $ROOT
-}
-
-
-install_python_ext() {
-	install_python
-	# fix_python_dylib_for_ext
+reset() {
+	rm -rf $PREFIX
 }
 
 if [ "$1" == "pkg" ]; then
@@ -48,16 +46,8 @@ if [ "$1" == "pkg" ]; then
 	install_python_pkg
 
 elif [ "$1" == "ext" ]; then
-	echo "Installing python from source as framework into 'py.mxo' external"
+	echo "Installing python from source as framework into external"
 	install_python_ext
-
-elif [ "$1" == "bin" ]; then
-	echo "Installing python framework from binary .pkg in 'support' folder"
-	install_bin_framework_pkg
-
-elif [ "$1" == "build-python" ]; then
-	echo "Building from python source as framework"
-	build_python_zipped
 else
-	usage
+	exit
 fi

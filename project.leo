@@ -260,67 +260,112 @@
 <v t="sta.20200628231202.1"><vh>t_max_err pyjs_eval_to_json</vh></v>
 </v>
 </v>
+<v t="sta.20200724112927.1"><vh>@clean build.py</vh>
+<v t="sta.20200724112942.1"><vh>Declarations</vh></v>
+<v t="sta.20200724114055.1"><vh>utility classes</vh>
+<v t="sta.20200724112942.82"><vh>class DependencyManager</vh>
+<v t="sta.20200724112942.83"><vh>__init__</vh></v>
+<v t="sta.20200724112942.84"><vh>is_valid_path</vh></v>
+<v t="sta.20200724112942.85"><vh>get_deps</vh></v>
+<v t="sta.20200724112942.86"><vh>process_deps</vh></v>
+<v t="sta.20200724112942.87"><vh>copy_dylibs</vh></v>
+<v t="sta.20200724112942.88"><vh>change_install_names</vh></v>
+<v t="sta.20200724112942.89"><vh>transform_exec</vh></v>
+<v t="sta.20200724112942.90"><vh>copy_staticlibs</vh></v>
+<v t="sta.20200724112942.91"><vh>process</vh></v>
 </v>
-<v t="sta.20200701100837.1"><vh>@chapter build</vh>
-<v t="sta.20200701100907.1"><vh>scripts</vh>
-<v t="sta.20200701101041.1"><vh>@clean py_builder.py</vh>
-<v t="sta.20200701101102.1"><vh>Declarations</vh></v>
-<v t="sta.20200701101102.2"><vh>class PyBuilder</vh>
-<v t="sta.20200701101102.3"><vh>__init__</vh></v>
-<v t="sta.20200701101102.4"><vh>ver</vh></v>
-<v t="sta.20200701101102.5"><vh>name</vh></v>
-<v t="sta.20200701101102.6"><vh>url_python</vh></v>
-<v t="sta.20200701101102.7"><vh>url_ssl</vh></v>
-<v t="sta.20200701101102.8"><vh>url_getpip</vh></v>
-<v t="sta.20200701101102.9"><vh>source</vh></v>
-<v t="sta.20200701101102.10"><vh>support</vh></v>
-<v t="sta.20200701101102.11"><vh>targets</vh></v>
-<v t="sta.20200701101102.12"><vh>target</vh></v>
-<v t="sta.20200701101102.13"><vh>build</vh></v>
-<v t="sta.20200701101102.14"><vh>python</vh></v>
-<v t="sta.20200701101102.15"><vh>prefix</vh></v>
-<v t="sta.20200701101102.16"><vh>bin</vh></v>
-<v t="sta.20200701101102.17"><vh>lib</vh></v>
-<v t="sta.20200701101102.18"><vh>ssl_src</vh></v>
-<v t="sta.20200701101102.19"><vh>ssl</vh></v>
-<v t="sta.20200701101102.20"><vh>tmp</vh></v>
-<v t="sta.20200701101102.21"><vh>dylib</vh></v>
-<v t="sta.20200701101102.22"><vh>cmd</vh></v>
-<v t="sta.20200701101102.23"><vh>chdir</vh></v>
-<v t="sta.20200701101102.24"><vh>move</vh></v>
-<v t="sta.20200701101102.25"><vh>copy</vh></v>
-<v t="sta.20200701101102.26"><vh>zipsrc</vh></v>
-<v t="sta.20200701101102.27"><vh>remove</vh></v>
-<v t="sta.20200701101102.28"><vh>rm_libs</vh></v>
-<v t="sta.20200701101102.29"><vh>rm_exts</vh></v>
-<v t="sta.20200701101102.30"><vh>rm_bins</vh></v>
-<v t="sta.20200701101102.31"><vh>get_url</vh></v>
-<v t="sta.20200701101102.32"><vh>get_python</vh></v>
-<v t="sta.20200701101102.33"><vh>get_ssl</vh></v>
-<v t="sta.20200701101102.34"><vh>reset_python</vh></v>
-<v t="sta.20200701101102.35"><vh>reset_support</vh></v>
-<v t="sta.20200701101102.36"><vh>reset_ssl</vh></v>
-<v t="sta.20200701101102.37"><vh>reset</vh></v>
-<v t="sta.20200701101102.38"><vh>recursive_clean</vh></v>
-<v t="sta.20200701101102.39"><vh>clean_python_pyc</vh></v>
-<v t="sta.20200701101102.40"><vh>clean_python_tests</vh></v>
-<v t="sta.20200701101102.41"><vh>clean_python_site_packages</vh></v>
-<v t="sta.20200701101102.42"><vh>remove_packages</vh></v>
-<v t="sta.20200701101102.43"><vh>remove_extensions</vh></v>
-<v t="sta.20200701101102.44"><vh>remove_binaries</vh></v>
-<v t="sta.20200701101102.45"><vh>clean_python</vh></v>
-<v t="sta.20200701101102.46"><vh>zip_python_library</vh></v>
-<v t="sta.20200701101102.47"><vh>build_ssl</vh></v>
-<v t="sta.20200701101102.48"><vh>write_python_setup_local</vh></v>
-<v t="sta.20200701101102.49"><vh>write_python_getpip</vh></v>
-<v t="sta.20200701101102.50"><vh>compile_python_from_source</vh></v>
-<v t="sta.20200701101102.51"><vh>build_python</vh></v>
-<v t="sta.20200701101102.52"><vh>build_python_zipped</vh></v>
-<v t="sta.20200701101102.53"><vh>fix_python_dylib_for_pkg</vh></v>
-<v t="sta.20200701101102.54"><vh>fix_python_dylib_for_ext</vh></v>
-<v t="sta.20200701101102.55"><vh>install_python</vh></v>
-<v t="sta.20200701101102.56"><vh>install_python_pkg</vh></v>
-<v t="sta.20200701101102.57"><vh>install_python_ext</vh></v>
+</v>
+<v t="sta.20200724113554.1"><vh>abstract classes</vh>
+<v t="sta.20200724112942.2"><vh>class Project</vh></v>
+<v t="sta.20200724112942.3"><vh>class Builder(ABC)</vh>
+<v t="sta.20200724112942.4"><vh>__init__</vh></v>
+<v t="sta.20200724112942.5"><vh>__repr__</vh></v>
+<v t="sta.20200724112942.6"><vh>__iter__</vh></v>
+<v t="sta.20200724112942.7"><vh>ver</vh></v>
+<v t="sta.20200724112942.8"><vh>ver_nodot</vh></v>
+<v t="sta.20200724112942.9"><vh>name_version</vh></v>
+<v t="sta.20200724112942.10"><vh>name_ver</vh></v>
+<v t="sta.20200724112942.11"><vh>url</vh></v>
+<v t="sta.20200724112942.12"><vh>name_archive</vh></v>
+<v t="sta.20200724112942.13"><vh>download_path</vh></v>
+<v t="sta.20200724112942.14"><vh>src_path</vh></v>
+<v t="sta.20200724112942.15"><vh>lib_path</vh></v>
+<v t="sta.20200724112942.16"><vh>prefix</vh></v>
+<v t="sta.20200724112942.17"><vh>prefix_lib</vh></v>
+<v t="sta.20200724112942.18"><vh>prefix_include</vh></v>
+<v t="sta.20200724112942.19"><vh>prefix_bin</vh></v>
+<v t="sta.20200724112942.20"><vh>libs_static_exist</vh></v>
+<v t="sta.20200724112942.21"><vh>cmd</vh></v>
+<v t="sta.20200724112942.22"><vh>chdir</vh></v>
+<v t="sta.20200724112942.23"><vh>move</vh></v>
+<v t="sta.20200724112942.24"><vh>copytree</vh></v>
+<v t="sta.20200724112942.25"><vh>copyfile</vh></v>
+<v t="sta.20200724112942.26"><vh>remove</vh></v>
+<v t="sta.20200724112942.27"><vh>reset</vh></v>
+<v t="sta.20200724112942.28"><vh>download</vh></v>
+<v t="sta.20200724112942.29"><vh>build</vh></v>
+</v>
+<v t="sta.20200724112942.30"><vh>class OSXBuilder(Builder)</vh>
+<v t="sta.20200724112942.31"><vh>dylib</vh></v>
+<v t="sta.20200724112942.32"><vh>download</vh></v>
+</v>
+</v>
+<v t="sta.20200724113615.1"><vh>concrete classes</vh>
+<v t="sta.20200724112942.33"><vh>class OpensslBuilder(OSXBuilder)</vh>
+<v t="sta.20200724112942.34"><vh>build</vh></v>
+</v>
+<v t="sta.20200724112942.35"><vh>class Bzip2Builder(OSXBuilder)</vh>
+<v t="sta.20200724112942.36"><vh>build</vh></v>
+</v>
+<v t="sta.20200724112942.37"><vh>class XzBuilder(OSXBuilder)</vh>
+<v t="sta.20200724112942.38"><vh>build</vh></v>
+</v>
+<v t="sta.20200724112942.39"><vh>class PythonBuilder(OSXBuilder)</vh>
+<v t="sta.20200724112942.40"><vh>__init__</vh></v>
+<v t="sta.20200724112942.41"><vh>static_lib</vh></v>
+<v t="sta.20200724112942.42"><vh>python_lib</vh></v>
+<v t="sta.20200724112942.43"><vh>site_packages</vh></v>
+<v t="sta.20200724112942.44"><vh>lib_dynload</vh></v>
+<v t="sta.20200724112942.45"><vh>pre_process</vh></v>
+<v t="sta.20200724112942.46"><vh>post_process</vh></v>
+<v t="sta.20200724112942.47"><vh>write_setup_local</vh></v>
+<v t="sta.20200724112942.48"><vh>apply_patch</vh></v>
+<v t="sta.20200724112942.49"><vh>install</vh></v>
+<v t="sta.20200724112942.50"><vh>install_python_pkg</vh></v>
+<v t="sta.20200724112942.51"><vh>install_python_ext</vh></v>
+<v t="sta.20200724112942.52"><vh>is_valid_path</vh></v>
+<v t="sta.20200724112942.53"><vh>get_deps</vh></v>
+<v t="sta.20200724112942.54"><vh>recursive_clean</vh></v>
+<v t="sta.20200724112942.55"><vh>clean_python_pyc</vh></v>
+<v t="sta.20200724112942.56"><vh>clean_python_tests</vh></v>
+<v t="sta.20200724112942.57"><vh>rm_libs</vh></v>
+<v t="sta.20200724112942.58"><vh>rm_exts</vh></v>
+<v t="sta.20200724112942.59"><vh>rm_bins</vh></v>
+<v t="sta.20200724112942.60"><vh>clean_python_site_packages</vh></v>
+<v t="sta.20200724112942.61"><vh>remove_packages</vh></v>
+<v t="sta.20200724112942.62"><vh>remove_extensions</vh></v>
+<v t="sta.20200724112942.63"><vh>remove_binaries</vh></v>
+<v t="sta.20200724112942.64"><vh>clean</vh></v>
+<v t="sta.20200724112942.65"><vh>zip_lib</vh></v>
+<v t="sta.20200724112942.66"><vh>fix_python_dylib_for_pkg</vh></v>
+<v t="sta.20200724112942.67"><vh>fix_python_dylib_for_ext</vh></v>
+<v t="sta.20200724112942.68"><vh>pre_process</vh></v>
+<v t="sta.20200724112942.69"><vh>post_process</vh></v>
+</v>
+<v t="sta.20200724112942.70"><vh>class StaticPythonBuilder(PythonBuilder)</vh>
+<v t="sta.20200724112942.71"><vh>prefix</vh></v>
+<v t="sta.20200724112942.72"><vh>build</vh></v>
+<v t="sta.20200724112942.73"><vh>post_process</vh></v>
+</v>
+<v t="sta.20200724112942.74"><vh>class SharedPythonBuilder(PythonBuilder)</vh>
+<v t="sta.20200724112942.75"><vh>prefix</vh></v>
+<v t="sta.20200724112942.76"><vh>build</vh></v>
+<v t="sta.20200724112942.77"><vh>remove_extensions</vh></v>
+</v>
+<v t="sta.20200724112942.78"><vh>class FrameworkPythonBuilder(PythonBuilder)</vh>
+<v t="sta.20200724112942.79"><vh>prefix</vh></v>
+<v t="sta.20200724112942.80"><vh>build</vh></v>
+<v t="sta.20200724112942.81"><vh>remove_extensions</vh></v>
 </v>
 </v>
 </v>
@@ -555,28 +600,66 @@ error:
 
 
 </t>
-<t tx="sta.20200602120251.18">long py_edsave(t_py* x, char** text, long size)
+<t tx="sta.20200602120251.18">void py_run(t_py* x)
 {
     PyObject* pval = NULL;
 
-    if (text == NULL) {
+    if ((*(x-&gt;p_code) != NULL) &amp;&amp; (*(x-&gt;p_code)[0] == '\0'))
+        // is empty string
         goto error;
-    }
 
-    pval = PyRun_String(*text, Py_file_input, x-&gt;p_globals, x-&gt;p_globals);
+    pval = PyRun_String(*(x-&gt;p_code), Py_file_input, x-&gt;p_globals, x-&gt;p_globals);
     if (pval == NULL) {
         goto error;
     }
 
     // success cleanup
     Py_DECREF(pval);
+    outlet_bang(x-&gt;p_outlet_right);
+    return;
+
+error:
+    py_handle_error(x, "run x-&gt;p_code failed");
+    Py_XDECREF(pval);
+    outlet_bang(x-&gt;p_outlet_middle);
+}
+
+
+// void py_okclose(t_py* x, char *s, short *result)
+// {
+//     // see: https://cycling74.com/forums/text-editor-without-dirty-bit
+//     py_log(x, "okclose: called");
+//     *result = 3; // don't put up a dialog
+// } 
+
+
+long py_edsave(t_py* x, char** text, long size)
+{
+    PyObject* pval = NULL;
+
+    if (x-&gt;p_run_on_save) {
+
+        py_log(x, "run-on-save activated");
+        
+        pval = PyRun_String(*text, Py_file_input, x-&gt;p_globals, x-&gt;p_globals);
+        if (pval == NULL) {
+            py_error(x, "py_edsave: pval == NULL");
+            goto error;
+        }
+
+        // success cleanup
+        Py_DECREF(pval);
+    }
+    py_log(x, "py_edsave: returning 0");
     return 0;
 
 error:
-    py_handle_error(x, "edclose-exec %s", x-&gt;p_code_filepath-&gt;s_name);
+    py_handle_error(x, "py_edsave with (possible) execution failed");
     Py_XDECREF(pval);
+    py_log(x, "py_edsave: returning 1");
     return 1;
 }
+
 
 
 </t>
@@ -912,6 +995,8 @@ error:
     class_addmethod(c, (method)py_edclose,    "edclose",    A_CANT,    0);
     class_addmethod(c, (method)py_edsave,     "edsave",     A_CANT,    0);
     class_addmethod(c, (method)py_load,       "load",       A_DEFSYM,  0);
+    class_addmethod(c, (method)py_run,        "run",        A_NOTHING, 0);
+    // class_addmethod(c, (method)py_okclose,    "okclose",    A_CANT,    0);
 
     // experimental
     class_addmethod(c, (method)py_appendtodict,  "appendtodictionary",  A_CANT, 0);
@@ -923,12 +1008,6 @@ error:
     CLASS_ATTR_SYM(c,   "name", 0,   t_py, p_name);
     CLASS_ATTR_BASIC(c, "name", 0);
     // CLASS_ATTR_INVISIBLE(c, "name", 0);
-
-    CLASS_ATTR_LABEL(c,  "debug", 0,  "debug log to console");
-    CLASS_ATTR_CHAR(c,   "debug", 0,  t_py, p_debug);
-    CLASS_ATTR_STYLE(c,  "debug", 0, "onoff");
-    CLASS_ATTR_BASIC(c,  "debug", 0);
-    CLASS_ATTR_SAVE(c,   "debug", 0);
 
     CLASS_ATTR_LABEL(c,  "file", 0,  "default python script");
     CLASS_ATTR_SYM(c,    "file", 0,   t_py,  p_code_filepath);
@@ -942,17 +1021,30 @@ error:
     CLASS_ATTR_BASIC(c,  "autoload", 0);
     CLASS_ATTR_SAVE(c,   "autoload", 0);
 
+    CLASS_ATTR_LABEL(c,  "run_on_save", 0,  "run content of editor on save");
+    CLASS_ATTR_CHAR(c,   "run_on_save", 0,  t_py, p_run_on_save);
+    CLASS_ATTR_STYLE(c,  "run_on_save", 0, "onoff");
+    CLASS_ATTR_BASIC(c,  "run_on_save", 0);
+    CLASS_ATTR_SAVE(c,   "run_on_save", 0);
+
     CLASS_ATTR_LABEL(c,  "pythonpath", 0,  "per-object pythonpath");
     CLASS_ATTR_SYM(c,    "pythonpath", 0,  t_py, p_pythonpath);
     CLASS_ATTR_STYLE(c,  "pythonpath", 0,  "file");
     CLASS_ATTR_BASIC(c,  "pythonpath", 0);
     CLASS_ATTR_SAVE(c,   "pythonpath", 0);
 
+    CLASS_ATTR_LABEL(c,  "debug", 0,  "debug log to console");
+    CLASS_ATTR_CHAR(c,   "debug", 0,  t_py, p_debug);
+    CLASS_ATTR_STYLE(c,  "debug", 0, "onoff");
+    CLASS_ATTR_BASIC(c,  "debug", 0);
+    CLASS_ATTR_SAVE(c,   "debug", 0);
+
     CLASS_ATTR_ORDER(c,  "name",        0,  "1");
     CLASS_ATTR_ORDER(c,  "file",        0,  "2");
     CLASS_ATTR_ORDER(c,  "autoload",    0,  "3");
-    CLASS_ATTR_ORDER(c,  "pythonpath",  0,  "4");
-    CLASS_ATTR_ORDER(c,  "debug",       0,  "5");
+    CLASS_ATTR_ORDER(c,  "run_on_save", 0,  "4");
+    CLASS_ATTR_ORDER(c,  "pythonpath",  0,  "5");
+    CLASS_ATTR_ORDER(c,  "debug",       0,  "6");
 
     // clang-format on
     //------------------------------------------------------------------------
@@ -1019,10 +1111,7 @@ error:
         x-&gt;p_box = NULL;
 
         // python-related
-        x-&gt;p_autoload = 0;
         x-&gt;p_pythonpath = gensym("");
-        x-&gt;p_debug = 1;
-
 
         // text editor
         x-&gt;p_code = sysmem_newhandle(0);
@@ -1034,6 +1123,11 @@ error:
         x-&gt;p_code_pathname[0] = 0;
         // short p_code_path;
         x-&gt;p_code_filepath = gensym("");
+        x-&gt;p_autoload = 0;
+        x-&gt;p_run_on_save = 0;
+
+        // set default debug level
+        x-&gt;p_debug = 1;
 
         // create inlet(s)
         // create outlet(s)
@@ -1100,19 +1194,58 @@ error:
 </t>
 <t tx="sta.20200602120251.8">void py_init(t_py* x)
 {
-    // wchar_t *program;
+    #ifdef PY_STATIC_EXT
+    wchar_t *python_home;
+    // char path[150];
 
+    // method 1
+    CFBundleRef bundle;
+    CFURLRef resources_url;
+    CFURLRef resources_abs_url;
+    CFStringRef resources_str;
+    const char* resources_path;
+
+    // Look for a bundle using its identifier
+    bundle = CFBundleGetBundleWithIdentifier(CFSTR("org.me.py"));
+    resources_url = CFBundleCopyResourcesDirectoryURL(bundle);
+    resources_abs_url = CFURLCopyAbsoluteURL(resources_url);
+    resources_str = CFURLCopyFileSystemPath(resources_abs_url, kCFURLPOSIXPathStyle);
+    resources_path = CFStringGetCStringPtr(resources_str, kCFStringEncodingUTF8);
+    python_home = Py_DecodeLocale(resources_path, NULL);    
+
+    // CFRelease(resources_url);
+    // CFRelease(resources_abs_url);
+    // CFRelease(resources_str);
+    // CFRelease(resources_path);
+
+    // STRANGE: if I run the next line the python_home isn't set properly!!
+    // char* exec_path = Py_EncodeLocale(Py_GetProgramFullPath(), NULL);
+    // sprintf(path, "%s/Resources", dirname(dirname(exec_path)));
+    // python_home = Py_DecodeLocale(path, NULL);
+
+    post("resources_path: %s", resources_path);
+    // python_home = Py_DecodeLocale("&lt;abs-path-to-Resources&gt;", NULL);
+    if (python_home == NULL) {
+        error("python_home is NULL");
+        // return;
+    }
+    Py_SetPythonHome(python_home);
+
+    // wchar_t *program;
     // program = Py_DecodeLocale("py", NULL);
     // if (program == NULL) {
     //     exit(1);
     // }
+
+    // Py_SetProgramName(program);
+    #endif
+
 
     /* Add the cythonized 'api' built-in module, before Py_Initialize */
     if (PyImport_AppendInittab("api", PyInit_api) == -1) {
         py_error(x, "could not add api to builtin modules table");
     }
 
-    // Py_SetProgramName(program);
 
     Py_Initialize();
 
@@ -1222,6 +1355,10 @@ void py_count(t_py* x) { outlet_int(x-&gt;p_outlet_left, py_global_obj_count); }
 /* max/msp api */
 #include "api.h"
 
+#ifdef PY_STATIC_EXT
+#include &lt;libgen.h&gt;
+#endif
+
 </t>
 <t tx="sta.20200602131131.1">/*--------------------------------------------------------------------------*/
 // GLOBALS
@@ -1274,6 +1411,7 @@ typedef struct _py {
     char p_code_filename[MAX_PATH_CHARS];
     char p_code_pathname[MAX_PATH_CHARS];
     short p_code_path;
+    t_bool p_run_on_save;
 
     t_symbol* p_code_filepath; /* default python filepath to load into
                                   the code editor and object 'globals'
@@ -1359,9 +1497,10 @@ void py_read(t_py* x, t_symbol* s);
 void py_load(t_py* x, t_symbol* s); // read(f) -&gt; execfile(f)
 void py_doread(t_py* x, t_symbol* s, long argc, t_atom* argv);
 void py_dblclick(t_py* x);
+void py_run(t_py* x);
 void py_edclose(t_py* x, char** text, long size);
 long py_edsave(t_py* x, char** text, long size);
-
+// void py_okclose(t_py* x, char *s, short *result);
 
 </t>
 <t tx="sta.20200602150733.1">/*--------------------------------------------------------------------------*/
@@ -3477,6 +3616,9 @@ error:
 <t tx="sta.20200611235620.1">t_hashtab* get_global_registry(void) { return py_global_registry; }
 
 
+
+
+
 </t>
 <t tx="sta.20200612043307.1"></t>
 <t tx="sta.20200612044656.1">@language c
@@ -5097,6 +5239,9 @@ error:
 #define PY_SSIZE_T_CLEAN
 #include &lt;Python.h&gt;
 
+#ifdef PY_STATIC_EXT
+#include &lt;libgen.h&gt;
+#endif
 @others
 @language c
 @tabwidth -4
@@ -5262,6 +5407,38 @@ error:
 </t>
 <t tx="sta.20200628230354.6">void pyjs_init(t_pyjs* x)
 {
+
+    #ifdef PY_STATIC_EXT
+    wchar_t *python_home;
+
+    CFBundleRef bundle;
+    CFURLRef resources_url;
+    CFURLRef resources_abs_url;
+    CFStringRef resources_str;
+    const char* resources_path;
+
+    // Look for a bundle using its identifier
+    bundle = CFBundleGetBundleWithIdentifier(CFSTR("org.me.pyjs"));
+    resources_url = CFBundleCopyResourcesDirectoryURL(bundle);
+    resources_abs_url = CFURLCopyAbsoluteURL(resources_url);
+    resources_str = CFURLCopyFileSystemPath(resources_abs_url, kCFURLPOSIXPathStyle);
+    resources_path = CFStringGetCStringPtr(resources_str, kCFStringEncodingUTF8);
+    python_home = Py_DecodeLocale(resources_path, NULL);    
+
+    // CFRelease(resources_url);
+    // CFRelease(resources_abs_url);
+    // CFRelease(resources_str);
+    // CFRelease(resources_path);
+
+    post("resources_path: %s", resources_path);
+
+    if (python_home == NULL) {
+        error("python_home is NULL");
+        // return;
+    }
+    Py_SetPythonHome(python_home);
+
+    #endif
 
     Py_Initialize();
 
@@ -5884,221 +6061,427 @@ t_max_err pyjs_code(t_pyjs* x, t_symbol* s, long argc, t_atom* argv,
 <t tx="sta.20200628232327.1"></t>
 <t tx="sta.20200628232335.1"></t>
 <t tx="sta.20200701100646.1"></t>
-<t tx="sta.20200701100837.1"></t>
-<t tx="sta.20200701100907.1">@path source/py/scripts
-
-</t>
-<t tx="sta.20200701101041.1">#!/usr/bin/env python3
+<t tx="sta.20200724112927.1">#!/usr/bin/env python3
 
 @others
 @language python
 @tabwidth -4
+
+if __name__ == '__main__':
+    p = SharedPythonBuilder()
+    # p.install()
+    # p.reset()
+    # p.download()
+    # p.build()
+    # p.clean()
+    # p.zip_lib()
 </t>
-<t tx="sta.20200701101102.1">import sys
+<t tx="sta.20200724112942.1">import logging
 import os
-from pathlib import Path
+import re
 import shutil
+import subprocess
+import sys
+import zipfile
+from abc import ABC, abstractmethod
+from pathlib import Path
+
 # import glob
 
-env = os.getenv
-cmd = os.system
-ver = tuple(sys.version_info)  # e.g. (3, 7, 7, 'final', 0)
-# major, minor, micro
+IGNORE_ERRORS = False
 
-VERSION_MAJOR = env('PY_MAJ_VER', '{0}.{1}'.format(*ver))
-VERSION_MINOR = env('PY_MIN_VER', '{2}'.format(*ver))
-SSL_VERSION = env('SSL_VER', '1.1.1g')
-MAC_DEP_TARGET = env('MAC_DEP', '10.13')
+DEBUG = True
+if DEBUG:
+    LOG_LEVEL = logging.DEBUG
+else:
+    LOG_LEVEL = logging.INFO
 
-# --- need not modify below except to change excluded modules
-
+LOG_FORMAT = '%(relativeCreated)-4d %(levelname)-5s: %(name)-10s %(message)s'
+logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT, stream=sys.stdout)
 
 </t>
-<t tx="sta.20200701101102.10">@property
-def support(self):
-    return self.root.parent.parent / 'source'
+<t tx="sta.20200724112942.10">@property
+def name_ver(self):
+    return f'{self.name.lower()}{self.ver}'
 
 </t>
-<t tx="sta.20200701101102.11">@property
-def targets(self):
-    return self.root / 'targets'
+<t tx="sta.20200724112942.11">@property
+def url(self):
+    return Path(self.url_template.format(name=self.name, 
+                                    version=self.version))
+</t>
+<t tx="sta.20200724112942.12">@property
+def name_archive(self):
+    return f'{self.name_version}.tgz'
 
 </t>
-<t tx="sta.20200701101102.12">@property
-def target(self):
-    return self.targets / 'python-org'
+<t tx="sta.20200724112942.13">@property
+def download_path(self):
+    return self.project.downloads / self.name_archive
 
 </t>
-<t tx="sta.20200701101102.13">@property
-def build(self):
-    return self.target / 'build'
+<t tx="sta.20200724112942.14">@property
+def src_path(self):
+    return self.project.src / self.name_version
 
 </t>
-<t tx="sta.20200701101102.14">@property
-def python(self):
-    return self.build / f'Python-{self.semver}'
+<t tx="sta.20200724112942.15">@property
+def lib_path(self):
+    return self.prefix
 
 </t>
-<t tx="sta.20200701101102.15">@property
+<t tx="sta.20200724112942.16">@property
 def prefix(self):
-    return self.support / self.name
+    return self.project.lib / self.name.lower()
 
 </t>
-<t tx="sta.20200701101102.16">@property
-def bin(self):
+<t tx="sta.20200724112942.17">@property
+def prefix_lib(self):
+    return self.prefix / 'lib'
+
+</t>
+<t tx="sta.20200724112942.18">@property
+def prefix_include(self):
+    return self.prefix / 'include'
+
+</t>
+<t tx="sta.20200724112942.19">@property
+def prefix_bin(self):
     return self.prefix / 'bin'
 
-</t>
-<t tx="sta.20200701101102.17">@property
-def lib(self):
-    return self.prefix / 'lib' / self.name
 
 </t>
-<t tx="sta.20200701101102.18">@property
-def ssl_src(self):
-    return self.build / self.ssl_version
+<t tx="sta.20200724112942.2">class Project:
+    root = Path.cwd()
+    source = root.parent / 'source'
+    support = root.parent.parent / 'support'
+    scripts = root / 'scripts'
+    patch = root / 'patch'
+    targets =  root / 'targets'
+    build = targets / 'build'
+    downloads = build / 'downloads'
+    src = build / 'src'
+    lib = build / 'lib'
+
 
 </t>
-<t tx="sta.20200701101102.19">@property
-def ssl(self):
-    return self.build / self.ssl
+<t tx="sta.20200724112942.20">def libs_static_exist(self):
+    for lib in self.libs_static:
+        if not (self.prefix_lib / lib).exists():
+            return False
+    return True
 
 </t>
-<t tx="sta.20200701101102.2">class PyBuilder:
-    @others
-</t>
-<t tx="sta.20200701101102.20">@property
-def tmp(self):
-    return self.build / self.tmp
-
-</t>
-<t tx="sta.20200701101102.21">@property
-def dylib(self):
-    return f'libpython{self.version}{self.suffix}.dylib'
-
-# ------------------------------------------------------------------------
-# operations
-
-</t>
-<t tx="sta.20200701101102.22">def cmd(self, shellcmd, *args, **kwargs):
+<t tx="sta.20200724112942.21">def cmd(self, shellcmd, *args, **kwargs):
     os.system(shellcmd.format(*args, **kwargs))
 
 </t>
-<t tx="sta.20200701101102.23">def chdir(self, path):
+<t tx="sta.20200724112942.22">def chdir(self, path):
     os.chdir(path)
 
 </t>
-<t tx="sta.20200701101102.24">def move(self, src, dst):
+<t tx="sta.20200724112942.23">def move(self, src, dst):
     shutil.move(src, dst)
 
 </t>
-<t tx="sta.20200701101102.25">def copy(self, src, dst):
+<t tx="sta.20200724112942.24">def copytree(self, src, dst):
     shutil.copytree(src, dst)
 
 </t>
-<t tx="sta.20200701101102.26">def zipsrc(self, zip_path, files_to_include):
-    "this is a placeholder"
+<t tx="sta.20200724112942.25">def copyfile(self, src, dst):
+    shutil.copyfile(src, dst)
 
 </t>
-<t tx="sta.20200701101102.27">def remove(self, path):
-    if hasattr(path, '__iter__'):
-        for f in path:
-            shutil.rmtree(f)
+<t tx="sta.20200724112942.26">def remove(self, path):
+    if path.is_dir():
+        shutil.rmtree(path, ignore_errors=IGNORE_ERRORS)
     else:
-        shutil.rmtree(path)
+        path.unlink(missing_ok=True)
 
 </t>
-<t tx="sta.20200701101102.28">def rm_libs(self, names):
-    for name in names:
-        self.remove(self.lib / name)
+<t tx="sta.20200724112942.27">def reset(self):
+    self.remove(self.src_path)
+    self.remove(self.prefix) # aka self.prefix
 
 </t>
-<t tx="sta.20200701101102.29">def rm_exts(self, names):
-    for name in names:
-        self.remove(self.lib / 'lib-dynload' /
-                    f'{name}.cpython-{self.ver}m-darwin.so')
+<t tx="sta.20200724112942.28">def download(self):
+    "download target src"
 
 </t>
-<t tx="sta.20200701101102.3">def __init__(self, py_version, ssl_version, mac_dep_target=None, packages=None, suffix=None):
-    self.semver = py_version
-    self.version = ".".join(py_version.split('.')[:2])
-    self.ssl_version = ssl_version
-    self.mac_dep_target = mac_dep_target if mac_dep_target else '1.13'
-    self.packages = packages if packages else []
-    self.suffix = suffix if suffix else ""
+<t tx="sta.20200724112942.29">def build(self):
+    "build target from src"
 
-    # directories
-    self.root = Path.cwd()
+
+</t>
+<t tx="sta.20200724112942.3">class Builder(ABC):
+    name: str
+    version: str
+    url_template: str
+    depends_on: []
+
+    @others
+</t>
+<t tx="sta.20200724112942.30">class OSXBuilder(Builder):
+    mac_dep_target = '10.13'
+
+    @others
+</t>
+<t tx="sta.20200724112942.31">@property
+def dylib(self):
+    return f'lib{self.name.lower()}{self.ver}.dylib'        
+
+</t>
+<t tx="sta.20200724112942.32">def download(self):
+    "download src"
+
+    self.project.downloads.mkdir(parents=True, exist_ok=True)
+    for dep in self.depends_on:
+        dep.download()
+
+    # download
+    if not self.download_path.exists():
+        self.log.info(f"downloading {self.download_path}")
+        self.cmd(f'curl -L --fail {self.url} -o {self.download_path}')
+ 
+    # unpack
+    if not self.src_path.exists():
+        self.log.info(f"unpacking {self.src_path}")
+        self.cmd(f'tar -C {self.project.src} -xvf {self.download_path}')
+
+
+</t>
+<t tx="sta.20200724112942.33">class OpensslBuilder(OSXBuilder):
+    name = 'openssl'
+    version = '1.1.1g'
+    url_template = 'https://www.openssl.org/source/{name}-{version}.tar.gz'
+    depends_on = []
+    libs_static = ['libssl.a', 'libcrypto.a']
+
+    @others
+</t>
+<t tx="sta.20200724112942.34">def build(self):
+    if not self.libs_static_exist():
+        self.chdir(self.src_path)
+        self.cmd(f'./config no-shared no-tests --prefix={self.prefix}')
+        self.cmd('make install_sw')
+        self.chdir(self.project.root)
+
+</t>
+<t tx="sta.20200724112942.35">class Bzip2Builder(OSXBuilder):
+    name = 'bzip2'
+    version = '1.0.8'
+    url_template = 'https://sourceware.org/pub/bzip2/{name}-{version}.tar.gz'
+    depends_on = []
+    libs_static = ['libbz2.a']
+
+    @others
+</t>
+<t tx="sta.20200724112942.36">def build(self):
+    if not self.libs_static_exist():
+        self.chdir(self.src_path)
+        self.cmd(f'make install PREFIX={self.prefix}')
+        self.chdir(self.project.root)
+
+
+
+</t>
+<t tx="sta.20200724112942.37">class XzBuilder(OSXBuilder):
+    name = 'xz'
+    version = '5.2.5'
+    url_template = 'http://tukaani.org/xz/{name}-{version}.tar.gz'
+    depends_on = []
+    libs_static = ['libxz.a']
+
+    @others
+</t>
+<t tx="sta.20200724112942.38">def build(self):
+    if not self.libs_static_exist():
+        self.chdir(self.src_path)
+        self.cmd(f"""MACOSX_DEPLOYMENT_TARGET={self.mac_dep_target} \
+            ./configure --disable-shared --enable-static --prefix={self.prefix}""")
+        self.cmd(f'make &amp;&amp; make install')
+        self.chdir(self.project.root)
+
+
+</t>
+<t tx="sta.20200724112942.39">class PythonBuilder(OSXBuilder):
+    name = 'Python'
+    version = '3.8.4'
+    url_template = 'https://www.python.org/ftp/python/{version}/{name}-{version}.tgz'
+    depends_on = [OpensslBuilder, Bzip2Builder, XzBuilder]
+    suffix = ""
+    setup_local = None
+    patch = None
+
+    @others
+</t>
+<t tx="sta.20200724112942.4">def __init__(self, project, version=None, depends_on=None):
+    self.project = project or Project()
+    self.version = version or self.version
+    self.depends_on = ([B(project) for B in depends_on] if depends_on else
+                       [B(project) for B in self.depends_on])
+    self.log = logging.getLogger(self.__class__.__name__)
+
+</t>
+<t tx="sta.20200724112942.40">def __init__(self, project=None, version=None, depends_on=None):
+    super().__init__(project, version, depends_on)
+
+    # dependency manager attributes (revise)
+    self.install_names = {}
+    self.deps = []
+    self.dep_list = []
 
 # ------------------------------------------------------------------------
-# propertiess
+# python properties
 
 </t>
-<t tx="sta.20200701101102.30">def rm_bins(self, names):
-    for name in names:
-        self.remove(self.prefix / 'bin' / name)
+<t tx="sta.20200724112942.41">@property
+def static_lib(self):
+    return f'lib{self.name.lower()}{self.ver}.a'
 
 </t>
-<t tx="sta.20200701101102.31">def get_url(self, url):
-    self.tmp.mkdir()
-    fname = Path(url).name
-    src_dir = self.tmp / fname
-    self.cmd(f'curl {url} -o {src_dir}')
-    self.cmd(f'tar -C {self.build} -xvf {src_dir}')
-    self.remove(self.tmp)
+<t tx="sta.20200724112942.42">@property
+def python_lib(self):
+    return self.prefix_lib / self.name_ver
 
 </t>
-<t tx="sta.20200701101102.32">def get_python(self):
-    self.get_url(self.url_python)
+<t tx="sta.20200724112942.43">@property
+def site_packages(self):
+    return self.python_lib / 'site-packages'
 
 </t>
-<t tx="sta.20200701101102.33">def get_ssl(self):
-    self.get_url(self.url_ssl)
+<t tx="sta.20200724112942.44">@property
+def lib_dynload(self):
+    return self.python_lib / 'lib-dynload'    
+
+# ------------------------------------------------------------------------
+# src-level operations
 
 </t>
-<t tx="sta.20200701101102.34">def reset_python(self):
-    self.remove(self.python)
+<t tx="sta.20200724112942.45">def pre_process(self):
+    "pre-build operations"
 
 </t>
-<t tx="sta.20200701101102.35">def reset_support(self):
-    self.remove(self.prefix)
+<t tx="sta.20200724112942.46">def post_process(self):
+    "post-build operations"
 
 </t>
-<t tx="sta.20200701101102.36">def reset_ssl(self):
-    self.remove(self.ssl_src)
-    self.remove(self.ssl)
+<t tx="sta.20200724112942.47">def write_setup_local(self, setup_local=None):
+    if not any([setup_local, self.setup_local]):
+        return
+    if not setup_local:
+        setup_local = self.setup_local
+    self.copyfile(self.project.patch / setup_local, 
+              self.src_path /'Modules' / 'Setup.local')
 
 </t>
-<t tx="sta.20200701101102.37">def reset(self):
-    self.reset_python()
-    self.reset_support()
-    self.reset_ssl()
+<t tx="sta.20200724112942.48">def apply_patch(self, patch=None):
+    if not any([patch, self.patch]):
+        return
+    if not patch:
+        patch = self.patch
+    self.cmd(f'patch -p1 &lt; {self.project.patch}/{patch}')
 
 </t>
-<t tx="sta.20200701101102.38">def recursive_clean(self, name, pattern):
-    cmd(f'find {name} | grep -E "({pattern})" | xargs rm -rf')
+<t tx="sta.20200724112942.49">def install(self):
+    self.reset()
+    self.download()
+    self.pre_process()
+    self.build()
+    self.post_process()
 
 </t>
-<t tx="sta.20200701101102.39">def clean_python_pyc(self, name):
+<t tx="sta.20200724112942.5">def __repr__(self):
+    return f"&lt;{self.__class__.__name__} '{self.name}-{self.version}'&gt;"
+
+</t>
+<t tx="sta.20200724112942.50">def install_python_pkg(self):
+    self.install_python()
+    self.fix_python_dylib_for_pkg()
+
+
+</t>
+<t tx="sta.20200724112942.51">def install_python_ext(self):
+    self.install_python()
+    self.fix_python_dylib_for_ext()
+
+# ------------------------------------------------------------------------
+# post-processing operations
+
+</t>
+<t tx="sta.20200724112942.52">def is_valid_path(self, dep_path):
+    return (dep_path == '' or 
+            dep_path.startswith('/opt/local/') or 
+            dep_path.startswith('/usr/local/') or 
+            dep_path.startswith('/User/'))
+
+</t>
+<t tx="sta.20200724112942.53">def get_deps(self, target=None):
+    if not target:
+        target = self.target
+    key = os.path.basename(target)
+    self.install_names[key] = []
+    result = subprocess.check_output(['otool', '-L', target])
+    entries = [line.decode('utf-8').strip() for line in result.splitlines()]
+    for entry in entries:
+        match = re.match(r'\s*(\S+)\s*\(compatibility version .+\)$', entry)
+        if match:
+            path = match.group(1)
+            (dep_path, dep_filename) = os.path.split(path)
+            if self.is_valid_path(dep_path):
+                if dep_path == '':
+                    path = os.path.join('/usr/local/lib', dep_filename)
+                dep_path, dep_filename = os.path.split(path)
+                item = (path, '@rpath/' + dep_filename)
+                self.install_names[key].append(item)
+                if path not in self.deps:
+                    self.deps.append(path)
+                    self.get_deps(path)
+
+
+
+</t>
+<t tx="sta.20200724112942.54">def recursive_clean(self, name, pattern):
+    self.cmd(f'find {name} | grep -E "({pattern})" | xargs rm -rf')
+
+</t>
+<t tx="sta.20200724112942.55">def clean_python_pyc(self, name):
     self.recursive_clean(name, r"__pycache__|\.pyc|\.pyo$")
 
 </t>
-<t tx="sta.20200701101102.4">@property
-def ver(self):
-    return self.version.replace('.', '')
-
-</t>
-<t tx="sta.20200701101102.40">def clean_python_tests(self, name):
+<t tx="sta.20200724112942.56">def clean_python_tests(self, name):
     self.recursive_clean(name, "tests|test")
 
 </t>
-<t tx="sta.20200701101102.41">def clean_python_site_packages(self):
-    self.remove((self.lib / 'site-packages').glob('*'))
+<t tx="sta.20200724112942.57">def rm_libs(self, names):
+    for name in names:
+        self.remove(self.python_lib / name)
 
 </t>
-<t tx="sta.20200701101102.42">def remove_packages(self):
+<t tx="sta.20200724112942.58">def rm_exts(self, names):
+    for name in names:
+        self.remove(self.python_lib / 'lib-dynload' /
+                    f'{name}.cpython-{self.ver_nodot}-darwin.so')
+
+</t>
+<t tx="sta.20200724112942.59">def rm_bins(self, names):
+    for name in names:
+        self.remove(self.prefix_bin / name)
+
+</t>
+<t tx="sta.20200724112942.6">def __iter__(self):
+    for dependency in self.depends_on:
+        yield dependency
+        for subdependency in iter(dependency):
+            yield subdependency
+</t>
+<t tx="sta.20200724112942.60">def clean_python_site_packages(self):
+    self.remove(self.python_lib / 'site-packages')
+
+</t>
+<t tx="sta.20200724112942.61">def remove_packages(self):
     self.rm_libs([
-        f'config-{self.version}{self.suffix}-darwin',
+        f'config-{self.ver}{self.suffix}-darwin',
         'idlelib',
         'lib2to3',
         'tkinter',
@@ -6111,7 +6494,167 @@ def ver(self):
     ])
 
 </t>
-<t tx="sta.20200701101102.43">def remove_extensions(self):
+<t tx="sta.20200724112942.62">def remove_extensions(self): pass
+
+</t>
+<t tx="sta.20200724112942.63">def remove_binaries(self):
+    self.rm_bins([
+        f'2to3-{self.ver}',
+        f'idle{self.ver}',
+        f'easy_install-{self.ver}',
+        f'pip{self.ver}',
+        f'pyvenv-{self.ver}',
+        f'pydoc{self.ver}',
+        # f'python{self.ver}{self.suffix}',
+        # f'python{self.ver}-config',
+    ])
+
+</t>
+<t tx="sta.20200724112942.64">def clean(self):
+    self.clean_python_pyc(self.prefix)
+    self.clean_python_tests(self.python_lib)
+    self.clean_python_site_packages()
+
+    for i in (self.python_lib / 'distutils' / 'command').glob('*.exe'):
+        self.remove(i)
+
+    self.remove(self.prefix_lib / 'pkgconfig')
+    self.remove(self.prefix / 'share')
+
+    self.remove_packages()
+    self.remove_extensions()
+    self.remove_binaries()
+
+</t>
+<t tx="sta.20200724112942.65">def zip_lib(self):
+    temp_lib_dynload = self.prefix_lib / 'lib-dynload'
+    temp_os_py = self.prefix_lib / 'os.py'
+
+    self.remove(self.site_packages)
+    self.lib_dynload.rename(temp_lib_dynload)
+    self.copyfile(self.python_lib / 'os.py', temp_os_py)
+
+    zip_path = self.prefix_lib  / f'python{self.ver_nodot}'
+    shutil.make_archive(zip_path, 'zip', self.python_lib)
+
+    self.remove(self.python_lib)
+    self.python_lib.mkdir()
+    temp_lib_dynload.rename(self.lib_dynload)
+    temp_os_py.rename(self.python_lib / 'os.py')
+    self.site_packages.mkdir()
+
+    
+</t>
+<t tx="sta.20200724112942.66">def fix_python_dylib_for_pkg(self):
+    self.chdir(self.prefix_lib)
+    self.cmd(f'chmod 777 {self.dylib}')
+    self.cmd(
+        'install_name_tool -id '
+        '@loader_path/../../../../support/{self.name}/lib/{self.dylib} '
+        '${self.dylib}')
+    self.chdir(self.root)
+
+</t>
+<t tx="sta.20200724112942.67">def fix_python_dylib_for_ext(self):
+    self.chdir(self.prefix_lib)
+    self.cmd(f'chmod 777 {self.dylib}')
+    self.cmd('install_name_tool -id @loader_path/{self.dylib} {self.dylib}')
+    self.chdir(self.root)
+
+</t>
+<t tx="sta.20200724112942.68">def pre_process(self):
+    self.chdir(self.src_path)
+    self.write_setup_local()
+    self.apply_patch()
+    self.chdir(self.project.root)
+
+</t>
+<t tx="sta.20200724112942.69">def post_process(self):
+    self.clean()
+    self.zip_lib()
+    # self.fix()
+    # self.sign()
+
+
+</t>
+<t tx="sta.20200724112942.7">@property
+def ver(self):
+    return  ".".join(self.version.split('.')[:2])
+
+</t>
+<t tx="sta.20200724112942.70">class StaticPythonBuilder(PythonBuilder):
+    setup_local = 'setup-static-min2.local'
+    patch = 'makesetup.patch'
+
+    @others
+</t>
+<t tx="sta.20200724112942.71">@property
+def prefix(self):
+    name = f'{self.name.lower()}-static'
+    return self.project.lib / name
+
+</t>
+<t tx="sta.20200724112942.72">def build(self):
+    for dep in self.depends_on:
+        dep.build()
+
+    self.chdir(self.src_path)
+    self.cmd(f"""\
+    ./configure MACOSX_DEPLOYMENT_TARGET={self.mac_dep_target} \
+        --prefix={self.prefix} \
+        --without-doc-strings \
+        --enable-ipv6 \
+        --without-ensurepip \
+        --with-lto \
+        --enable-optimizations
+    """)
+    self.cmd('make altinstall')
+    self.chdir(self.project.root)
+
+
+</t>
+<t tx="sta.20200724112942.73">def post_process(self):
+    self.clean()
+    self.zip_lib()
+    self.static_lib.rename(self.prefix / self.library)
+
+
+
+</t>
+<t tx="sta.20200724112942.74">class SharedPythonBuilder(PythonBuilder):
+    setup_local = 'setup-shared.local'
+
+    @others
+</t>
+<t tx="sta.20200724112942.75">@property
+def prefix(self):
+    name = f'{self.name.lower()}-shared'
+    return self.project.lib / name
+
+</t>
+<t tx="sta.20200724112942.76">def build(self):
+    for dep in self.depends_on:
+        dep.build()
+
+    self.chdir(self.src_path)
+    self.write_setup_local()
+    self.cmd(f"""\
+    ./configure MACOSX_DEPLOYMENT_TARGET={self.mac_dep_target} \
+        --prefix={self.prefix} \
+        --enable-shared \
+        --with-openssl={self.project.lib / 'openssl'} \
+        --without-doc-strings \
+        --enable-ipv6 \
+        --without-ensurepip \
+        --with-lto \
+        --enable-optimizations
+    """)
+    self.cmd('make altinstall')
+    self.chdir(self.project.root)
+
+
+</t>
+<t tx="sta.20200724112942.77">def remove_extensions(self):
     self.rm_exts([
         '_tkinter',
         '_ctypes',
@@ -6126,184 +6669,218 @@ def ver(self):
         '_curses_panel',
     ])
 
-</t>
-<t tx="sta.20200701101102.44">def remove_binaries(self):
-    self.rm_bins([
-        f'2to3-${self.version}',
-        f'idle${self.version}',
-        f'easy_install-${self.version}',
-        f'pip${self.version}',
-        f'python${self.version}m',
-        f'pyvenv-${self.version}',
-    ])
 
 </t>
-<t tx="sta.20200701101102.45">def clean_python(self):
-    self.clean_python_pyc(self.prefix)
-    self.clean_python_tests(self.lib)
-    self.clean_python_site_packages()
+<t tx="sta.20200724112942.78">class FrameworkPythonBuilder(PythonBuilder):
+    # setup_local = 'setup-shared.local'
 
-    self.remove((self.lib / 'distutils' / 'command').glob('*.exe'))
-
-    self.remove(self.prefix / 'lib' / 'pkgconfig')
-    self.remove(self.prefix / 'share')
-
-    self.remove_packages()
-    self.remove_extensions()
-    self.remove_binaries()
+    @others
+</t>
+<t tx="sta.20200724112942.79">@property
+def prefix(self):
+    return self.project.lib / 'Python.Framework'
 
 </t>
-<t tx="sta.20200701101102.46">def zip_python_library(self):
-    self.remove(self.lib / 'site-packages')
-    self.move(self.lib / 'lib-dynload', self.prefix)
-    self.copy(self.lib / 'os.py', self.prefix)
-    self.zipsrc(self.prefix / 'lib' / f'python{self.ver}.zip',
-                self.lib.glob('*'))
-    self.remove(self.lib)
-    self.lib.mkdir()
-    self.move(self.prefix / 'lib-dynload', self.lib)
-    self.move(self.lib / 'os.py', self.lib)
-    (self.lib / 'site-packages').mkdir()
+<t tx="sta.20200724112942.8">@property
+def ver_nodot(self):
+    return self.ver.replace('.', '')
 
 </t>
-<t tx="sta.20200701101102.47">def build_ssl(self):
-    self.chdir(self.ssl_src)
-    self.cmd(f'./config no-shared --prefix={self.ssl}')
-    self.cmd('make install_sw')
-    self.chdir(self.root)
+<t tx="sta.20200724112942.80">def build(self):
+    for dep in self.depends_on:
+        dep.build()
 
-</t>
-<t tx="sta.20200701101102.48">def write_python_setup_local(self):
-    lines = ['*disabled*'] + [
-        '_ctypes'
-        #'_sqlite3'
-        '_tkinter'
-        '_curses'
-        '_curses_panel'
-        'xxlimited'
-        'xxsubtype'
-        '_multibytecodec'
-        '_codecs_jp'
-        '_codecs_kr'
-        '_codecs_tw'
-        '_codecs_cn'
-        '_codecs_hk'
-        '_codecs_iso2022'
-    ]
-    with open(self.python / 'Modules' / 'Setup.local', 'w') as f:
-        f.writelines(lines)
-
-</t>
-<t tx="sta.20200701101102.49">def write_python_getpip(self):
-    script = f"""
-        curl ${self.url_getpip} -s -o get-pip.py 
-        ./bin/python{self.version} get-pip.py
-    """
-    self.cmd("chmod +x get_pip.sh")
-    with open(self.python / 'bin' / 'get_pip.sh', 'w') as f:
-        f.write(script)
-
-</t>
-<t tx="sta.20200701101102.5">@property
-def name(self):
-    return f'python{self.version}'
-
-</t>
-<t tx="sta.20200701101102.50">def compile_python_from_source(self):
-
-    self.chdir(self.python)
-
-    self.write_python_setup_local()
-    self.cmd(f"""
+    self.chdir(self.src_path)
+    self.write_setup_local()
+    self.cmd(f"""\
     ./configure MACOSX_DEPLOYMENT_TARGET={self.mac_dep_target} \
         --prefix={self.prefix} \
-        --enable-shared \
-        --with-openssl={self.ssl} \
+        --enable-framework={self.project.lib} \
+        --with-openssl={self.project.lib / 'openssl'} \
         --with-lto \
         --enable-optimizations
     """)
     self.cmd('make altinstall')
-    self.chdir(self.root)
-
-</t>
-<t tx="sta.20200701101102.51">def build_python(self):
-    self.compile_python_from_source()
-    self.clean_python()
-    self.write_python_getpip()
-
-</t>
-<t tx="sta.20200701101102.52">def build_python_zipped(self):
-    self.build_python()
-    self.zip_python_library()
-
-</t>
-<t tx="sta.20200701101102.53">def fix_python_dylib_for_pkg(self):
-    self.chdir(self.prefix / self.lib)
-    self.cmd(f'chmod 777 {self.dylib}')
-    self.cmd(
-        'install_name_tool -id '
-        '@loader_path/../../../../support/{self.name}/lib/{self.dylib} '
-        '${self.dylib}')
-    self.chdir(self.root)
+    self.chdir(self.project.root)
 
 
 </t>
-<t tx="sta.20200701101102.54">def fix_python_dylib_for_ext(self):
-    self.chdir(self.prefix / self.lib)
-    self.cmd(f'chmod 777 {self.dylib}')
-    self.cmd('install_name_tool -id @loader_path/{self.dylib} {self.dylib}')
-    self.chdir(self.root)
-
-
-\\-4.# FIXME: not complete!
-\\-4.# def fix_python_libintl(self):
-\\-4.#     #otool -L $PREFIX/lib/libpython${VERSION}.dylib
-\\-4.#     cp /usr/local/opt/gettext/lib/libintl.8.dylib ${PREFIX}/lib
-\\-4.#     chmod 777 ${PREFIX}/lib/libintl.8.dylib
-\\-4.#     install_name_tool -id @executable_path/libintl.8.dylib ${PREFIX}/lib/libintl.8.dylib
-\\-4.#     install_name_tool -change /usr/local/opt/gettext/lib/libintl.8.dylib @executable_path/libintl.8.dylib libpython${VERSION}.dylib
-
-
-</t>
-<t tx="sta.20200701101102.55">def install_python(self):
-    self.get_python()
-    self.get_ssl()
-    self.build_ssl()
-    self.build_python_zipped()
+<t tx="sta.20200724112942.81">def remove_extensions(self):
+    self.rm_exts([
+        '_tkinter',
+        '_ctypes',
+        '_multibytecodec',
+        '_codecs_jp',
+        '_codecs_hk',
+        '_codecs_cn',
+        '_codecs_kr',
+        '_codecs_tw',
+        '_codecs_iso2022',
+        '_curses',
+        '_curses_panel',
+    ])
 
 
 </t>
-<t tx="sta.20200701101102.56">def install_python_pkg(self):
-    self.install_python()
-    self.fix_python_dylib_for_pkg()
+<t tx="sta.20200724112942.82">class DependencyManager:
+    """Aggreggates, copies dylib dependencies and fixed references.
 
+    target: dylib to made relocatable
+    frameworks_dir: where target dylib will be copied to with copied dependents
+    exec_ref: back ref for executable or plugin
+    """
 
+    @others
 </t>
-<t tx="sta.20200701101102.57">def install_python_ext(self):
-    self.install_python()
-    self.fix_python_dylib_for_ext()
-    # FIXME: not complete!
-    # cp python to py.mxo
-</t>
-<t tx="sta.20200701101102.6">@property
-def url_python(self):
-    return f'https://www.python.org/ftp/python/{self.version}/Python-{self.version}.tgz'
-
-</t>
-<t tx="sta.20200701101102.7">@property
-def url_ssl(self):
-    return f'https://www.openssl.org/source/openssl-{self.ssl_version}.tar.gz'
-
-</t>
-<t tx="sta.20200701101102.8">@property
-def url_getpip(self):
-    return 'https://bootstrap.pypa.io/get-pip.py'
+<t tx="sta.20200724112942.83">def __init__(self, target, frameworks_dir='build', staticlibs_dir=None,
+        exec_ref='@loader_path/../Frameworks'):
+    self.target = target
+    self.frameworks_dir = frameworks_dir
+    self.staticlibs_dir = staticlibs_dir
+    self.exec_ref = exec_ref
+    self.install_names = {}
+    self.deps = []
+    self.dep_list = []
 
 </t>
-<t tx="sta.20200701101102.9">@property
-def source(self):
-    return self.root.parent / 'source'
+<t tx="sta.20200724112942.84">def is_valid_path(self, dep_path):
+    return (dep_path == '' or 
+            dep_path.startswith('/opt/local/') or 
+            dep_path.startswith('/usr/local/') or 
+            dep_path.startswith('/User/'))
 
 </t>
+<t tx="sta.20200724112942.85">def get_deps(self, target=None):
+    if not target:
+        target = self.target
+    key = os.path.basename(target)
+    self.install_names[key] = []
+    result = subprocess.check_output(['otool', '-L', target])
+    entries = [line.decode('utf-8').strip() for line in result.splitlines()]
+    for entry in entries:
+        match = re.match(r'\s*(\S+)\s*\(compatibility version .+\)$', entry)
+        if match:
+            path = match.group(1)
+            (dep_path, dep_filename) = os.path.split(path)
+            if self.is_valid_path(dep_path):
+                if dep_path == '':
+                    path = os.path.join('/usr/local/lib', dep_filename)
+
+                dep_path, dep_filename = os.path.split(path)
+                item = (path, '@rpath/' + dep_filename)
+                self.install_names[key].append(item)
+                if path not in self.deps:
+                    self.deps.append(path)
+                    self.get_deps(path)
+
+</t>
+<t tx="sta.20200724112942.86">def process_deps(self):
+    for dep in self.deps:
+        dep_path, dep_filename = os.path.split(dep)
+        dest = os.path.join(self.frameworks_dir, dep_filename)
+        self.dep_list.append([dep, '@rpath/' + dep_filename])
+
+</t>
+<t tx="sta.20200724112942.87">def copy_dylibs(self):
+    if not os.path.exists(self.frameworks_dir):
+        os.mkdir(self.frameworks_dir)
+
+    # cp target to frameworks_dir
+    if os.path.dirname(self.target) != self.frameworks_dir:
+        dest = os.path.join(self.frameworks_dir, os.path.basename(self.target))
+        shutil.copyfile(self.target, dest)
+        os.chmod(dest, 0o644)
+        cmdline = ['install_name_tool', '-id', self.exec_ref, dest]
+        err = subprocess.call(cmdline)
+        if err != 0:
+            raise RuntimeError("Failed to change '{0}' '{1}'".format(dest, self.exec_ref))
+
+    # copy the rest
+    for item in self.dep_list:
+        orig_path, transformed = item
+        dirname, dylib = os.path.split(orig_path)
+
+        dest = os.path.join(self.frameworks_dir, dylib)
+
+        if not os.path.exists(dest):
+            shutil.copyfile(orig_path, dest)
+            os.chmod(dest, 0o644)
+
+</t>
+<t tx="sta.20200724112942.88">def change_install_names(self):
+    for key in sorted(self.install_names.keys()):
+        # print(key)
+        # for i in self.install_names[key]:
+        #     print('\t', i)
+        # print()
+
+        target = os.path.join(self.frameworks_dir, key)
+        deps = self.install_names[key]
+        for dep in deps:
+            old, new = dep
+
+            (old_name_path, old_name_filename) = os.path.split(old)
+            if key == old_name_filename:
+                cmdline = ['install_name_tool', '-id', new, target]
+            else:
+                cmdline = ['install_name_tool', '-change', old, new, target]
+
+            err = subprocess.call(cmdline)
+            if err != 0:
+                raise RuntimeError("Failed to change '{0}' to '{1}' in '{2}".format(old, new, target))
+
+</t>
+<t tx="sta.20200724112942.89">def transform_exec(self, target):
+    result = subprocess.check_output(['otool', '-L', target])
+    entries = [line.decode('utf-8').strip() for line in result.splitlines()]
+    for entry in entries:
+        match = re.match(r'\s*(\S+)\s*\(compatibility version .+\)$', entry)
+        if match:
+            path = match.group(1)
+            (dep_path, dep_filename) = os.path.split(path)
+            if self.is_valid_path(dep_path):
+                if dep_path == '':
+                    path = os.path.join('/usr/local/lib', dep_filename)
+
+                dep_path, dep_filename = os.path.split(path)
+
+                dest = os.path.join(self.exec_ref, dep_filename)
+                cmdline = ['install_name_tool', '-change', path, dest, target]
+                subprocess.call(cmdline)
+
+</t>
+<t tx="sta.20200724112942.9">@property
+def name_version(self):
+    return f'{self.name}-{self.version}'
+
+</t>
+<t tx="sta.20200724112942.90">def copy_staticlibs(self):
+    if not self.staticlibs_dir:
+        raise Exception("must set 'staticlibs_dir parameter")
+    for i in self.deps:
+        head, tail = os.path.split(i)
+        name = tail.rstrip('.dylib')
+        if '.' in name:
+            name = os.path.splitext(name)[0] + '.a'
+        static = os.path.join(head, name)
+        exists = os.path.exists(static)
+        if exists:
+            shutil.copyfile(static, os.path.join(self.staticlibs_dir, name))
+        else:
+            print("revise: not exists", static)
+
+</t>
+<t tx="sta.20200724112942.91">def process(self):
+    self.get_deps()
+    self.process_deps()
+    self.copy_staticlibs()
+    self.copy_dylibs()
+    self.change_install_names()
+    self.transform_exec('./eg')
+
+</t>
+<t tx="sta.20200724113554.1"></t>
+<t tx="sta.20200724113615.1"></t>
+<t tx="sta.20200724114055.1"></t>
 </tnodes>
 </leo_file>

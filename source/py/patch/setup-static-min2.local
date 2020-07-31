@@ -1,0 +1,192 @@
+
+# -------------------------------------------------------------------------------
+# VARS
+
+DESTLIB=$(LIBDEST)
+MACHDESTLIB=$(BINLIBDEST)
+DESTPATH=
+SITEPATH=
+TESTPATH=
+COREPYTHONPATH=$(DESTPATH)$(SITEPATH)$(TESTPATH)
+PYTHONPATH=$(COREPYTHONPATH)
+
+# -------------------------------------------------------------------------------
+# CORE STATIC (don't modify)
+
+posix -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal posixmodule.c
+errno errnomodule.c
+pwd pwdmodule.c
+
+_sre _sre.c
+_codecs _codecsmodule.c
+_weakref _weakref.c
+_functools -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal _functoolsmodule.c
+_operator _operator.c
+_collections _collectionsmodule.c
+_abc _abc.c
+itertools itertoolsmodule.c
+atexit atexitmodule.c
+_signal -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal signalmodule.c
+_stat _stat.c
+time -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal timemodule.c
+_thread -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal _threadmodule.c
+
+_locale -DPy_BUILD_CORE_BUILTIN _localemodule.c
+
+_io -DPy_BUILD_CORE_BUILTIN -I$(srcdir)/Include/internal -I$(srcdir)/Modules/_io \
+    _io/_iomodule.c \
+    _io/iobase.c \
+    _io/fileio.c \
+    _io/bytesio.c \
+    _io/bufferedio.c \
+    _io/textio.c \
+    _io/stringio.c
+
+faulthandler faulthandler.c
+_tracemalloc _tracemalloc.c hashtable.c
+
+
+# -------------------------------------------------------------------------------
+# OPTIONAL STATIC (can be static or dynamic)
+
+_symtable symtablemodule.c
+
+*static*
+
+#readline readline.c -lreadline -ltermcap
+
+array arraymodule.c
+cmath cmathmodule.c _math.c
+math mathmodule.c _math.c
+_contextvars _contextvarsmodule.c
+_struct _struct.c
+_weakref _weakref.c
+#_testcapi _testcapimodule.c
+#_testinternalcapi _testinternalcapi.c -I$(srcdir)/Include/internal \
+    -DPy_BUILD_CORE_MODULE
+_random _randommodule.c
+_elementtree -I$(srcdir)/Modules/expat -DHAVE_EXPAT_CONFIG_H \
+    -DUSE_PYEXPAT_CAPI _elementtree.c
+_pickle _pickle.c
+_datetime _datetimemodule.c
+_bisect _bisectmodule.c
+_heapq _heapqmodule.c
+_asyncio _asynciomodule.c
+_json -I$(srcdir)/Include/internal -DPy_BUILD_CORE_BUILTIN _json.c
+_statistics _statisticsmodule.c
+
+unicodedata unicodedata.c
+
+_uuid _uuidmodule.c
+_opcode _opcode.c
+_multiprocessing _multiprocessing/multiprocessing.c _multiprocessing/semaphore.c
+_posixshmem _multiprocessing/posixshmem.c
+
+
+fcntl fcntlmodule.c
+#spwd spwdmodule.c
+grp grpmodule.c
+select selectmodule.c
+
+#mmap mmapmodule.c
+
+_csv _csv.c
+
+_posixsubprocess _posixsubprocess.c
+_blake2 _blake2/blake2module.c \
+    _blake2/blake2b_impl.c _blake2/blake2s_impl.c
+binascii binascii.c
+parser parsermodule.c
+
+_queue _queuemodule.c
+_md5 md5module.c
+_sha1 sha1module.c
+_sha256 sha256module.c
+_sha512 sha512module.c
+_sha3 _sha3/sha3module.c
+_socket socketmodule.c
+
+_lsprof _lsprof.o rotatingtree.c
+
+pyexpat expat/xmlparse.c \
+    expat/xmlrole.c \
+    expat/xmltok.c \
+    pyexpat.c \
+    -I$(srcdir)/Modules/expat \
+    -DHAVE_EXPAT_CONFIG_H -DUSE_PYEXPAT_CAPI -DXML_DEV_URANDOM
+
+zlib zlibmodule.c -I$(prefix)/include -lz
+
+
+#_ctypes _ctypes/_ctypes.c \
+#     _ctypes/callbacks.c \
+#     _ctypes/callproc.c \
+#     _ctypes/stgdict.c \
+#     _ctypes/cfield.c \
+#     _ctypes/libffi_apple/prep_cif.c \
+#     _ctypes/libffi_apple/types.c \
+#     _ctypes/libffi_apple/raw_api.c \
+#     _ctypes/libffi_apple/java_raw_api.c \
+#     _ctypes/libffi_apple/closures.c \
+#     _ctypes/libffi_apple/x86/ffi64_x86_64.c \
+#     _ctypes/libffi_apple/x86/ffiw64_x86_64.c \
+#     _ctypes/libffi_apple/x86/unix64_x86_64.S \
+#     _ctypes/libffi_apple/x86/win64_x86_64.S \
+#     -I$(srcdir)/Modules/_ctypes/libffi_apple/include
+
+_decimal _decimal/_decimal.c \
+    _decimal/libmpdec/basearith.c \
+    _decimal/libmpdec/constants.c \
+    _decimal/libmpdec/context.c \
+    _decimal/libmpdec/convolute.c \
+    _decimal/libmpdec/crt.c \
+    _decimal/libmpdec/difradix2.c \
+    _decimal/libmpdec/fnt.c \
+    _decimal/libmpdec/fourstep.c \
+    _decimal/libmpdec/io.c \
+    _decimal/libmpdec/memory.c \
+    _decimal/libmpdec/mpdecimal.c \
+    _decimal/libmpdec/numbertheory.c \
+    _decimal/libmpdec/sixstep.c \
+    _decimal/libmpdec/transpose.c \
+    -I$(srcdir)/Modules/_decimal/libmpdec \
+    -DCONFIG_64=1 -DANSI=1 -DHAVE_UINT128_T=1
+
+# -------------------------------------------------------------------------------
+# DISABLED
+
+*disabled*
+
+_crypt
+
+_dbm
+_gdbm
+audioop
+mmap
+nis
+resource
+syslog
+termios
+
+_ctypes
+_tkinter 
+_curses
+_curses_panel
+
+xxlimited
+xxsubtype
+_xxsubinterpreters
+
+_multibytecodec
+_codecs_cn
+_codecs_hk
+_codecs_iso2022
+_codecs_jp 
+_codecs_kr 
+_codecs_tw
+
+_scproxy
+_bz2
+_lzma
+_sqlite3
+readline

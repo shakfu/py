@@ -15,7 +15,7 @@ function warn {
 }
 
 VERSION_MAJOR=${PY_MAJ_VER:=3.8}
-VERSION_MINOR=${PY_MIN_VER:=3}
+VERSION_MINOR=${PY_MIN_VER:=4}
 SSL_VERSION=${SSL_VER:=1.1.1g}
 MAC_DEP_TARGET=${MAC_DEP:=10.13}
 
@@ -36,6 +36,7 @@ SUPPORT=${ROOT}/../../support
 EXTERNALS=${ROOT}/../../externals
 SOURCE=${ROOT}/../source
 FRAMEWORKS=${SUPPORT}/Frameworks
+SCRIPTS=${ROOT}/scripts
 BUILD=${ROOT}/targets/build
 PYTHON=${BUILD}/Python-${SEMVER}
 PREFIX=${SUPPORT}/${NAME}

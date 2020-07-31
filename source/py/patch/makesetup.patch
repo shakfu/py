@@ -1,0 +1,45 @@
+diff --git a/Modules/makesetup b/Modules/makesetup
+index fefe3fd129..e4ca74c610 100755
+--- a/Modules/makesetup
++++ b/Modules/makesetup
+@@ -133,7 +133,7 @@
+ 
+ 		# Output DEFS in reverse order so first definition overrides
+ 		case $line in
+-		*=*)	DEFS="$line$NL$DEFS"; continue;;
++		[A-Z]*=*)	DEFS="$line$NL$DEFS"; continue;;
+ 		'include '*)	DEFS="$line$NL$DEFS"; continue;;
+ 		'*noobjects*')
+ 			case $noobjects in
+@@ -162,9 +162,12 @@
+ 			esac
+ 			case $arg in
+ 			-framework)	libs="$libs $arg"; skip=libs;
+-				        # OSX/OSXS/Darwin framework link cmd
++				        # OSX/iOS/Darwin framework
+ 					;;
+-			-[IDUCfF]*)	cpps="$cpps $arg";;
++			-F*)	libs="$libs $arg"; skip=libs;
++				        # OSX/iOS/Darwin framework directory
++					;;
++			-[IDUCf]*)	cpps="$cpps $arg";;
+ 			-Xcompiler)	skip=cpps;;
+ 			-Xlinker)	libs="$libs $arg"; skip=libs;;
+ 			-rpath)		libs="$libs $arg"; skip=libs;;
+@@ -182,6 +185,7 @@
+ 			*.c++)		srcs="$srcs $arg";;
+ 			*.cxx)		srcs="$srcs $arg";;
+ 			*.cpp)		srcs="$srcs $arg";;
++			*.S)		srcs="$srcs $arg";;
+ 			\$*)		libs="$libs $arg"
+ 					cpps="$cpps $arg";;
+ 			*.*)		echo 1>&2 "bad word $arg in $line"
+@@ -219,6 +223,7 @@
+ 			*.C)   obj=`basename $src .C`.o; cc='$(CXX)';;
+ 			*.cxx) obj=`basename $src .cxx`.o; cc='$(CXX)';;
+ 			*.cpp) obj=`basename $src .cpp`.o; cc='$(CXX)';;
++			*.S)   obj=`basename $src .S`.o; cc='$(CC)';; # Assembly
+ 			*.m)   obj=`basename $src .m`.o; cc='$(CC)';; # Obj-C
+ 			*)     continue;;
+ 			esac
+\ No newline at end of file

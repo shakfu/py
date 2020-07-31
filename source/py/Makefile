@@ -38,6 +38,15 @@ $(call section,"build $1")
 	done
 endef
 
+# $(call xbuild,name,flags)
+define xbuild-targets-flags
+$(call section,"build $1 with flags: $2")
+@for target in ${TARGETS}; do \
+		xcodebuild -project targets/$1/py-js.xcodeproj -target $$target GCC_PREPROCESSOR_DEFINITIONS='$$GCC_PREPROCESSOR_DEFINITIONS $2 ' ; \
+	done
+endef
+
+
 # $call xclean,name)
 define xclean-build
 $(call section,"cleaning build artifacts from $1 target")
@@ -122,6 +131,9 @@ pkg-support:
 build: build-bin-homebrew-sys
 	$(call section,"build project")
 
+build-bin-beeware-ext: build-extension
+	$(call xbuild-targets-flags,"bin-beeware-ext","PY_STATIC_EXT")
+
 build-bin-homebrew-sys: build-extension
 	$(call xbuild-targets,"bin-homebrew-sys")
 
@@ -161,6 +173,61 @@ build-src-static-ext: prep-src-static-ext
 build-extension:
 	$(call section,"generate c code from cython extension")
 	@cython -3 ${EXTENSION}
+
+# re-compile only (without prep)
+# -----------------------------------------------------------------------
+.PHONY: compile compile-extension \
+		compile-bin-homebrew-sys \
+		compile-bin-homebrew-pkg compile-bin-homebrew-ext \
+		compile-bin-framework-pkg compile-bin-framework-ext \
+		compile-src-framework-pkg compile-src-framework-ext \
+		compile-src-shared-pkg compile-src-shared-ext \
+		compile-src-static-pkg compile-src-static-ext \
+		compile-bin-resource-ext
+
+compile: compile-bin-homebrew-sys
+	$(call section,"compile project")
+
+compile-bin-homebrew-sys: compile-extension
+	$(call xbuild-targets,"bin-homebrew-sys")
+
+compile-bin-homebrew-pkg:
+	$(call xbuild-targets,"bin-homebrew-pkg")
+
+compile-bin-homebrew-ext:
+	$(call xbuild-targets,"bin-homebrew-ext")
+
+compile-bin-framework-pkg:
+	$(call xbuild-targets,"bin-framework-pkg")
+
+compile-bin-framework-ext:
+	$(call xbuild-targets,"bin-framework-ext")
+
+compile-bin-resource-ext:
+	$(call xbuild-targets,"bin-resource-ext")
+
+compile-src-framework-pkg:
+	$(call xbuild-targets,"src-framework-pkg")
+
+compile-src-framework-ext:
+	$(call xbuild-targets,"src-framework-ext")
+
+compile-src-shared-pkg:
+	$(call xbuild-targets,"src-shared-pkg")
+
+compile-src-shared-ext:
+	$(call xbuild-targets,"src-shared-ext")
+
+compile-src-static-pkg:
+	$(call xbuild-targets,"src-static-pkg")
+
+compile-src-static-ext:
+	$(call xbuild-targets,"src-static-ext")
+
+compile-extension:
+	$(call section,"generate c code from cython extension")
+	@cython -3 ${EXTENSION}
+
 
 # Pre-build prep
 # -----------------------------------------------------------------------

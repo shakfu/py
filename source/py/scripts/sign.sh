@@ -9,7 +9,7 @@ function section {
 }
 
 VERSION=3.7
-PY=/Users/sa/Downloads/src/py
+PY=${HOME}/Downloads/src/py
 PY_EXT=${PY}/externals/py.mxo
 PY_EXT_VERSION=${PY_EXT}/Contents/Resources/Python.Framework/Versions/${VERSION}
 PYJS_EXT=${PY}/externals/pyjs.mxo

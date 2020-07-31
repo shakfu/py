@@ -9,6 +9,10 @@
 /* max/msp api */
 #include "api.h"
 
+#ifdef PY_STATIC_EXT
+#include <libgen.h>
+#endif
+
 /*--------------------------------------------------------------------------*/
 // GLOBALS
 
@@ -88,6 +92,9 @@ error:
 
 
 t_hashtab* get_global_registry(void) { return py_global_registry; }
+
+
+
 
 
 void py_locate_path_from_symbol(t_py* x, t_symbol* s)
@@ -346,19 +353,58 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
 
 void py_init(t_py* x)
 {
-    // wchar_t *program;
+    #ifdef PY_STATIC_EXT
+    wchar_t *python_home;
+    // char path[150];
 
+    // method 1
+    CFBundleRef bundle;
+    CFURLRef resources_url;
+    CFURLRef resources_abs_url;
+    CFStringRef resources_str;
+    const char* resources_path;
+
+    // Look for a bundle using its identifier
+    bundle = CFBundleGetBundleWithIdentifier(CFSTR("org.me.py"));
+    resources_url = CFBundleCopyResourcesDirectoryURL(bundle);
+    resources_abs_url = CFURLCopyAbsoluteURL(resources_url);
+    resources_str = CFURLCopyFileSystemPath(resources_abs_url, kCFURLPOSIXPathStyle);
+    resources_path = CFStringGetCStringPtr(resources_str, kCFStringEncodingUTF8);
+    python_home = Py_DecodeLocale(resources_path, NULL);    
+
+    // CFRelease(resources_url);
+    // CFRelease(resources_abs_url);
+    // CFRelease(resources_str);
+    // CFRelease(resources_path);
+
+    // STRANGE: if I run the next line the python_home isn't set properly!!
+    // char* exec_path = Py_EncodeLocale(Py_GetProgramFullPath(), NULL);
+    // sprintf(path, "%s/Resources", dirname(dirname(exec_path)));
+    // python_home = Py_DecodeLocale(path, NULL);
+
+    post("resources_path: %s", resources_path);
+    // python_home = Py_DecodeLocale("<abs-path-to-Resources>", NULL);
+    if (python_home == NULL) {
+        error("python_home is NULL");
+        // return;
+    }
+    Py_SetPythonHome(python_home);
+
+    // wchar_t *program;
     // program = Py_DecodeLocale("py", NULL);
     // if (program == NULL) {
     //     exit(1);
     // }
+
+    // Py_SetProgramName(program);
+    #endif
+
 
     /* Add the cythonized 'api' built-in module, before Py_Initialize */
     if (PyImport_AppendInittab("api", PyInit_api) == -1) {
         py_error(x, "could not add api to builtin modules table");
     }
 
-    // Py_SetProgramName(program);
 
     Py_Initialize();
 

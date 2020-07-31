@@ -4,6 +4,9 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#ifdef PY_STATIC_EXT
+#include <libgen.h>
+#endif
 
 #define PY_MAX_ATOMS 128
 #define PY_MAX_LOG_CHAR 500 // high number during development
@@ -148,6 +151,38 @@ error:
 
 void pyjs_init(t_pyjs* x)
 {
+
+    #ifdef PY_STATIC_EXT
+    wchar_t *python_home;
+
+    CFBundleRef bundle;
+    CFURLRef resources_url;
+    CFURLRef resources_abs_url;
+    CFStringRef resources_str;
+    const char* resources_path;
+
+    // Look for a bundle using its identifier
+    bundle = CFBundleGetBundleWithIdentifier(CFSTR("org.me.pyjs"));
+    resources_url = CFBundleCopyResourcesDirectoryURL(bundle);
+    resources_abs_url = CFURLCopyAbsoluteURL(resources_url);
+    resources_str = CFURLCopyFileSystemPath(resources_abs_url, kCFURLPOSIXPathStyle);
+    resources_path = CFStringGetCStringPtr(resources_str, kCFStringEncodingUTF8);
+    python_home = Py_DecodeLocale(resources_path, NULL);    
+
+    // CFRelease(resources_url);
+    // CFRelease(resources_abs_url);
+    // CFRelease(resources_str);
+    // CFRelease(resources_path);
+
+    post("resources_path: %s", resources_path);
+
+    if (python_home == NULL) {
+        error("python_home is NULL");
+        // return;
+    }
+    Py_SetPythonHome(python_home);
+
+    #endif
 
     Py_Initialize();
 

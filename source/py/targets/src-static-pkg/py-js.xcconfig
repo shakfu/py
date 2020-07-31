@@ -2,6 +2,11 @@
 
 PREFIX = $(SUPPORT)/python$(VERSION)
 PY_HEADERS = $(PREFIX)/include/python$(VERSION)
-PY_LIBS = $(PREFIX)/lib /usr/local/Cellar/gettext/0.20.2_1/lib
-PY_LDFLAGS = -lpython$(VERSION) -ldl -lintl
+PY_LIBS = $(PREFIX)/lib
+
+PY_LDFLAGS = -lpython$(VERSION) -ldl
+
+// old (with gettext dependency)
+//PY_LIBS = $(PREFIX)/lib /usr/local/Cellar/gettext/0.20.2_1/lib
+//PY_LDFLAGS = -lpython$(VERSION) -ldl -lintl
 

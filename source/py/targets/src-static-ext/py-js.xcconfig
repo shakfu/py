@@ -1,7 +1,16 @@
 #include "../common.xcconfig"
 
+BUILD = $(SRCROOT)/../build/lib
 PREFIX = $(SUPPORT)/python$(VERSION)
+PREFIX = $(SRCROOT)/../build/lib/python-static
 PY_HEADERS = $(PREFIX)/include/python$(VERSION)
-PY_LIBS = $(PREFIX)/lib /usr/local/Cellar/gettext/0.20.2_1/lib
-PY_LDFLAGS = -lpython$(VERSION) -ldl -lintl
+PY_LIBS = $(PREFIX)/lib $(BUILD)/bzip2/lib $(BUILD)/openssl/lib $(BUILD)/xz/lib $(BUILD)
+//PY_LIBS = $(PREFIX)/lib $(BUILD)/bzip2/lib $(BUILD)/openssl/lib $(BUILD)/xz/lib /usr/local/Cellar/gettext/0.20.2_1/lib
+PY_LDFLAGS = -lpython$(VERSION) -ldl -lssl -lbz2 -llzma -lz -lintl -liconv
+//PY_LDFLAGS = -lpython$(VERSION) -ldl -lssl -lbz2 -llzma -lxz -lsqlite3 -lz
 
+//PY_LIBS = $(PREFIX)/lib
+//PY_LDFLAGS = -lpython$(VERSION) -ldl
+
+//PY_LIBS = $(PREFIX)/lib /usr/local/Cellar/gettext/0.20.2_1/lib
+//PY_LDFLAGS = -lpython$(VERSION) -ldl -lintl
