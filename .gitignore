@@ -38,3 +38,5 @@ support/*
 sysbuild
 tmp
 uv.lock
+.claude
+CLAUDE.md

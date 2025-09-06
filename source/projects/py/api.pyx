@@ -4312,8 +4312,8 @@ cdef class Matrix:
     cdef jt.t_jit_matrix_info info
     cdef char* data
     cdef public str name
-    cdef Py_ssize_t shape[2]
-    cdef Py_ssize_t strides[2]
+    cdef Py_ssize_t shape[jt.JIT_MATRIX_MAX_DIMCOUNT]
+    cdef Py_ssize_t strides[jt.JIT_MATRIX_MAX_DIMCOUNT]
 
     def __cinit__(self):
         self.ptr = NULL
@@ -4332,43 +4332,48 @@ cdef class Matrix:
         self.refresh()
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
-        # cdef Py_ssize_t itemsize = self.itemsize
-        self.shape[0]  = self.info.dim[1]
-        self.shape[1]  = self.info.dim[0]
-        self.strides[0] = self.info.dimstride[1]
-        self.strides[1] = self.info.dimstride[0]
-        # ncols = 8
+        # Refresh matrix data to ensure we have current info
+        self.refresh()
+        
+        # Validate matrix data
+        if self.data is NULL:
+            raise ValueError("Matrix data is not available")
+        
+        if self.ndim <= 0 or self.ndim > jt.JIT_MATRIX_MAX_DIMCOUNT:
+            raise ValueError(f"Invalid number of dimensions: {self.ndim}")
+        
+        # Set shape and strides based on matrix dimensions
+        cdef int i
+        for i in range(self.ndim):
+            if self.info.dim[i] <= 0:
+                raise ValueError(f"Invalid dimension size at index {i}: {self.info.dim[i]}")
+            self.shape[i] = self.info.dim[i]
+            self.strides[i] = self.info.dimstride[i]
 
-        # swapped here as self.info.dim == [8, 10]
-        # 10          = 80            // 8
-        # self.shape[0] = self.v.size() // self.ncols
-        # 8           = 8
-        # self.shape[1] = self.ncols
-
-        # also swapped here: self.info.dimstride == [2, 16]
-        # Stride 1 is the distance, in bytes, between two items in a row
-        # this is the distance between two adjacent items in the vector.
-        # Stride 0 is the distance between the first elements of adjacent rows.
-        # self.strides[1] = <Py_ssize_t>(  <char *>&(self.v[1])
-        #                                - <char *>&(self.v[0]))
-
-        # self.strides[0] = self.ncols * self.strides[1]
-
-        # buffer.buf = <char *>&(self.v[0])
+        # Set up buffer structure
         buffer.buf = <char *>self.data
-        buffer.format = 'c'                     # char
-        buffer.internal = NULL                  # see References
+        buffer.internal = NULL
         buffer.itemsize = self.itemsize
-        # buffer.len = self.v.size() * itemsize   # product(shape) * itemsize
-        buffer.len = product(self.dim) * self.itemsize # product(shape) * itemsize
+        buffer.len = product(self.dim) * self.itemsize * self.planecount
         buffer.ndim = self.ndim
         buffer.obj = self
         buffer.readonly = 0
-        # buffer.shape = <Py_ssize_t *>self.info.dim
-        # buffer.strides = <Py_ssize_t *>self.info.dimstride
         buffer.shape = self.shape
         buffer.strides = self.strides
-        buffer.suboffsets = NULL                # for pointer arrays onl
+        buffer.suboffsets = NULL
+
+        # Set format string based on matrix type
+        cdef str matrix_type = self.type
+        if matrix_type == 'char':
+            buffer.format = 'b'  # signed char
+        elif matrix_type == 'long':
+            buffer.format = 'l'  # signed long
+        elif matrix_type == 'float32':
+            buffer.format = 'f'  # float
+        elif matrix_type == 'float64':
+            buffer.format = 'd'  # double
+        else:
+            raise ValueError(f"Unsupported matrix type: {matrix_type}")
 
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
@@ -4455,6 +4460,11 @@ cdef class Matrix:
             'float32': 4,
             'float64': 8,
         }[self.type]
+
+    @property
+    def ndim(self) -> int:
+        """number of dimensions"""
+        return self.dimcount
 
     @property
     def plane_len(self) -> int:
@@ -5063,6 +5073,101 @@ cdef class Matrix:
                     p[0] = <long>xs[z]
                     p += 1
                     z += 1
+
+    # Typed memoryview methods
+    
+    def as_float32_memoryview(self):
+        """Return a typed memoryview for float32 matrices.
+        
+        Returns:
+            memoryview: Typed memoryview with appropriate shape and strides
+        
+        Raises:
+            ValueError: If matrix type is not float32 or if matrix is not available
+        """
+        if self.type != 'float32':
+            raise ValueError(f"Matrix type is '{self.type}', expected 'float32'")
+        
+        self.refresh()
+        if self.data is NULL:
+            raise ValueError("Matrix data is not available")
+        
+        # Create a memoryview from the buffer protocol
+        return memoryview(self)
+    
+    def as_float64_memoryview(self):
+        """Return a typed memoryview for float64 matrices.
+        
+        Returns:
+            memoryview: Typed memoryview with appropriate shape and strides
+        
+        Raises:
+            ValueError: If matrix type is not float64 or if matrix is not available
+        """
+        if self.type != 'float64':
+            raise ValueError(f"Matrix type is '{self.type}', expected 'float64'")
+        
+        self.refresh()
+        if self.data is NULL:
+            raise ValueError("Matrix data is not available")
+        
+        # Create a memoryview from the buffer protocol
+        return memoryview(self)
+    
+    def as_char_memoryview(self):
+        """Return a typed memoryview for char matrices.
+        
+        Returns:
+            memoryview: Typed memoryview with appropriate shape and strides
+        
+        Raises:
+            ValueError: If matrix type is not char or if matrix is not available
+        """
+        if self.type != 'char':
+            raise ValueError(f"Matrix type is '{self.type}', expected 'char'")
+        
+        self.refresh()
+        if self.data is NULL:
+            raise ValueError("Matrix data is not available")
+        
+        # Create a memoryview from the buffer protocol
+        return memoryview(self)
+    
+    def as_long_memoryview(self):
+        """Return a typed memoryview for long matrices.
+        
+        Returns:
+            memoryview: Typed memoryview with appropriate shape and strides
+        
+        Raises:
+            ValueError: If matrix type is not long or if matrix is not available
+        """
+        if self.type != 'long':
+            raise ValueError(f"Matrix type is '{self.type}', expected 'long'")
+        
+        self.refresh()
+        if self.data is NULL:
+            raise ValueError("Matrix data is not available")
+        
+        # Create a memoryview from the buffer protocol
+        return memoryview(self)
+    
+    def as_memoryview(self):
+        """Return a generic typed memoryview for any matrix type.
+        
+        Returns:
+            memoryview: Typed memoryview with appropriate shape and strides for the matrix's data type
+        
+        Raises:
+            ValueError: If matrix data is not available
+        """
+        self.refresh()
+        if self.data is NULL:
+            raise ValueError("Matrix data is not available")
+        
+        # Create a memoryview from the buffer protocol
+        # The __getbuffer__ method will set the appropriate format string
+        return memoryview(self)
 
 # def demo(height=6, width=8, planes=2):
 #     z = 0
