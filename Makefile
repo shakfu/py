@@ -1,17 +1,29 @@
 ROOTDIR := $(shell pwd)
+SRCDIR := $(ROOTDIR)/source
+PROJECTS := $(SRCDIR)/projects
+PYDIR := $(PROJECTS)/py
+API_MODULE = $(PYDIR)/api.pyx
 PKG_NAME = py
 MAX_VERSIONS := 8 9
 
-.phony: all build clean setup update-submodules link
+CYTHON_OPTIONS := --timestamps -E INCLUDE_NUMPY=$(ENABLE_NUMPY) -X emit_code_comments=False
+
+
+.phony: all build api clean setup update-submodules link
 
 all: build
 
 
-build: clean
+build: clean api
 	@mkdir -p build && cd build && \
 		cmake .. && \
 		cmake --build . --config Release
 
+source/projects/py/api.c: source/projects/py/api.pyx
+	@echo "generating source/projects/py/api.c"
+	@cython -3 $(CYTHON_OPTIONS) $(API_MODULE)
+
+api: source/projects/py/api.c
 
 clean:
 	@rm -rf exterals build

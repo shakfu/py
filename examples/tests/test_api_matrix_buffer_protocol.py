@@ -306,9 +306,12 @@ def test_matrix_memoryview_performance():
     
     # Test memoryview access
     mv = m.as_memoryview()
+
+    # api.post(f"{dir(mv)}")
     
     # Read all values through memoryview
-    if mv.size > 0:
+    # if mv.size > 0:
+    if len(mv) > 0:
         sum_via_mv = sum(mv)
         api.post(f"Sum via memoryview: {sum_via_mv}")
     
