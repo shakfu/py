@@ -1,0 +1,2 @@
+max definekind python @parent textfile @showextension 1;
+max fileformat .py TEXT 0 "Python Source file" python;

@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<?xml-stylesheet href="./_c74_ref.xsl" type="text/xsl"?>
+
+<c74object name="py" module="max" category="Python">
+
+	<digest>Evaluate python code</digest>
+	<description>
+		<o>py</o> provides a set of methods to execute and evaluate python3 code and to return the results in a max/msp patch.
+	</description>
+	
+	<!--METADATA-->
+	<metadatalist>
+		<metadata name="author">shakfu</metadata>
+		<metadata name="tag">Python</metadata>
+	</metadatalist>
+
+	<!--INLETS-->
+	<inletlist>
+		<inlet id="0" type="INLET_TYPE">
+			<digest>py object inlet</digest>
+			<description>The py object has only one inlet.</description>
+		</inlet>
+	</inletlist>
+
+	<!--OUTLETS-->
+	<outletlist>
+		<outlet id="0" type="OUTLET_TYPE">
+			<digest>Right outlet for bang notification when an operation succeeds.</digest>
+		</outlet>
+		
+		<outlet id="1" type="OUTLET_TYPE">
+			<digest>Middle outlet for bang notification when an operation fails</digest>
+		</outlet>
+
+		<outlet id="2" type="OUTLET_TYPE">
+			<digest>Left outlet for all outputs from python operations</digest>
+		</outlet>
+	</outletlist>
+
+	<!--ATTRIBUTES-->
+	<attributelist>
+
+		<attribute name='name' get='1' set='1' type='symbol' size='1' >
+			<digest>Name of the py object </digest>
+			<description>Name of the py object. Every <o>py</o> object in a patcher must be named. A unique automatically generated name is assigned if the user doesn't pick a name for the object. </description>
+		</attribute>
+
+		<attribute name='file' get='1' set='1' type='symbol' size='1' >
+			<digest>Path to a default python file </digest>
+			<description>Path to a default python file. A python file to <m>load</m> into the code editor. This path is saved. </description>
+		</attribute>
+
+		<attribute name='autoload' get='1' set='1' type='bool' size='1' >
+			<digest>Autoload default python file at start </digest>
+			<description>Autoload default python file at start. Enabling this will <m>load</m> the default python file at start. This option is saved. </description>
+		</attribute>
+
+		<attribute name='run_on_save' get='1' set='1' type='bool' size='1' >
+			<digest>Automatically run code in editor after saving </digest>
+			<description>Automatically run code in editor after saving. Enabling this will <m>execfile</m> code in the text editor after saving. This option is saved. </description>
+		</attribute>
+
+		<attribute name='pythonpath' get='1' set='1' type='symbol' size='1' >
+			<digest>Additional <m>import</m> path for python interpreter </digest>
+			<description>Additional <m>import</m> path for python interpreter. Provide an optional additional path which will be automatically added to the python interpreter's sys.path to enable <m>import</m> messages from that directory. </description>
+		</attribute>
+		
+		<attribute name='debug' get='1' set='1' type='bool' size='1' >
+			<digest>Debug mode </digest>
+			<description>Debug mode. Switch on/off debug logging of the py object to the console. </description>
+		</attribute>
+
+	</attributelist>
+
+	<!--MESSAGES-->
+	<methodlist>
+
+		<method name="import">
+			<arglist>
+				<arg name="module" optional="0" type="symbol" />
+			</arglist>
+			<digest>import a python module</digest>
+			<description>
+				Can import standard builtin modules, a custom builtin 'api' to access the max api from python or any modules available on python's sys.path.
+			</description>
+		</method>
+
+		<method name="eval">
+			<arglist>
+				<arg name="expression" optional="0" type="symbol" />
+			</arglist>
+			<digest>Evaluate a python expression</digest>
+			<description>
+				The <a>expression</a> is evaluated in the context of the <o>py</o> object namespace and outputs results to the left outlet and a bang from the right outlet to signal end of evaluation.
+			</description>
+		</method>
+
+		<method name="exec">
+			<arglist>
+				<arg name="statement" optional="0" type="symbol" />
+			</arglist>
+			<digest>Execute a python statement into the object namespace</digest>
+			<description>
+				Can modify and inject new code and data into the namespace.
+			</description>
+		</method>
+
+		<method name="execfile">
+			<arglist>
+				<arg name="filepath" optional="0" type="symbol" />
+			</arglist>
+			<digest>Execute a python file into the object namespace</digest>
+			<description>
+				Can modify and inject new code and data into the namespace.
+			</description>
+		</method>
+
+		<method name="assign">
+			<arglist>
+				<arg name="varname" optional="0" type="symbol" />
+				<arg name="data" optional="0" type="atom" />
+			</arglist>
+			<digest>Creates a new variable in the python namespace with a list of the data</digest>
+			<description>
+				Used for sending max data into the <o>py</o> instance's namespace, so it can be used by python code. 
+			</description>
+		</method>
+
+		<method name="call">
+			<arglist>
+				<arg name="identifier" optional="0" type="symbol" />
+				<arg name="args" optional="0" type="atom" />
+			</arglist>
+			<digest>Tries to call the identifier based on simple rules</digest>
+			<description>
+				Checks whether first argument is a symbol, if it exists in <o>py</o> object's namespace, if is a callable, and then using the following arguments as arguments to the callable and outputs the result.
+			</description>
+		</method>
+
+		<method name="pipe">
+			<arglist>
+				<arg name="value or variable" optional="0" type="atom" />
+				<arg name="funcs" optional="0" type="python callables" />
+			</arglist>
+			<digest>Pipes a value or python variable through a chain of python callables and outputs result</digest>
+			<description>
+				Like a <m>call</m> in reverse, pipes a max value or python variable through a chain of python callables and outputs results in left outlet.
+			</description>
+		</method>
+
+		<method name="code">
+			<arglist>
+				<arg name="identifier" optional="0" type="symbol" />
+			</arglist>
+			<digest>Tries to <m>eval</m> or <m>exec</m> the message as python code based on simple rules</digest>
+			<description>
+				Attempts to compile the message body, if it succeeds tries to <m>eval</m> it and return the results, or <m>exec</m> it and return.
+			</description>
+		</method>
+
+		<method name="scan">
+			<arglist/>
+			<digest>Scan the parent patcher for scripting names</digest>
+			<description>
+				Scans the parent patcher for scripting names and stores them in an internal registry that is accessible by all <o>py</o> objects.
+			</description>
+		</method>
+
+		<method name="send">
+			<arglist>
+				<arg name="object name" optional="0" type="symbol" />
+				<arg name="args" optional="0" type="atom" />
+			</arglist>
+			<digest>Sends a message to the named object</digest>
+			<description>
+				Similar to <o>thispatcher</o> message send, the <m>send</m>message following by the objct name and the body of the message allows the <o>py</o> object to call the method of any object in the parent patcher (including subpatchers).
+			</description>
+		</method>
+
+		<method name="read">
+			<arglist>
+				<arg name="filepath" optional="0" type="symbol" />
+			</arglist>
+			<digest>Read a python file into the code-editor</digest>
+			<description>
+				Loads a python file into the code-editor.
+			</description>
+		</method>
+
+		<method name="load">
+			<arglist>
+				<arg name="filepath" optional="0" type="symbol" />
+			</arglist>
+			<digest>Loads a python file into the code editor and executes it in the object namespace</digest>
+			<description>
+				Loads and executes a file (like a 'read' msg followed by 'execfile' on the same file.)
+			</description>
+		</method>
+
+		<method name="run">
+			<arglist/>
+			<digest>Runs the code in the editor executing it in the object namespace</digest>
+			<description>
+				This is like an <m>execfile</m> except the operation is on code editor text in memory.
+			</description>
+		</method>
+
+		<method name="sched">
+			<arglist>
+				<arg name="milliseconds" optional="0" type="float" />
+				<arg name="callable" optional="0" type="symbol" />
+				<arg name="args" optional="0" type="atom" />
+			</arglist>
+			<digest>Schedules to call a python function after a specified number of ms</digest>
+			<description>
+				This is like a <m>call</m> except the operation is deferred by N ms.
+			</description>
+		</method>
+
+	</methodlist>
+
+	<!--OUTLETS-->
+	<misc name = "Outlets">
+		<entry name ="0 (anything)">
+			<description>Left outlet for all outputs from python operations. </description>
+		</entry>
+		<entry name ="1 (bang)">
+			<description>Middle outlet for bang notification when an operation fails. </description>
+		</entry>
+		<entry name ="2 (bang)">
+			<description>Right outlet for bang notification when an operation succeeds. </description>
+		</entry>
+	</misc>
+
+	<!--SEEALSO-->
+	<seealsolist>
+		<seealso name="pyjs" />
+		<seealso name="js" />
+	</seealsolist>
+
+
+</c74object>
