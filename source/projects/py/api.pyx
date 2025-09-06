@@ -4674,7 +4674,7 @@ cdef class Matrix:
         jt.jit_object_method(self.ptr, mx.gensym("read"), atom.size, atom.ptr)
 
     def set_all(self, *args):
-        """Set all cells to a value
+        """Set all cells to a value (_jit_sym_setall)
 
         setall(list values)
 
@@ -4685,7 +4685,10 @@ cdef class Matrix:
         >>> matrix.set_all(10, 20)
         # sets all cells in: plane0 to 10, plane1 to 20
         """
-        self.call("setall", args)
+        cdef Atom atom = Atom(*args)
+        jt.jit_object_method_typed(<jt.t_object*>self.ptr,
+            str_to_sym("setall"), atom.size, atom.ptr, NULL # <- NULL or raises TypError
+        )
 
     def set_cell(self, list[int] positions,  list[object] values, int plane=-1):
         """Set a cell to a specified value

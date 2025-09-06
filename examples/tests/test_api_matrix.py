@@ -113,9 +113,8 @@ def test_matrix_read():
 
 def test_matrix_set_all():
     m = mem["m"]
-    m.set_all(5)
+    m.set_all(1, 2)
     api.bang_success()
-
 
 def test_matrix_set_val():
     m = mem["m"]
