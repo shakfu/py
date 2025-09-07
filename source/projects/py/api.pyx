@@ -4495,6 +4495,13 @@ cdef class Matrix:
             return result.value
         return
 
+    def call_noreturn(self, str method, *args):
+        """helper wrapper method around jit_object_method_typed"""
+        cdef Atom atom = Atom(*args)
+        jt.jit_object_method_typed(<jt.t_object*>self.ptr,
+            str_to_sym(method), atom.size, atom.ptr, NULL
+        )
+
     def call_with_atoms(self, str method, Atom atom) -> Optional[object]:
         """helper wrapper method around jit_object_method_typed"""
         cdef Atom result = Atom.new(1)
@@ -4685,12 +4692,14 @@ cdef class Matrix:
         >>> matrix.set_all(10, 20)
         # sets all cells in: plane0 to 10, plane1 to 20
         """
-        cdef Atom atom = Atom(*args)
-        jt.jit_object_method_typed(<jt.t_object*>self.ptr,
-            str_to_sym("setall"), atom.size, atom.ptr, NULL # <- NULL or raises TypError
-        )
+        # cdef Atom atom = Atom(*args)
+        # jt.jit_object_method_typed(<jt.t_object*>self.ptr,
+        #     str_to_sym("setall"), atom.size, atom.ptr, NULL # <- NULL or raises TypError
+        # )
+        self.call_noreturn("setall", args)
 
-    def set_cell(self, list[int] positions,  list[object] values, int plane=-1):
+
+    def set_cell(self, list[int] positions, list[object] values, int plane=-1):
         """Set a cell to a specified value
 
         setcell(list position, literal plane?, int plane-number?, literal val, list values)
@@ -4704,16 +4713,19 @@ cdef class Matrix:
 
         For eg, for a char 3 plane 2d matrix
 
-        >>> self.set_cell(positions=[0,0], values=[10, 8, 5]/)
+        >>> self.set_cell(positions=[0,0], values=[10, 8, 5])
         """
-        assert len(positions) == self.dimcount, "len(positions) must equal # of dimensions"
-        assert len(values) < self.planecount, "len(values) must be less than planecount"
+        if self.planecount -1 > plane >= 0:
+            assert len(values) == 1, "if plane is specified then only 1 value is allowed"
+        else:
+            assert len(positions) == self.dimcount, "len(positions) must equal # of dimensions"
+            assert len(values) == self.planecount , "len(values) must be equal to planecount"
         args = positions[:]
         if plane >= 0:
             args.extend(['plane', plane])
         args.append('val')
         args.extend(values)
-        self.call("setcell", args)
+        self.call_noreturn("setcell", args)
 
     def set_cell1d(self, int x, list[object] values):
         """Set a 1-dimensional cell to a specified value

@@ -87,6 +87,12 @@ def test_matrix_fill_plane():
     m.fill_plane(7, plane=1)
 
 
+def test_matrix_set_cell():
+    m = mem["m"]
+    m.set_cell(positions=[2, 3], values=[50, 110])
+    api.bang_success()
+
+
 def test_matrix_get_cell():
     m = mem["m"]
     m.get_cell(0, 0)
