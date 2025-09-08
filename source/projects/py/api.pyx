@@ -4399,11 +4399,6 @@ cdef class Matrix:
         return self.info.flags
 
     @property
-    def ncols(self) -> int:
-        """number of columns in the matrix"""
-        return self.dim[0]
-
-    @property
     def shape(self):
         """shape of dimensions"""
         return self.info.dim
@@ -4439,12 +4434,27 @@ cdef class Matrix:
         """number of planes"""
         return self.info.planecount
 
-    # custom properties
+    # extended data properties
+
+    @property
+    def ndim(self) -> int:
+        """number of dimensions (synonym for `dimcount`)"""
+        return self.dimcount
+
+    @property
+    def ncols(self) -> int:
+        """number of columns in the matrix"""
+        return self.dim[0]
 
     @property
     def width(self) -> int:
         """width of matrix"""
         return self.dim[0]
+
+    @property
+    def nrows(self) -> int:
+        """number of rows in the matrix"""
+        return self.dim[1]
 
     @property
     def height(self) -> int:
@@ -4462,11 +4472,6 @@ cdef class Matrix:
         }[self.type]
 
     @property
-    def ndim(self) -> int:
-        """number of dimensions"""
-        return self.dimcount
-
-    @property
     def plane_len(self) -> int:
         """number of `cells` in a single plane"""
         return product(self.dim)
@@ -4481,6 +4486,18 @@ cdef class Matrix:
     def is_matrix(self) -> bool:
         """Checks if matrix pointer refers to an actual matrix"""
         return <bint>jt.jit_object_method(self.ptr, jt._jit_sym_class_jit_matrix)
+
+    def is_char_matrix(self) -> bool:
+        return self.type == "char"
+
+    def is_long_matrix(self) -> bool:
+        return self.type == "long"
+
+    def is_float_matrix(self) -> bool:
+        return self.type == "float32"
+
+    def is_double_matrix(self) -> bool:
+        return self.type == "float64"
 
     # helper methods
 
@@ -4527,6 +4544,8 @@ cdef class Matrix:
         data. Position is specified of a list whose length is equal to the
         number of dimensions (`dimcount`).
         """
+        if self.type not in ["char", "long"]:
+            raise TypeError(f"matrix wrong type '{self.type}' for `set_int`")
         assert 0 < len(values) <= self.planecount, "# of values cannot == 0 or >= # planes"
         self.call("int", values)
 
@@ -4539,6 +4558,8 @@ cdef class Matrix:
         data. Value is specified as a list whose length is equal to the
         number of dimensions (`dimcount`).
         """
+        if self.type not in ["float32", "float64"]:
+            raise TypeError(f"matrix wrong type '{self.type}' for `set_float`")
         assert 0 < len(values) <= self.planecount, "# of values cannot == 0 or >= # planes"
         self.call("float", values)
 
@@ -4584,7 +4605,7 @@ cdef class Matrix:
         cdef Atom atom = Atom(filename, fps, codec, quality, timescale)
         jt.jit_object_method(self.ptr, mx.gensym("exportmovie"), atom.size, atom.ptr)
 
-    def expr_fill(self, str expr, int plane = 0):
+    def exprfill(self, str expr, int plane = 0):
         """Evaluate an expression to fill the matrix
 
         exprfill(int plane?, symbol expression)
@@ -4612,7 +4633,7 @@ cdef class Matrix:
         cdef Atom atom = Atom(plane, value)
         jt.jit_object_method(self.ptr, mx.gensym("fillplane"), atom.size, atom.ptr)
 
-    def get_cell(self, *positions):
+    def get_cell(self, *positions) -> list[int | float]:
         """Report cell values
 
         getcell(list position)
@@ -4623,9 +4644,74 @@ cdef class Matrix:
             cell pos1... posN val plane0-value... planeN-value
 
         where pos1 and pos2 would correspond to x and y in a 2d matrix
+
+        prototype:
+
+            t_jit_err jit_matrix_getcell (t_jit_matrix *x, t_symbol *s,
+                long argc, t_atom *argv, // send
+                long *rac, t_atom *rav)  // receive
         """
-        cdef Atom atom = Atom(*positions)
-        jt.jit_object_method(self.ptr, mx.gensym("getcell"), atom.size, atom.ptr)
+        assert len(positions) == self.ndim, f"wrong number of position, should be {self.ndim}"
+        assert jt.jit_object_method(self.ptr, jt._jit_sym_class_jit_matrix)
+
+        cdef int i
+        cdef long savelock
+        cdef Atom atom = Atom(positions)
+        cdef mx.t_atom rv
+        cdef mx.t_object *rvarr
+        cdef long rvac = 0
+        cdef mx.t_atom * rvav = NULL
+
+        # cdef Atom result = Atom.new(self.planecount)
+        result = []
+
+        savelock = <long>self.lock()
+
+        jt.jit_object_method_typed(<jt.t_object*>self.ptr,
+            str_to_sym("getcell"), atom.size, atom.ptr, &rv
+        )
+        rvarr = <mx.t_object *>jt.jit_atom_getobj(&rv)
+        if rvarr is not NULL:
+            mx.object_getvalueof(rvarr, &rvac, &rvav)
+            if rvac and rvav:
+                if self.is_char_matrix():
+                    for i in range(rvac):
+                        result.append(<int>jt.jit_atom_getcharfix(rvav + i))
+    
+                elif self.is_long_matrix():
+                    for i in range(rvac):
+                        result.append(<int>mx.atom_getlong(rvav + i))
+    
+                elif self.is_float_matrix():
+                    for i in range(rvac):
+                        result.append(<float>mx.atom_getfloat(rvav + i))
+    
+                elif self.is_double_matrix():
+                    for i in range(rvac):
+                        result.append(<int>mx.atom_getfloat(rvav + i))
+
+        self.unlock(savelock)
+
+        return result
+ 
+
+    def op(self, *args):
+        """Perform `jit.op` operations on the matrix
+
+        The word `op`, followed by the name of a `jit.op` object operator and
+        a set of values, is equivalent to including a `jit.op` object with
+        the specified operator set as an attribute and this `jit.matrix`
+        object specified as the output matrix. The additional `value`
+        arguments may either be a matrix name or a constant. If only one
+        value argument is provided, this matrix is considered both the
+        output and the left operand.
+
+        For example
+            `op + foo bar` is equivalent to the operation `thismatrix = foo + bar`,
+                and
+            `op * 0.5` is equivalent to the operation `thismatrix = thismatrix * 0.5`
+        """
+        self.call_noreturn("op", args)
 
     def import_movie(self, str filename, int timeoffset = 0):
         """Import a movie into the matrix
@@ -4649,24 +4735,6 @@ cdef class Matrix:
         """
         cdef Atom atom = Atom(texture_name)
         jt.jit_object_method(self.ptr, mx.gensym("jit_gl_texture"), atom.size, atom.ptr)
-
-    def op(self, *args):
-        """Perform `jit.op` operations on the matrix
-
-        The word `op`, followed by the name of a `jit.op` object operator and
-        a set of values, is equivalent to including a `jit.op` object with
-        the specified operator set as an attribute and this `jit.matrix`
-        object specified as the output matrix. The additional `value`
-        arguments may either be a matrix name or a constant. If only one
-        value argument is provided, this matrix is considered both the
-        output and the left operand.
-
-        For example
-            `op + foo bar` is equivalent to the operation `thismatrix = foo + bar`,
-                and
-            `op * 0.5` is equivalent to the operation `thismatrix = thismatrix * 0.5`
-        """
-        self.call("op", args)
 
     def read(self, str filename):
         """Read Jitter binary data files (.jxf)
@@ -4692,12 +4760,7 @@ cdef class Matrix:
         >>> matrix.set_all(10, 20)
         # sets all cells in: plane0 to 10, plane1 to 20
         """
-        # cdef Atom atom = Atom(*args)
-        # jt.jit_object_method_typed(<jt.t_object*>self.ptr,
-        #     str_to_sym("setall"), atom.size, atom.ptr, NULL # <- NULL or raises TypError
-        # )
         self.call_noreturn("setall", args)
-
 
     def set_cell(self, list[int] positions, list[object] values, int plane=-1):
         """Set a cell to a specified value
@@ -4714,6 +4777,8 @@ cdef class Matrix:
         For eg, for a char 3 plane 2d matrix
 
         >>> self.set_cell(positions=[0,0], values=[10, 8, 5])
+
+        see also: https://cycling74.com/forums/setcell-jit_object_method#reply-58ed1f4f43f50b22d4ba98d9
         """
         if self.planecount -1 > plane >= 0:
             assert len(values) == 1, "if plane is specified then only 1 value is allowed"
@@ -4735,7 +4800,10 @@ cdef class Matrix:
         message but without the need to use a `val` token to separate the
         coordinates from the value since the dimension count (1) is fixed.
         """
-        self.call("setcell1d", x, values)
+        args = [x]
+        assert len(values) == self.planecount , "len(values) must be equal to planecount"
+        args.extend(values)
+        self.call_noreturn("setcell1d", args)
 
     def set_cell2d(self, int x, int y, list[object] values):
         """Set a 2-dimensional cell to specified values
@@ -4745,8 +4813,10 @@ cdef class Matrix:
         message but without the need to use a `val` token to separate the
         coordinates from the value since the dimension count (2) is fixed.
         """
-        assert len(values) < self.planecount, "len(values) must be less than planecount"
-        self.call("set_cell2d", x, y, values)
+        args = [x, y]
+        assert len(values) == self.planecount , "len(values) must be equal to planecount"
+        args.extend(values)
+        self.call_noreturn("setcell2d", args)
 
     def set_cell3d(self, int x, int y, int z, list[object] values):
         """Set a 3-dimensional cell to specified values
@@ -4757,8 +4827,10 @@ cdef class Matrix:
         separate the coordinates from the value since the dimension count
         (3) is fixed.
         """
-        assert len(values) < self.planecount, "len(values) must be less than planecount"
-        self.call("set_cell2d", x, y, z, values)
+        args = [x, y, z]
+        assert len(values) == self.planecount , "len(values) must be equal to planecount"
+        args.extend(values)
+        self.call_noreturn("setcell2d", args)
 
     def set_plane1d(self, int x, int plane, object value):
         """Set a cell in a plane to a value (1d, no val token)
@@ -4811,7 +4883,7 @@ cdef class Matrix:
         assert 0 < len(values) <= self.planecount, "# of values cannot == 0 or >= # planes"
         # using `setall` because `val` cannot be found
         # (suspect it's need to be an attr to be called as in max-sdk/matrix/jit.op)
-        self.call("setall", values)
+        self.call_noreturn("setall", values)
         self.bang()
 
     def write(self, str filename):

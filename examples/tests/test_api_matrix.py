@@ -41,7 +41,13 @@ def test_matrix_info():
     api.post(f"dim: {m.dim}")
     api.post(f"dimstride: {m.dimstride}")
     api.post(f"planecount: {m.planecount}")
-    # custom properties
+    
+    api.post("----- extended properties ------")
+
+    api.post(f"ndim: {m.ndim}")
+    api.post(f"ncols == width: {m.ncols} == {m.width}")
+    api.post(f"nrows == height: {m.nrows} == {m.height}")
+    
     api.post(f"itemsize: {m.itemsize}")
     api.post(f"plane_len: {m.plane_len}")
     api.post(f"matrix_len: {m.matrix_len}")
@@ -79,7 +85,11 @@ def test_matrix_export_movie():
 
 def test_matrix_exprfill():
     m = mem["m"]
-    m.exprfill("pow(jit.noise(), 4)")
+    m.exprfill("cell[0]==10")
+
+def test_matrix_exprfill2():
+    m = mem["m"]
+    m.exprfill("cell[0]!=10")
 
 
 def test_matrix_fill_plane():
@@ -95,8 +105,39 @@ def test_matrix_set_cell():
 
 def test_matrix_get_cell():
     m = mem["m"]
-    m.get_cell(0, 0)
+    res = m.get_cell(1, 2)
     api.bang_success()
+    return res
+    
+
+def test_matrix_set_cell1d():
+    m = mem["m"]
+    if m.type in ["char", "long"]:
+        m.set_cell1d(0, values=[2, 3])
+    else:
+        m.set_cell1d(0, values=[2.5, 3.3])
+    api.bang_success()
+
+
+def test_matrix_set_cell2d():
+    m = mem["m"]
+    if m.type in ["char", "long"]:
+        m.set_cell2d(0, 1, values=[2, 3])
+    else:
+        m.set_cell2d(0, 1, values=[2.5, 3.3])
+    api.bang_success()
+
+
+def test_matrix_set_cell3d():
+    m = mem["m"]
+    if m.type in ["char", "long"]:
+        m.set_cell2d(0, 1, 2, values=[2, 3, 4])
+    else:
+        m.set_cell2d(0, 1, 2, values=[2.5, 3.3, 4.4])
+    api.bang_success()
+
+
+
 
 
 def test_matrix_import_movie():
@@ -133,21 +174,7 @@ def test_matrix_get_data():
     return m.get_data()
 
 
-def test_matrix_set_cell2d():
-    m = mem["m"]
-    if m.type in ["char", "long"]:
-        m.set_cell2d(8, x=3, y=2, plane=0)
-        m.set_cell2d(9, x=3, y=2, plane=1)
-    else:
-        m.set_cell2d(2.5, x=3, y=2, plane=0)
-        m.set_cell2d(3.5, x=2, y=3, plane=1)
-    api.bang_success()
 
-
-def test_matrix_set_cell2d():
-    m = mem["m"]
-    m.set_cell2d(5, x=3, y=2, plane=0)
-    api.bang_success()
 
 
 # def test_matrix_set_char_data():
