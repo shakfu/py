@@ -4662,7 +4662,6 @@ cdef class Matrix:
         cdef long rvac = 0
         cdef mx.t_atom * rvav = NULL
 
-        # cdef Atom result = Atom.new(self.planecount)
         result = []
 
         savelock = <long>self.lock()
@@ -4918,13 +4917,13 @@ cdef class Matrix:
 
     def get_data(self) -> list[object]:
         """retrieve data from matrix as contiguous array."""
-        if self.type == "char":
+        if self.is_char_matrix():
             return self.get_char_data()
-        elif self.type == "long":
+        elif self.is_long_matrix():
             return self.get_long_data()
-        elif self.type == "float32":
+        elif self.is_float_matrix():
             return self.get_float_data()
-        elif self.type == "float64":
+        elif self.is_double_matrix():
             return self.get_double_data()
         else:
             raise TypeError("could not process this type")
@@ -5000,13 +4999,13 @@ cdef class Matrix:
 
     def set_data(self, list[object] data):
         """retrieve data from matrix as contiguous array."""
-        if self.type == "char":
+        if self.is_char_matrix():
             self.set_char_data(data)
-        elif self.type == "long":
+        elif self.is_long_matrix():
             self.set_long_data(data)
-        elif self.type == "float32":
+        elif self.is_float_matrix():
             self.set_float_data(data)
-        elif self.type == "float64":
+        elif self.is_double_matrix():
             self.set_double_data(data)
         else:
             raise TypeError("could not process this type")
@@ -5088,28 +5087,28 @@ cdef class Matrix:
 
             j = offset0 + offset1 * self.dim[0]
 
-            if (self.info.type == jt._jit_sym_char):
+            if self.is_char_matrix():
                 self.data += plane
                 for i in range(argc):
                     p = self.data + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
                     (<jt.uchar*>p)[0] = jt.jit_atom_getcharfix(atom.ptr + i)
                     j += 1
 
-            elif (self.info.type == jt._jit_sym_long):
+            elif self.is_long_matrix():
                 self.data += plane * 4
                 for i in range(argc):
                     p = self.data + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
                     (<mx.t_int32*>p)[0] = <mx.t_int32>jt.jit_atom_getlong(atom.ptr + i)
                     j += 1
 
-            elif (self.info.type == jt._jit_sym_float32):
+            elif self.is_float_matrix():
                 self.data += plane * 4
                 for i in range(argc):
                     p = self.data + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
                     (<float*>p)[0] = <float>jt.jit_atom_getfloat(atom.ptr + i)
                     j += 1
 
-            elif (self.info.type == jt._jit_sym_float64):
+            elif self.is_double_matrix():
                 self.data += plane * 8
                 for i in range(argc):
                     p = self.data + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]

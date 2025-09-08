@@ -137,7 +137,24 @@ def test_matrix_set_cell3d():
     api.bang_success()
 
 
+def test_matrix_memoryview():
+    m = mem["m"]
+    mv = m.as_memoryview()
 
+    api.post(f"shape: {mv.shape}")
+    api.post(f"strides: {mv.strides}")
+    api.post(f"ndim: {mv.ndim}")
+    api.post(f"itemsize: {mv.itemsize}")
+    api.post(f"nbytes: {mv.nbytes}")
+    api.post(f"size: {len(mv)}")
+    api.post(f"format: {mv.format}")
+    api.post(f"readonly: {mv.readonly}")
+
+    if m.is_char_matrix():
+        api.post(f"[1,2] = {mv[1,2]}")
+        api.post(f"[2,1] = {mv[2,1]}")
+
+    # api.post(str(dir(mv)))
 
 
 def test_matrix_import_movie():

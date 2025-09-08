@@ -3176,6 +3176,19 @@
 						"showontab" : 1,
 						"boxes" : [ 							{
 								"box" : 								{
+									"id" : "obj-43",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 306.0, 292.0, 149.0, 22.0 ],
+									"presentation_linecount" : 2,
+									"text" : "test_matrix_memoryview()"
+								}
+
+							}
+, 							{
+								"box" : 								{
 									"id" : "obj-51",
 									"maxclass" : "message",
 									"numinlets" : 2,
@@ -3533,7 +3546,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 307.0, 47.0, 127.0, 22.0 ],
+									"patching_rect" : [ 306.0, 47.0, 127.0, 22.0 ],
 									"text" : "test_matrix_char_init()"
 								}
 
@@ -3688,7 +3701,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 306.0, 284.0, 128.0, 22.0 ],
+									"patching_rect" : [ 306.0, 264.0, 128.0, 22.0 ],
 									"text" : "test_matrix_set_data()"
 								}
 
@@ -3748,7 +3761,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 308.0, 79.0, 101.0, 22.0 ],
+									"patching_rect" : [ 306.0, 79.0, 101.0, 22.0 ],
 									"text" : "test_matrix_info()"
 								}
 
@@ -3770,7 +3783,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 308.0, 17.0, 132.0, 22.0 ],
+									"patching_rect" : [ 306.0, 17.0, 132.0, 22.0 ],
 									"text" : "load test_api_matrix.py"
 								}
 
@@ -4201,6 +4214,14 @@
 									"destination" : [ "obj-1", 0 ],
 									"hidden" : 1,
 									"source" : [ "obj-42", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-1", 0 ],
+									"hidden" : 1,
+									"source" : [ "obj-43", 0 ]
 								}
 
 							}
