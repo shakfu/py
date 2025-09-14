@@ -489,7 +489,8 @@ void py_free(t_py* x)
         sysmem_freehandle(x->editor.code);
     }
 
-    Py_XDECREF(x->python.globals);
+    // NOTE: x->python.globals is a borrowed reference from PyModule_GetDict()
+    // and should NOT be decremented. Removed: Py_XDECREF(x->python.globals);
     // python objects cleanup
     py_debug(x, "will be deleted");
 
@@ -2099,7 +2100,8 @@ t_max_err py_assign(t_py* x, t_symbol* s, long argc, t_atom* argv)
         py_error(x, "assign varname to list failed");
         goto error;
     }
-    // Py_XDECREF(list); // causes a crash (because it still exists?)
+    // PyDict_SetItemString does NOT steal reference, so we must decrement it
+    Py_DECREF(list);
     PyGILState_Release(gstate);
     py_bang_success(x);
     return MAX_ERR_NONE;
