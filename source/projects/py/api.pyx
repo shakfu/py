@@ -4332,48 +4332,106 @@ cdef class Matrix:
         self.refresh()
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
-        # Refresh matrix data to ensure we have current info
-        self.refresh()
-        
-        # Validate matrix data
-        if self.data is NULL:
-            raise ValueError("Matrix data is not available")
-        
-        if self.ndim <= 0 or self.ndim > jt.JIT_MATRIX_MAX_DIMCOUNT:
-            raise ValueError(f"Invalid number of dimensions: {self.ndim}")
-        
-        # Set shape and strides based on matrix dimensions
         cdef int i
-        for i in range(self.ndim):
-            if self.info.dim[i] <= 0:
-                raise ValueError(f"Invalid dimension size at index {i}: {self.info.dim[i]}")
-            self.shape[i] = self.info.dim[i]
-            self.strides[i] = self.info.dimstride[i]
+        cdef Py_ssize_t total_elements = 1
+        cdef Py_ssize_t calculated_len = 0
 
-        # Set up buffer structure
-        buffer.buf = <char *>self.data
-        buffer.internal = NULL
-        buffer.itemsize = self.itemsize
-        buffer.len = product(self.dim) * self.itemsize * self.planecount
-        buffer.ndim = self.ndim
-        buffer.obj = self
-        buffer.readonly = 0
-        buffer.shape = self.shape
-        buffer.strides = self.strides
+        # Validate buffer pointer
+        if buffer is NULL:
+            raise ValueError("Buffer pointer is NULL")
+
+        # Initialize buffer structure to safe defaults
+        buffer.buf = NULL
+        # buffer.obj = NULL
+        buffer.len = 0
+        buffer.itemsize = 0
+        buffer.ndim = 0
+        buffer.shape = NULL
+        buffer.strides = NULL
         buffer.suboffsets = NULL
+        buffer.format = NULL
+        buffer.readonly = 1  # Start as readonly, change if writable
+        buffer.internal = NULL
 
-        # Set format string based on matrix type
-        cdef str matrix_type = self.type
-        if matrix_type == 'char':
-            buffer.format = 'b'  # signed char
-        elif matrix_type == 'long':
-            buffer.format = 'l'  # signed long
-        elif matrix_type == 'float32':
-            buffer.format = 'f'  # float
-        elif matrix_type == 'float64':
-            buffer.format = 'd'  # double
-        else:
-            raise ValueError(f"Unsupported matrix type: {matrix_type}")
+        try:
+            # Refresh matrix data to ensure we have current info
+            self.refresh()
+
+            # Validate matrix data
+            if self.data is NULL:
+                raise ValueError("Matrix data is not available")
+
+            if self.ndim <= 0 or self.ndim > jt.JIT_MATRIX_MAX_DIMCOUNT:
+                raise ValueError(f"Invalid number of dimensions: {self.ndim}")
+
+            # Validate itemsize to prevent division by zero or overflow
+            if self.itemsize <= 0 or self.itemsize > 1024:  # reasonable upper bound
+                raise ValueError(f"Invalid itemsize: {self.itemsize}")
+
+            # Validate planecount
+            if self.planecount <= 0 or self.planecount > 32:  # reasonable upper bound
+                raise ValueError(f"Invalid planecount: {self.planecount}")
+
+            # Set shape and strides based on matrix dimensions
+            # cdef int i
+            # cdef Py_ssize_t total_elements = 1
+            for i in range(self.ndim):
+                if self.info.dim[i] <= 0:
+                    raise ValueError(f"Invalid dimension size at index {i}: {self.info.dim[i]}")
+                if self.info.dimstride[i] < 0:
+                    raise ValueError(f"Invalid stride at index {i}: {self.info.dimstride[i]}")
+                self.shape[i] = self.info.dim[i]
+                self.strides[i] = self.info.dimstride[i]
+
+                # Check for potential overflow
+                if total_elements > 0x7FFFFFFF // self.info.dim[i]:
+                    raise ValueError(f"Matrix dimensions too large, would cause overflow")
+                total_elements *= self.info.dim[i]
+
+            # Calculate and validate buffer length
+            calculated_len = total_elements * self.itemsize * self.planecount
+            if calculated_len < 0 or calculated_len > 0x7FFFFFFF:  # Check for overflow/underflow
+                raise ValueError(f"Buffer length calculation overflow: {calculated_len}")
+
+            # Set up buffer structure
+            buffer.buf = <char *>self.data
+            buffer.internal = NULL
+            buffer.itemsize = self.itemsize
+            buffer.len = calculated_len
+            buffer.ndim = self.ndim
+            buffer.obj = self
+            buffer.readonly = 0
+            buffer.shape = self.shape
+            buffer.strides = self.strides
+            buffer.suboffsets = NULL
+
+            # Set format string based on matrix type
+            matrix_type = self.type
+            if matrix_type == 'char':
+                buffer.format = 'b'  # signed char
+            elif matrix_type == 'long':
+                buffer.format = 'l'  # signed long
+            elif matrix_type == 'float32':
+                buffer.format = 'f'  # float
+            elif matrix_type == 'float64':
+                buffer.format = 'd'  # double
+            else:
+                raise ValueError(f"Unsupported matrix type: {matrix_type}")
+
+        except Exception as e:
+            # Clean up buffer on error
+            buffer.buf = NULL
+            # buffer.obj = NULL
+            buffer.len = 0
+            buffer.itemsize = 0
+            buffer.ndim = 0
+            buffer.shape = NULL
+            buffer.strides = NULL
+            buffer.suboffsets = NULL
+            buffer.format = NULL
+            buffer.readonly = 1
+            buffer.internal = NULL
+            raise
 
     def __releasebuffer__(self, Py_buffer *buffer):
         pass

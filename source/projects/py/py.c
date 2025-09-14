@@ -2978,18 +2978,29 @@ void py_okclose(t_py* x, char* s, short* result)
  */
 t_max_err py_edsave(t_py* x, char** text, long size)
 {
+    if (!x || !text || !*text) {
+        py_error(x, "py_edsave: invalid parameters");
+        return MAX_ERR_GENERIC;
+    }
+
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
     PyObject* pval = NULL;
 
     if (x->editor.run_on_save) {
-
         py_debug(x, "run-on-save activated");
 
-        pval = PyRun_String(*text, Py_file_input, x->python.globals, x->python.globals);
+        // Input validation before execution
+        if (py_validate_code(x, *text, 0) != MAX_ERR_NONE) {
+            py_error(x, "py_edsave: code validation failed");
+            goto error;
+        }
+
+        // Use safe execution instead of PyRun_String
+        pval = py_safe_run_string(x, *text, Py_file_input);
         if (pval == NULL) {
-            py_error(x, "py_edsave: pval == NULL");
+            py_error(x, "py_edsave: code execution failed");
             goto error;
         }
 
@@ -3002,7 +3013,7 @@ t_max_err py_edsave(t_py* x, char** text, long size)
 
 error:
     py_handle_error(x, "py_edsave with (possible) execution failed");
-    Py_XDECREF(pval); // not necessary
+    Py_XDECREF(pval);
     PyGILState_Release(gstate);
     py_debug(x, "py_edsave: returning 1");
     return MAX_ERR_GENERIC;
