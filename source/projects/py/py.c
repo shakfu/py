@@ -6,6 +6,9 @@
 /* py external api */
 #include "py.h"
 
+/* user configuration */
+#include "py_config.h"
+
 /* max/msp api */
 #include "api.h"
 
@@ -198,24 +201,24 @@ void ext_main(void* module_ref)
 
     CLASS_ATTR_LONG(c,      "security_mode", 0,  t_py, security.security_mode);
     CLASS_ATTR_STYLE(c,     "security_mode", 0, "onoff");
-    CLASS_ATTR_DEFAULT(c,   "security_mode", 0,     "1");
+    CLASS_ATTR_DEFAULT(c,   "security_mode", 0,     STR(PY_DEFAULT_SECURITY_MODE));
     CLASS_ATTR_BASIC(c,     "security_mode", 0);
     CLASS_ATTR_SAVE(c,      "security_mode", 0);
 
     CLASS_ATTR_LONG(c,      "restrict_imports", 0,  t_py, security.restrict_imports);
     CLASS_ATTR_STYLE(c,     "restrict_imports", 0, "onoff");
-    CLASS_ATTR_DEFAULT(c,   "restrict_imports", 0,     "0");
+    CLASS_ATTR_DEFAULT(c,   "restrict_imports", 0,     STR(PY_DEFAULT_RESTRICT_IMPORTS));
     CLASS_ATTR_BASIC(c,     "restrict_imports", 0);
     CLASS_ATTR_SAVE(c,      "restrict_imports", 0);
 
     CLASS_ATTR_LONG(c,      "restrict_file_access", 0,  t_py, security.restrict_file_access);
     CLASS_ATTR_STYLE(c,     "restrict_file_access", 0, "onoff");
-    CLASS_ATTR_DEFAULT(c,   "restrict_file_access", 0,     "0");
+    CLASS_ATTR_DEFAULT(c,   "restrict_file_access", 0,     STR(PY_DEFAULT_RESTRICT_FILE_ACCESS));
     CLASS_ATTR_BASIC(c,     "restrict_file_access", 0);
     CLASS_ATTR_SAVE(c,      "restrict_file_access", 0);
 
     CLASS_ATTR_LONG(c,      "max_execution_time", 0,  t_py, security.max_execution_time);
-    CLASS_ATTR_DEFAULT(c,   "max_execution_time", 0,     "5000");
+    CLASS_ATTR_DEFAULT(c,   "max_execution_time", 0,     STR(PY_DEFAULT_MAX_EXECUTION_TIME));
     CLASS_ATTR_BASIC(c,     "max_execution_time", 0);
     CLASS_ATTR_SAVE(c,      "max_execution_time", 0);
 
@@ -300,11 +303,11 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
         // set default debug level
         x->python.debug = 0;
 
-        // set default security settings
-        x->security.security_mode = 1;          // enabled by default
-        x->security.restrict_imports = 0;       // disabled by default
-        x->security.restrict_file_access = 0;   // disabled by default
-        x->security.max_execution_time = 5000;  // 5 seconds default
+        // set default security settings from config
+        x->security.security_mode = PY_DEFAULT_SECURITY_MODE;
+        x->security.restrict_imports = PY_DEFAULT_RESTRICT_IMPORTS;
+        x->security.restrict_file_access = PY_DEFAULT_RESTRICT_FILE_ACCESS;
+        x->security.max_execution_time = PY_DEFAULT_MAX_EXECUTION_TIME;
 
         // clocked tasks
         x->scheduler.clock = clock_new((t_object*)x, (method)py_task);
@@ -862,30 +865,12 @@ t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval)
         return MAX_ERR_GENERIC;
     }
 
-    // Check for obviously dangerous patterns
-    const char* dangerous_patterns[] = {
-        "__import__",
-        "exec(",
-        "eval(",
-        "compile(",
-        "open(",
-        "file(",
-        "__builtins__",
-        "globals(",
-        "locals(",
-        "vars(",
-        "dir(",
-        "getattr(",
-        "setattr(",
-        "delattr(",
-        NULL
-    };
-
+    // Check for dangerous patterns from configuration
     if (x->security.security_mode) {
-        for (int i = 0; dangerous_patterns[i]; i++) {
-            if (strstr(code, dangerous_patterns[i])) {
+        for (int i = 0; PY_DANGEROUS_PATTERNS[i]; i++) {
+            if (strstr(code, PY_DANGEROUS_PATTERNS[i])) {
                 py_error(x, "dangerous code pattern detected: %s",
-                         dangerous_patterns[i]);
+                         PY_DANGEROUS_PATTERNS[i]);
                 return MAX_ERR_GENERIC;
             }
         }
@@ -894,13 +879,9 @@ t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval)
     // Additional validation for eval mode
     if (is_eval) {
         // Check for statements that should only be in exec mode
-        const char* exec_only[] = {
-            "import ", "from ", "def ", "class ", "=", NULL
-        };
-
-        for (int i = 0; exec_only[i]; i++) {
-            if (strstr(code, exec_only[i])) {
-                py_error(x, "statement '%s' not allowed in eval mode", exec_only[i]);
+        for (int i = 0; PY_EXEC_ONLY_STATEMENTS[i]; i++) {
+            if (strstr(code, PY_EXEC_ONLY_STATEMENTS[i])) {
+                py_error(x, "statement '%s' not allowed in eval mode", PY_EXEC_ONLY_STATEMENTS[i]);
                 return MAX_ERR_GENERIC;
             }
         }
@@ -1857,11 +1838,65 @@ error:
  * @param s symbol of module to be imported
  * @return t_max_err error code
  */
+/**
+ * @brief Check if a module is safe to import
+ *
+ * @param module_name name of the module to check
+ * @return t_bool true if module is safe, false otherwise
+ */
+static t_bool py_is_module_safe(const char* module_name)
+{
+    if (!module_name) return false;
+
+    // Check if module is in safe list
+    for (int i = 0; PY_SAFE_MODULES[i]; i++) {
+        if (strcmp(module_name, PY_SAFE_MODULES[i]) == 0) {
+            return true;
+        }
+    }
+
+    // Always allow api module
+    if (strcmp(module_name, "api") == 0) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * @brief Check if a module is explicitly unsafe
+ *
+ * @param module_name name of the module to check
+ * @return t_bool true if module is unsafe, false otherwise
+ */
+static t_bool py_is_module_unsafe(const char* module_name)
+{
+    if (!module_name) return false;
+
+    // Check if module is in unsafe list
+    for (int i = 0; PY_UNSAFE_MODULES[i]; i++) {
+        if (strcmp(module_name, PY_UNSAFE_MODULES[i]) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 t_max_err py_import(t_py* x, t_symbol* s)
 {
-    if(x->security.restrict_imports) {
-        if (s != gensym("api")) {
-            py_error(x, "only 'api' module allowed in restricted import mode");
+    if (x->security.restrict_imports) {
+        const char* module_name = s->s_name;
+
+        // Check if module is explicitly unsafe
+        if (py_is_module_unsafe(module_name)) {
+            py_error(x, "module '%s' is not allowed (unsafe module)", module_name);
+            return MAX_ERR_GENERIC;
+        }
+
+        // Check if module is in safe list
+        if (!py_is_module_safe(module_name)) {
+            py_error(x, "module '%s' is not allowed (not in safe module list)", module_name);
             return MAX_ERR_GENERIC;
         }
     }
