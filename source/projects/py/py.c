@@ -14,11 +14,13 @@
 
 t_class* py_class; // global pointer to object class
 
-static int py_global_obj_count = 0; // when 0 then free interpreter
+static atomic_long py_global_obj_count = 0; // when 0 then free interpreter (atomic)
 
 static t_hashtab* py_global_registry = NULL; // global object lookups
+static t_systhread_mutex py_global_registry_mutex = NULL; // mutex for registry access
 
 static uintptr_t py_global_obj_ref = 0;
+static t_systhread_mutex py_global_obj_ref_mutex = NULL; // mutex for obj ref access
 
 /*--------------------------------------------------------------------------*/
 /* Datastructures */
@@ -64,6 +66,14 @@ struct t_py {
                                  the code editor and 'globals' namespace */
         t_bool autoload;         /*!< bool to autoload of code_filepath  */
     } editor;
+
+    /* security settings */
+    struct {
+        t_bool security_mode;        /*!< enable enhanced security checks */
+        t_bool restrict_imports;     /*!< restrict module imports */
+        t_bool restrict_file_access; /*!< restrict file system access */
+        long max_execution_time;     /*!< max execution time in ms */
+    } security;
 
     /* outlet creation */
     void* p_outlet_right;       /*!< right outlet to bang success */
@@ -186,13 +196,40 @@ void ext_main(void* module_ref)
     CLASS_ATTR_BASIC(c,     "debug", 0);
     CLASS_ATTR_SAVE(c,      "debug", 0);
 
-    CLASS_ATTR_ORDER(c,     "name",         0,  "1");
-    CLASS_ATTR_ORDER(c,     "file",         0,  "2");
-    CLASS_ATTR_ORDER(c,     "autoload",     0,  "3");
-    CLASS_ATTR_ORDER(c,     "run_on_save",  0,  "4");
-    CLASS_ATTR_ORDER(c,     "run_on_close", 0,  "5");
-    CLASS_ATTR_ORDER(c,     "pythonpath",   0,  "6");
-    CLASS_ATTR_ORDER(c,     "debug",        0,  "7");
+    CLASS_ATTR_LONG(c,      "security_mode", 0,  t_py, security.security_mode);
+    CLASS_ATTR_STYLE(c,     "security_mode", 0, "onoff");
+    CLASS_ATTR_DEFAULT(c,   "security_mode", 0,     "1");
+    CLASS_ATTR_BASIC(c,     "security_mode", 0);
+    CLASS_ATTR_SAVE(c,      "security_mode", 0);
+
+    CLASS_ATTR_LONG(c,      "restrict_imports", 0,  t_py, security.restrict_imports);
+    CLASS_ATTR_STYLE(c,     "restrict_imports", 0, "onoff");
+    CLASS_ATTR_DEFAULT(c,   "restrict_imports", 0,     "0");
+    CLASS_ATTR_BASIC(c,     "restrict_imports", 0);
+    CLASS_ATTR_SAVE(c,      "restrict_imports", 0);
+
+    CLASS_ATTR_LONG(c,      "restrict_file_access", 0,  t_py, security.restrict_file_access);
+    CLASS_ATTR_STYLE(c,     "restrict_file_access", 0, "onoff");
+    CLASS_ATTR_DEFAULT(c,   "restrict_file_access", 0,     "0");
+    CLASS_ATTR_BASIC(c,     "restrict_file_access", 0);
+    CLASS_ATTR_SAVE(c,      "restrict_file_access", 0);
+
+    CLASS_ATTR_LONG(c,      "max_execution_time", 0,  t_py, security.max_execution_time);
+    CLASS_ATTR_DEFAULT(c,   "max_execution_time", 0,     "5000");
+    CLASS_ATTR_BASIC(c,     "max_execution_time", 0);
+    CLASS_ATTR_SAVE(c,      "max_execution_time", 0);
+
+    CLASS_ATTR_ORDER(c,     "name",                 0,  "1");
+    CLASS_ATTR_ORDER(c,     "file",                 0,  "2");
+    CLASS_ATTR_ORDER(c,     "autoload",             0,  "3");
+    CLASS_ATTR_ORDER(c,     "run_on_save",          0,  "4");
+    CLASS_ATTR_ORDER(c,     "run_on_close",         0,  "5");
+    CLASS_ATTR_ORDER(c,     "pythonpath",           0,  "6");
+    CLASS_ATTR_ORDER(c,     "debug",                0,  "7");
+    CLASS_ATTR_ORDER(c,     "security_mode",        0,  "8");
+    CLASS_ATTR_ORDER(c,     "restrict_imports",     0,  "9");
+    CLASS_ATTR_ORDER(c,     "restrict_file_access", 0,  "10");
+    CLASS_ATTR_ORDER(c,     "max_execution_time",   0,  "11");
 
     // clang-format on
     //------------------------------------------------------------------------
@@ -230,7 +267,9 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
 
     if (x) {
 
-        if (py_global_obj_count == 0) {
+        // read current count atomically for naming decision
+        atomic_long current_count = py_global_obj_count;
+        if (current_count == 0) {
             // if name is not set as argument then
             // first py obj is called '__main__' by default
             x->obj.name = gensym("__main__");
@@ -260,6 +299,12 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
 
         // set default debug level
         x->python.debug = 0;
+
+        // set default security settings
+        x->security.security_mode = 1;          // enabled by default
+        x->security.restrict_imports = 0;       // disabled by default
+        x->security.restrict_file_access = 0;   // disabled by default
+        x->security.max_execution_time = 5000;  // 5 seconds default
 
         // clocked tasks
         x->scheduler.clock = clock_new((t_object*)x, (method)py_task);
@@ -399,17 +444,30 @@ void py_init(t_py* x)
     // register the object
     object_register(CLASS_BOX, x->obj.name, x);
 
-    // increment global object counter
-    py_global_obj_count++;
+    // increment global object counter (atomic)
+    atomic_long new_count = atomic_fetch_sub_explicit(&py_global_obj_count, 1, memory_order_relaxed);
+    // atomic_long new_count = ATOMIC_INCREMENT(&py_global_obj_count);
 
-    if (py_global_obj_count == 1) {
-        // if first py object create the py_global_registry;
+    if (new_count == 1) {
+        // if first py object create the py_global_registry and mutexes
+        if (systhread_mutex_new(&py_global_registry_mutex, SYSTHREAD_MUTEX_NORMAL) != MAX_ERR_NONE) {
+            py_error(x, "failed to create registry mutex");
+            return;
+        }
+        if (systhread_mutex_new(&py_global_obj_ref_mutex, SYSTHREAD_MUTEX_NORMAL) != MAX_ERR_NONE) {
+            py_error(x, "failed to create obj ref mutex");
+            return;
+        }
         py_global_registry = hashtab_new(0);
         hashtab_flags(py_global_registry, OBJ_FLAG_REF);
     }
 
-    // set object ref which can be accessed from api module
-    py_global_obj_ref = (uintptr_t)x;
+    // set object ref which can be accessed from api module (thread-safe)
+    if (py_global_obj_ref_mutex) {
+        systhread_mutex_lock(py_global_obj_ref_mutex);
+        py_global_obj_ref = (uintptr_t)x;
+        systhread_mutex_unlock(py_global_obj_ref_mutex);
+    }
 }
 
 
@@ -434,10 +492,33 @@ void py_free(t_py* x)
     Py_XDECREF(x->python.globals);
     // python objects cleanup
     py_debug(x, "will be deleted");
-    py_global_obj_count--;
-    if (py_global_obj_count == 0) {
+
+    // decrement global object counter (atomic)
+    atomic_long new_count = atomic_fetch_add_explicit(&py_global_obj_count, 1, memory_order_relaxed);
+    // atomic_long new_count = ATOMIC_DECREMENT(&py_global_obj_count);
+
+    if (new_count == 0) {
         /* WARNING: don't call x here or max will crash */
-        hashtab_chuck(py_global_registry);
+        // thread-safe cleanup of global resources
+        if (py_global_registry_mutex) {
+            systhread_mutex_lock(py_global_registry_mutex);
+            if (py_global_registry) {
+                hashtab_chuck(py_global_registry);
+                py_global_registry = NULL;
+            }
+            systhread_mutex_unlock(py_global_registry_mutex);
+            systhread_mutex_free(py_global_registry_mutex);
+            py_global_registry_mutex = NULL;
+        }
+
+        if (py_global_obj_ref_mutex) {
+            systhread_mutex_lock(py_global_obj_ref_mutex);
+            py_global_obj_ref = 0;
+            systhread_mutex_unlock(py_global_obj_ref_mutex);
+            systhread_mutex_free(py_global_obj_ref_mutex);
+            py_global_obj_ref_mutex = NULL;
+        }
+
         // post("last py obj freed -> finalizing py mem / interpreter.");
         if(Py_FinalizeEx()) { // returns 0 if successful, -1 if there were errors
             error("error finalizing `py`");
@@ -730,7 +811,18 @@ error:
  *
  * This is only used in the api module
  */
-t_hashtab* py_get_global_registry(void) { return py_global_registry; }
+t_hashtab* py_get_global_registry(void)
+{
+    t_hashtab* registry = NULL;
+    if (py_global_registry_mutex) {
+        systhread_mutex_lock(py_global_registry_mutex);
+        registry = py_global_registry;
+        systhread_mutex_unlock(py_global_registry_mutex);
+    } else {
+        registry = py_global_registry;
+    }
+    return registry;
+}
 
 /**
  * @brief      Return a ref the t_py *x pointer via the global_ref
@@ -739,8 +831,120 @@ t_hashtab* py_get_global_registry(void) { return py_global_registry; }
  *
  * This is only used in the api module
  */
-uintptr_t py_get_object_ref(void) { return py_global_obj_ref; }
+uintptr_t py_get_object_ref(void)
+{
+    uintptr_t ref = 0;
+    if (py_global_obj_ref_mutex) {
+        systhread_mutex_lock(py_global_obj_ref_mutex);
+        ref = py_global_obj_ref;
+        systhread_mutex_unlock(py_global_obj_ref_mutex);
+    } else {
+        ref = py_global_obj_ref;
+    }
+    return ref;
+}
 
+/*--------------------------------------------------------------------------*/
+/* Security Functions */
+
+/**
+ * @brief Validate Python code before execution
+ *
+ * @param x pointer to object struct
+ * @param code code string to validate
+ * @param is_eval true if eval mode, false if exec mode
+ * @return t_max_err validation result
+ */
+t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval)
+{
+    if (!code) {
+        return MAX_ERR_GENERIC;
+    }
+
+    // Check for obviously dangerous patterns
+    const char* dangerous_patterns[] = {
+        "__import__",
+        "exec(",
+        "eval(",
+        "compile(",
+        "open(",
+        "file(",
+        "__builtins__",
+        "globals(",
+        "locals(",
+        "vars(",
+        "dir(",
+        "getattr(",
+        "setattr(",
+        "delattr(",
+        NULL
+    };
+
+    if (x->security.security_mode) {
+        for (int i = 0; dangerous_patterns[i]; i++) {
+            if (strstr(code, dangerous_patterns[i])) {
+                py_error(x, "potentially dangerous code pattern detected: %s",
+                         dangerous_patterns[i]);
+                return MAX_ERR_GENERIC;
+            }
+        }
+    }
+
+    // Additional validation for eval mode
+    if (is_eval) {
+        // Check for statements that should only be in exec mode
+        const char* exec_only[] = {
+            "import ", "from ", "def ", "class ", "=", NULL
+        };
+
+        for (int i = 0; exec_only[i]; i++) {
+            if (strstr(code, exec_only[i])) {
+                py_error(x, "statement not allowed in eval mode: %s", exec_only[i]);
+                return MAX_ERR_GENERIC;
+            }
+        }
+    }
+
+    return MAX_ERR_NONE;
+}
+
+/**
+ * @brief Safely execute Python code with validation
+ *
+ * @param x pointer to object struct
+ * @param code Python code string to execute
+ * @param mode Py_eval_input or Py_file_input
+ * @return PyObject* result or NULL on error
+ */
+PyObject* py_safe_run_string(t_py* x, const char* code, int mode)
+{
+    if (!code || strlen(code) == 0) {
+        py_error(x, "empty code string provided");
+        return NULL;
+    }
+
+    // Length check to prevent excessive memory usage
+    size_t code_len = strlen(code);
+    size_t max_len = (mode == Py_eval_input) ? PY_MAX_EVAL_LENGTH : PY_MAX_CODE_LENGTH;
+
+    if (code_len > max_len) {
+        py_error(x, "code string too long (max %zu characters)", max_len);
+        return NULL;
+    }
+
+    // Basic syntax validation using compile()
+    PyObject* compiled = Py_CompileString(code, "<py_external>", mode);
+    if (!compiled) {
+        py_error(x, "code compilation failed");
+        return NULL;
+    }
+
+    // Execute the compiled code
+    PyObject* result = PyEval_EvalCode(compiled, x->python.globals, x->python.globals);
+    Py_DECREF(compiled);
+
+    return result;
+}
 
 /**
  * @brief      Return path to external with optional subpath
@@ -970,7 +1174,11 @@ void py_assist(t_py* x, void* b, long io, long idx, char* s)
  *
  * @param x pointer to object struct.
  */
-void py_count(t_py* x) { outlet_int(x->p_outlet_left, py_global_obj_count); }
+void py_count(t_py* x) {
+    // read current object count atomically
+    atomic_long current_count = py_global_obj_count;
+    outlet_int(x->p_outlet_left, current_count);
+}
 
 
 /**
@@ -1651,6 +1859,13 @@ error:
  */
 t_max_err py_import(t_py* x, t_symbol* s)
 {
+    if(x->security.restrict_imports) {
+        if (s != gensym("api")) {
+            py_error(x, "only api module can be imported in restricted mode");
+            return MAX_ERR_GENERIC;
+        }
+    }
+
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
@@ -1693,8 +1908,15 @@ t_max_err py_eval(t_py* x, t_symbol* s, long argc, t_atom* argv)
     char* py_argv = atom_getsym(argv)->s_name;
     py_debug(x, "%s %s", s->s_name, py_argv);
 
-    PyObject* pval = PyRun_String(py_argv, Py_eval_input, x->python.globals,
-                                  x->python.globals);
+    // Input validation
+    if (py_validate_code(x, py_argv, 1) != MAX_ERR_NONE) {
+        py_error(x, "eval input failed validation");
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+
+    PyObject* pval = py_safe_run_string(x, py_argv, Py_eval_input);
 
     if (pval != NULL) {
         py_handle_output(x, pval);
@@ -1729,7 +1951,13 @@ t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
         goto error;
     }
 
-    pval = PyRun_String(py_argv, Py_file_input, x->python.globals, x->python.globals);
+    // Input validation
+    if (py_validate_code(x, py_argv, 0) != MAX_ERR_NONE) {
+        py_error(x, "exec input failed validation");
+        goto error;
+    }
+
+    pval = py_safe_run_string(x, py_argv, Py_file_input);
     if (pval == NULL) {
         goto error;
     }

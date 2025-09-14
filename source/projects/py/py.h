@@ -33,6 +33,11 @@
 #include "ext.h"
 #include "ext_obex.h"
 
+/* thread safety */
+#include "ext_systhread.h"
+// #include "ext_atomic.h"
+#include <stdatomic.h>
+
 /* optional */
 #if defined(INCLUDE_COMMONSYMS)
 #include "commonsyms.h"
@@ -50,12 +55,14 @@
 
 #define PY_MAX_ERROR 4096
 #define PY_MAX_ELEMS 1024
+#define PY_MAX_CODE_LENGTH 65536  // Max length of code string
+#define PY_MAX_EVAL_LENGTH 1024   // Max length for eval expressions
 
 /*--------------------------------------------------------------------------*/
 /* Compile-time Options */
 
 #define PY_WITH_API 1
-#define PY_CFG_ISOLATED 0
+#define PY_CFG_ISOLATED 1
 #define PY_ATTRS_WITH_DEFAULTS 0
 #define PY_CHECK_REFS 0
 
@@ -70,8 +77,8 @@ enum OUTLETS { O_OUTPUT, O_FAILURE, O_SUCCESS, NUM_OUTLETS };
 /* Globals */
 
 t_class* py_class;                    // global pointer to object class
-static int py_global_obj_count;       // when 0 then free interpreter
-static t_hashtab* py_global_registry; // global object lookups
+// static int py_global_obj_count;       // when 0 then free interpreter
+// static t_hashtab* py_global_registry; // global object lookups
 
 /*--------------------------------------------------------------------------*/
 /* Datastructures */
@@ -106,6 +113,11 @@ void py_postargs(t_symbol *s, long argc, t_atom *argv);
 
 void py_init_builtins(t_py* x);
 t_max_err py_eval_text(t_py* x, long argc, t_atom* argv);
+
+/* security helpers */
+
+t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval);
+PyObject* py_safe_run_string(t_py* x, const char* code, int mode);
 
 /* api module helpers */
 
@@ -269,5 +281,195 @@ static inline PyCodeObject* PyFrame_GetCode(PyFrameObject* frame)
 #undef PY_REF_ERR
 #endif
 
+/*--------------------------------------------------------------------------*/
+/* Security Variables */
+
+// const char * SAFE_MODULES[] = {
+//     "abc",
+//     "antigravity",
+//     "argparse",
+//     "ast",
+//     "asyncio",
+//     "base64",
+//     "bdb",
+//     "bisect",
+//     "bz2",
+//     "cProfile",
+//     "calendar",
+//     "cmd",
+//     "code",
+//     "codecs",
+//     "codeop",
+//     "collections",
+//     "colorsys",
+//     "compileall",
+//     "concurrent",
+//     "configparser",
+//     "contextlib",
+//     "contextvars",
+//     "copy",
+//     "copyreg",
+//     "csv",
+//     "ctypes",
+//     "curses",
+//     "dataclasses",
+//     "datetime",
+//     "dbm",
+//     "decimal",
+//     "difflib",
+//     "dis",
+//     "doctest",
+//     "email",
+//     "encodings",
+//     "ensurepip",
+//     "enum",
+//     "filecmp",
+//     "fileinput",
+//     "fnmatch",
+//     "fractions",
+//     "ftplib",
+//     "functools",
+//     "genericpath",
+//     "getopt",
+//     "getpass",
+//     "gettext",
+//     "glob",
+//     "graphlib",
+//     "gzip",
+//     "hashlib",
+//     "heapq",
+//     "hmac",
+//     "html",
+//     "http",
+//     "idlelib",
+//     "imaplib",
+//     "importlib",
+//     "inspect",
+//     "io",
+//     "ipaddress",
+//     "json",
+//     "keyword",
+//     "lib-dynload",
+//     "linecache",
+//     "locale",
+//     "logging",
+//     "lzma",
+//     "mailbox",
+//     "mimetypes",
+//     "modulefinder",
+//     "multiprocessing",
+//     "netrc",
+//     "ntpath",
+//     "nturl2path",
+//     "numbers",
+//     "opcode",
+//     "operator",
+//     "optparse",
+//     "os",
+//     "pathlib",
+//     "pdb",
+//     "pickle",
+//     "pickletools",
+//     "pkgutil",
+//     "platform",
+//     "plistlib",
+//     "poplib",
+//     "posixpath",
+//     "pprint",
+//     "profile",
+//     "pstats",
+//     "pty",
+//     "py_compile",
+//     "pyclbr",
+//     "pydoc",
+//     "pydoc_data",
+//     "queue",
+//     "quopri",
+//     "random",
+//     "re",
+//     "reprlib",
+//     "rlcompleter",
+//     "runpy",
+//     "sched",
+//     "secrets",
+//     "selectors",
+//     "shelve",
+//     "shlex",
+//     "shutil",
+//     "signal",
+//     "site-packages",
+//     "site",
+//     "sitecustomize",
+//     "smtplib",
+//     "socket",
+//     "socketserver",
+//     "sqlite3",
+//     "sre_compile",
+//     "sre_constants",
+//     "sre_parse",
+//     "ssl",
+//     "stat",
+//     "statistics",
+//     "string",
+//     "stringprep",
+//     "struct",
+//     "subprocess",
+//     "symtable",
+//     "sysconfig",
+//     "tabnanny",
+//     "tarfile",
+//     "tempfile",
+//     "test",
+//     "textwrap",
+//     "this",
+//     "threading",
+//     "timeit",
+//     "tkinter",
+//     "token",
+//     "tokenize",
+//     "tomllib",
+//     "trace",
+//     "traceback",
+//     "tracemalloc",
+//     "tty",
+//     "turtle",
+//     "turtledemo",
+//     "types",
+//     "typing",
+//     "unittest",
+//     "urllib",
+//     "uuid",
+//     "venv",
+//     "warnings",
+//     "wave",
+//     "weakref",
+//     "webbrowser",
+//     "wsgiref",
+//     "xml",
+//     "xmlrpc",
+//     "zipapp",
+//     "zipfile",
+//     "zipimport",
+//     "zoneinfo", 
+// };
+
+
+// const char * UNSAFE_MODULES[] = {
+//     "ctypes",
+//     "curses",
+//     "ensurepip",
+//     "glob",
+//     "http",
+//     "multiprocessing",
+//     "os",
+//     "pathlib",
+//     "shutil",
+//     "signal",
+//     "socket",
+//     "socketserver",
+//     "subprocess",
+//     "venv",
+//     "webbrowser",
+// };
 
 #endif // PY_H
