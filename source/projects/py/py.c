@@ -318,19 +318,19 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
         // set patcher object
         object_obex_lookup(x, gensym("#P"), &x->obj.patcher);
         if (x->obj.patcher == NULL) {
-            error("patcher object not created.");
+            error("py: failed to create patcher object");
         }
 
         // set box object
         object_obex_lookup(x, gensym("#B"), &x->obj.box);
         if (x->obj.box == NULL) {
-            error("box object not created.");
+            error("py: failed to create box object");
         }
 
         // create scripting name
         t_max_err err = jbox_set_varname(x->obj.box, x->obj.name);
         if (err != MAX_ERR_NONE) {
-            error("could not set scripting name to box");
+            error("py: failed to set scripting name to box");
         }
 
         // initialize python interpreter
@@ -407,7 +407,7 @@ void py_init(t_py* x)
 
         /* Add the cythonized 'api' built-in module, before Py_Initialize */
         if (PyImport_AppendInittab("api", PyInit_api) == -1) {
-            py_error(x, "could not add api module to builtin modules table");
+            py_error(x, "failed to add API module to builtin modules table");
         }
     }
 #endif
@@ -424,13 +424,13 @@ void py_init(t_py* x)
     PyConfig config;
     PyConfig_InitPythonConfig(&config);
     config.parse_argv = 0; // Disable parsing command line arguments
-    config.isolated = PY_CFG_ISOLATED; // default is disabled
+    config.isolated = PY_CFG_ISOLATED; // enabled by default
     config.home = python_home;
 
     status = Py_InitializeFromConfig(&config);
     if (PyStatus_Exception(status)) {
         PyConfig_Clear(&config);
-        py_error(x, "could not initialize python");
+        py_error(x, "failed to initialize Python interpreter");
     }
 
     PyConfig_Clear(&config);
@@ -451,11 +451,11 @@ void py_init(t_py* x)
     if (new_count == 1) {
         // if first py object create the py_global_registry and mutexes
         if (systhread_mutex_new(&py_global_registry_mutex, SYSTHREAD_MUTEX_NORMAL) != MAX_ERR_NONE) {
-            py_error(x, "failed to create registry mutex");
+            py_error(x, "failed to create global registry mutex");
             return;
         }
         if (systhread_mutex_new(&py_global_obj_ref_mutex, SYSTHREAD_MUTEX_NORMAL) != MAX_ERR_NONE) {
-            py_error(x, "failed to create obj ref mutex");
+            py_error(x, "failed to create object reference mutex");
             return;
         }
         py_global_registry = hashtab_new(0);
@@ -522,7 +522,7 @@ void py_free(t_py* x)
 
         // post("last py obj freed -> finalizing py mem / interpreter.");
         if(Py_FinalizeEx()) { // returns 0 if successful, -1 if there were errors
-            error("error finalizing `py`");
+            error("py: failed to finalize Python interpreter");
         } else {
             post("done.");
         }
@@ -607,13 +607,13 @@ t_max_err py_pythonpath_add(t_py* x, t_symbol* path)
 {
     PyObject* sys_path = PySys_GetObject((char*)"path"); // borrowed
     if (!sys_path) {
-        py_error(x, "could not obtain sys.path");
+        py_error(x, "failed to obtain sys.path");
         return MAX_ERR_GENERIC;
     }
 
     PyObject* py_path = PyUnicode_FromString(path->s_name);
     if (!py_path) {
-        py_error(x, "could not set pythonpath");
+        py_error(x, "failed to set Python path");
         return MAX_ERR_GENERIC;
     }
     PyList_Append(sys_path, py_path);
@@ -791,7 +791,7 @@ void py_init_builtins(t_py* x)
                               x->python.globals);
 
     if (p_code_obj == NULL) {
-        py_error(x, "cannot import PY_PRELUDE_MODULE");
+        py_error(x, "failed to import PY_PRELUDE_MODULE");
         goto error;
     }
 
@@ -800,7 +800,7 @@ void py_init_builtins(t_py* x)
     return;
 
 error:
-    py_handle_error(x, "failed to initialize python builtins");
+    py_handle_error(x, "failed to initialize Python builtins");
     Py_XDECREF(p_name);
 }
 
@@ -884,7 +884,7 @@ t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval)
     if (x->security.security_mode) {
         for (int i = 0; dangerous_patterns[i]; i++) {
             if (strstr(code, dangerous_patterns[i])) {
-                py_error(x, "potentially dangerous code pattern detected: %s",
+                py_error(x, "dangerous code pattern detected: %s",
                          dangerous_patterns[i]);
                 return MAX_ERR_GENERIC;
             }
@@ -900,7 +900,7 @@ t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval)
 
         for (int i = 0; exec_only[i]; i++) {
             if (strstr(code, exec_only[i])) {
-                py_error(x, "statement not allowed in eval mode: %s", exec_only[i]);
+                py_error(x, "statement '%s' not allowed in eval mode", exec_only[i]);
                 return MAX_ERR_GENERIC;
             }
         }
@@ -920,7 +920,7 @@ t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval)
 PyObject* py_safe_run_string(t_py* x, const char* code, int mode)
 {
     if (!code || strlen(code) == 0) {
-        py_error(x, "empty code string provided");
+        py_error(x, "code string cannot be empty");
         return NULL;
     }
 
@@ -929,14 +929,14 @@ PyObject* py_safe_run_string(t_py* x, const char* code, int mode)
     size_t max_len = (mode == Py_eval_input) ? PY_MAX_EVAL_LENGTH : PY_MAX_CODE_LENGTH;
 
     if (code_len > max_len) {
-        py_error(x, "code string too long (max %zu characters)", max_len);
+        py_error(x, "code string exceeds maximum length (%zu characters)", max_len);
         return NULL;
     }
 
     // Basic syntax validation using compile()
     PyObject* compiled = Py_CompileString(code, "<py_external>", mode);
     if (!compiled) {
-        py_error(x, "code compilation failed");
+        py_error(x, "failed to compile Python code");
         return NULL;
     }
 
@@ -1040,7 +1040,7 @@ t_max_err py_locate_path_from_symbol(t_py* x, t_symbol* s)
         if (locatefile_extended(x->editor.code_filename, &x->editor.code_path,
                                 &x->editor.code_outtype, &x->editor.code_filetype, 1)) {
             // nozero: not found
-            py_error(x, "can't find file %s", s->s_name);
+            py_error(x, "file not found: %s", s->s_name);
             ret = MAX_ERR_GENERIC;
             goto finally;
         } else {
@@ -1048,7 +1048,7 @@ t_max_err py_locate_path_from_symbol(t_py* x, t_symbol* s)
             ret = path_toabsolutesystempath(x->editor.code_path, x->editor.code_filename,
                                             x->editor.code_pathname);
             if (ret != MAX_ERR_NONE) {
-                py_error(x, "can't convert %s to absolutepath", s->s_name);
+                py_error(x, "failed to convert '%s' to absolute path", s->s_name);
                 goto finally;
             }
         }
@@ -1351,17 +1351,17 @@ t_max_err py_sched(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     // first atom in argv must be a float
     if (argv->a_type != A_FLOAT) {
-        py_error(x, "first atom must be a float!");
+        py_error(x, "first argument must be a float");
         goto error;
     }
 
     if (argc < 2) {
-        py_error(x, "need at least 2 args to schedule function calls");
+        py_error(x, "scheduler requires at least 2 arguments");
         goto error;
     }
 
     if ((argv + 0)->a_type != A_FLOAT) {
-        py_error(x, "1st arg of sched needs to be a float time in ms");
+        py_error(x, "scheduler first argument must be float time in milliseconds");
         goto error;
     }
 
@@ -1373,8 +1373,7 @@ t_max_err py_sched(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     // atom after the name of the time
     if ((argv + 1)->a_type != A_SYM) {
-        py_error(
-            x, "2nd elem of sched atom needs to be the name of the callable");
+        py_error(x, "scheduler second argument must be callable name");
         goto error;
     }
 
@@ -1391,7 +1390,7 @@ t_max_err py_sched(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     x->scheduler.sched_data = atomarray_new(argc, argv);
     if (x->scheduler.sched_data == NULL) {
-        py_error(x, "sched_data not scheduled");
+        py_error(x, "scheduler data not found");
         goto error;
     }
     clock_fdelay(x->scheduler.clock, time);
@@ -1399,7 +1398,7 @@ t_max_err py_sched(t_py* x, t_symbol* s, long argc, t_atom* argv)
     goto finally;
 
 error:
-    py_error(x, "send failed");
+    py_error(x, "failed to send message");
     ret = MAX_ERR_GENERIC;
 
 finally:
@@ -1422,7 +1421,7 @@ t_max_err py_task(t_py* x)
     // also scheduler_gettime(&time);
     t_max_err err = atomarray_getatoms(x->scheduler.sched_data, &argc, &argv);
     if (err != MAX_ERR_NONE) {
-        py_error(x, "atomarray arg initialization failed");
+        py_error(x, "failed to initialize argument array");
         return MAX_ERR_GENERIC;
     }
     py_debug(x, "%lx instance is executing at time %.2f", x, time);
@@ -1502,7 +1501,7 @@ t_max_err py_handle_float_output(t_py* x, PyObject* pfloat)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "py_handle_float_output failed");
+    py_handle_error(x, "failed to handle float output");
     Py_XDECREF(pfloat);
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
@@ -1535,7 +1534,7 @@ t_max_err py_handle_long_output(t_py* x, PyObject* plong)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "py_handle_long_output failed");
+    py_handle_error(x, "failed to handle long output");
     Py_XDECREF(plong);
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
@@ -1567,7 +1566,7 @@ t_max_err py_handle_string_output(t_py* x, PyObject* pstring)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "py_handle_string_output failed");
+    py_handle_error(x, "failed to handle string output");
     Py_XDECREF(pstring);
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
@@ -1600,7 +1599,7 @@ t_max_err py_handle_list_output(t_py* x, PyObject* plist)
         py_debug(x, "seq_size: %d", seq_size);
 
         if (seq_size == 0) {
-            py_error(x, "cannot convert py list of length 0 to atoms");
+            py_error(x, "cannot convert empty Python list to atoms");
             goto error;
         }
 
@@ -1666,7 +1665,7 @@ t_max_err py_handle_list_output(t_py* x, PyObject* plist)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "py_handle_list_output failed");
+    py_handle_error(x, "failed to handle list output");
     Py_XDECREF(plist);
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
@@ -1693,13 +1692,13 @@ t_max_err py_handle_dict_output(t_py* x, PyObject* pdict)
         // depends on definition in py_prelude.h
         pfun = PyDict_GetItemString(x->python.globals, "out_dict"); // borrowed
         if (pfun == NULL) {
-            py_error(x, "retrieving out_dict func from globals failed");
+            py_error(x, "failed to retrieve 'out_dict' function from globals");
             goto error;
         }
 
         pval = PyObject_CallFunctionObjArgs(pfun, pdict, NULL); // new
         if (pval == NULL) {
-            py_error(x, "out_dict call failed to retrieve result");
+            py_error(x, "'out_dict' function call failed to retrieve result");
             goto error;
         }
 
@@ -1709,12 +1708,12 @@ t_max_err py_handle_dict_output(t_py* x, PyObject* pdict)
             return MAX_ERR_NONE;
         }
 
-        py_error(x, "expected list output got something else");
+        py_error(x, "expected list output, got different type");
         goto error;
     }
 
 error:
-    py_handle_error(x, "py_handle_dict_output failed");
+    py_handle_error(x, "failed to handle dictionary output");
     Py_XDECREF(pval);
     // fail bang
     py_bang_failure(x);
@@ -1732,7 +1731,7 @@ error:
 t_max_err py_handle_output(t_py* x, PyObject* pval)
 {
     if (pval == NULL) {
-        py_error(x, "cannot handle NULL value");
+        py_error(x, "cannot handle NULL Python value");
         return MAX_ERR_GENERIC;
     }
 
@@ -1778,7 +1777,7 @@ t_max_err py_handle_output(t_py* x, PyObject* pval)
         return py_handle_string_output(x, rep);
     }
 
-    py_error(x, "cannot handle his type of value");
+    py_error(x, "cannot handle this Python value type");
     return MAX_ERR_GENERIC;
     
 }
@@ -1801,7 +1800,7 @@ PyObject* py_atoms_to_list(t_py* x, long argc, t_atom* argv, int start_from)
     PyObject* plist = NULL; // python list
 
     if ((plist = PyList_New(0)) == NULL) {
-        py_error(x, "could not create an empty python list");
+        py_error(x, "failed to create empty Python list");
         goto error;
     }
 
@@ -1844,7 +1843,7 @@ PyObject* py_atoms_to_list(t_py* x, long argc, t_atom* argv, int start_from)
     return plist;
 
 error:
-    py_error(x, "atom to list conversion failed");
+    py_error(x, "failed to convert atoms to Python list");
     return NULL;
 }
 
@@ -1862,7 +1861,7 @@ t_max_err py_import(t_py* x, t_symbol* s)
 {
     if(x->security.restrict_imports) {
         if (s != gensym("api")) {
-            py_error(x, "only api module can be imported in restricted mode");
+            py_error(x, "only 'api' module allowed in restricted import mode");
             return MAX_ERR_GENERIC;
         }
     }
@@ -1886,7 +1885,7 @@ t_max_err py_import(t_py* x, t_symbol* s)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "import %s", s->s_name);
+    py_handle_error(x, "failed to import module '%s'", s->s_name);
     PyGILState_Release(gstate);
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
@@ -1911,7 +1910,7 @@ t_max_err py_eval(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     // Input validation
     if (py_validate_code(x, py_argv, 1) != MAX_ERR_NONE) {
-        py_error(x, "eval input failed validation");
+        py_error(x, "eval input failed security validation");
         PyGILState_Release(gstate);
         py_bang_failure(x);
         return MAX_ERR_GENERIC;
@@ -1924,7 +1923,7 @@ t_max_err py_eval(t_py* x, t_symbol* s, long argc, t_atom* argv)
         PyGILState_Release(gstate);
         return MAX_ERR_NONE;
     }
-    py_handle_error(x, "eval %s", py_argv);
+    py_handle_error(x, "failed to evaluate: %s", py_argv);
     PyGILState_Release(gstate);
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
@@ -1954,7 +1953,7 @@ t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     // Input validation
     if (py_validate_code(x, py_argv, 0) != MAX_ERR_NONE) {
-        py_error(x, "exec input failed validation");
+        py_error(x, "exec input failed security validation");
         goto error;
     }
 
@@ -1970,7 +1969,7 @@ t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "exec %s", py_argv);
+    py_handle_error(x, "failed to execute: %s", py_argv);
     Py_XDECREF(pval);
     PyGILState_Release(gstate);
     py_bang_failure(x);
@@ -1997,13 +1996,13 @@ t_max_err py_execfile(t_py* x, t_symbol* s)
         // set x->editor.code_filepath
         t_max_err err = py_locate_path_from_symbol(x, s);
         if (err != MAX_ERR_NONE) {
-            py_error(x, "could not locate path from symbol");
+            py_error(x, "failed to locate path from symbol");
             goto error;
         }
     }
 
     if (s == gensym("") || x->editor.code_filepath == gensym("")) {
-        py_error(x, "could not set filepath");
+        py_error(x, "failed to set file path");
         goto error;
     }
 
@@ -2013,7 +2012,7 @@ t_max_err py_execfile(t_py* x, t_symbol* s)
     fhandle = fopen(x->editor.code_filepath->s_name, "r+");
 
     if (fhandle == NULL) {
-        py_error(x, "could not open file");
+        py_error(x, "failed to open file");
         goto error;
     }
 
@@ -2032,7 +2031,7 @@ t_max_err py_execfile(t_py* x, t_symbol* s)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "execfile");
+    py_handle_error(x, "failed to execute file");
     Py_XDECREF(pval);
     PyGILState_Release(gstate);
     py_bang_failure(x);
@@ -2071,7 +2070,7 @@ t_max_err py_assign(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     // first atom in argv must be a symbol
     if (argv->a_type != A_SYM) {
-        py_error(x, "first atom must be a symbol!");
+        py_error(x, "first argument must be a symbol");
         goto error;
 
     } else {
@@ -2081,12 +2080,12 @@ t_max_err py_assign(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     list = py_atoms_to_list(x, argc, argv, 1);
     if (list == NULL) {
-        py_error(x, "atom to py list conversion failed");
+        py_error(x, "failed to convert atoms to Python list");
         goto error;
     }
 
     if (PyList_Size(list) != argc - 1) {
-        py_error(x, "PyList_Size(list) != argc - 1");
+        py_error(x, "argument count mismatch in list conversion");
         goto error;
     } else {
         py_debug(x, "length of list: %d", PyList_Size(list));
@@ -2097,7 +2096,7 @@ t_max_err py_assign(t_py* x, t_symbol* s, long argc, t_atom* argv)
     // following does not steal ref to list
     res = PyDict_SetItemString(x->python.globals, varname, list);
     if (res != 0) {
-        py_error(x, "assign varname to list failed");
+        py_error(x, "failed to assign variable to list");
         goto error;
     }
     // PyDict_SetItemString does NOT steal reference, so we must decrement it
@@ -2107,7 +2106,7 @@ t_max_err py_assign(t_py* x, t_symbol* s, long argc, t_atom* argv)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "assign %s", s->s_name);
+    py_handle_error(x, "failed to assign variable '%s'", s->s_name);
     Py_XDECREF(list);
     PyGILState_Release(gstate);
     py_bang_failure(x);
@@ -2178,7 +2177,7 @@ t_max_err py_eval_text(t_py* x, long argc, t_atom* argv)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "python code evaluation failed");
+    py_handle_error(x, "Python code evaluation failed");
 
     // fail bang
     PyGILState_Release(gstate);
@@ -2278,14 +2277,14 @@ t_max_err py_func_to_list(t_py* x, const char* pyfunc_name, t_symbol* s, long ar
     // convert atoms to python list
     plist = py_atoms_to_list(x, argc, argv, 0);
     if (plist == NULL) {
-         py_error(x, "could not convert atoms to list");
+         py_error(x, "failed to convert atoms to list");
          goto error;
     }
 
     // depends on definition in py_prelude.h
     pyfunc = PyDict_GetItemString(x->python.globals, pyfunc_name);
     if (pyfunc == NULL) {
-        py_error(x, "retrieving python func '%s' from globals failed",
+        py_error(x, "failed to retrieve Python function '%s' from globals",
                  pyfunc_name);
         goto error;
     }
@@ -2317,7 +2316,7 @@ t_max_err py_func_to_list(t_py* x, const char* pyfunc_name, t_symbol* s, long ar
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "%s call failed", pyfunc_name);
+    py_handle_error(x, "Python function '%s' call failed", pyfunc_name);
     Py_XDECREF(plist);
     Py_XDECREF(pval);
     // fail bang
@@ -2351,14 +2350,14 @@ t_max_err py_func_to_atoms(t_py* x, const char* pyfunc_name, t_symbol* s, long a
     // convert atoms to python list
     plist = py_atoms_to_list(x, argc, argv, 0);
     if (plist == NULL) {
-         py_error(x, "could not convert atoms to list");
+         py_error(x, "failed to convert atoms to list");
          goto error;
     }
 
     // convert list to tuple
     ptuple = PySequence_Tuple(plist);
     if (plist == NULL) {
-         py_error(x, "could not convert python list to python tuple");
+         py_error(x, "failed to convert Python list to tuple");
          goto error;
     }
     Py_XDECREF(plist);
@@ -2366,7 +2365,7 @@ t_max_err py_func_to_atoms(t_py* x, const char* pyfunc_name, t_symbol* s, long a
     // depends on definition in py_prelude.h
     pyfunc = PyDict_GetItemString(x->python.globals, pyfunc_name);
     if (pyfunc == NULL) {
-        py_error(x, "retrieving python func '%s' from globals failed",
+        py_error(x, "failed to retrieve Python function '%s' from globals",
                  pyfunc_name);
         goto error;
     }
@@ -2397,7 +2396,7 @@ t_max_err py_func_to_atoms(t_py* x, const char* pyfunc_name, t_symbol* s, long a
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "%s call failed", pyfunc_name);
+    py_handle_error(x, "Python function '%s' call failed", pyfunc_name);
     Py_XDECREF(plist);
     Py_XDECREF(ptuple);
     Py_XDECREF(pval);
@@ -2427,7 +2426,7 @@ t_max_err py_func_to_pyobj(t_py* x, const char* pyfunc_name, PyObject* obj)
     // depends on definition in py_prelude.h
     pyfunc = PyDict_GetItemString(x->python.globals, pyfunc_name);
     if (pyfunc == NULL) {
-        py_error(x, "retrieving python func '%s' from globals failed",
+        py_error(x, "failed to retrieve Python function '%s' from globals",
                  pyfunc_name);
         goto error;
     }
@@ -2457,7 +2456,7 @@ t_max_err py_func_to_pyobj(t_py* x, const char* pyfunc_name, PyObject* obj)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "%s call failed", pyfunc_name);
+    py_handle_error(x, "Python function '%s' call failed", pyfunc_name);
     Py_XDECREF(pval);
     PyGILState_Release(gstate);
     py_bang_failure(x);
@@ -2492,13 +2491,13 @@ t_max_err py_func_to_text(t_py* x, const char* pyfunc_name, t_symbol* s, long ar
     err = atom_gettext(argc, argv, &textsize, &text,
                        OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
     if (err != MAX_ERR_NONE || !textsize || !text) {
-        py_error(x, "atom -> text conversion failed");
+        py_error(x, "failed to convert atom to text");
         goto error;
     }
 
     pstr = PyUnicode_FromString(text);
     if (pstr == NULL) {
-        py_error(x, "cstr -> pyunicode conversion failed");
+        py_error(x, "failed to convert C string to Python unicode");
         goto error;
     }
 
@@ -2507,7 +2506,7 @@ t_max_err py_func_to_text(t_py* x, const char* pyfunc_name, t_symbol* s, long ar
     // depends on definition in py_prelude.h
     pyfunc = PyDict_GetItemString(x->python.globals, pyfunc_name);
     if (pyfunc == NULL) {
-        py_error(x, "retrieving python func '%s' from globals failed",
+        py_error(x, "failed to retrieve Python function '%s' from globals",
                  pyfunc_name);
         goto error;
     }
@@ -2538,7 +2537,7 @@ t_max_err py_func_to_text(t_py* x, const char* pyfunc_name, t_symbol* s, long ar
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "%s call failed", pyfunc_name);
+    py_handle_error(x, "Python function '%s' call failed", pyfunc_name);
     Py_XDECREF(pstr);
     Py_XDECREF(pval);
     // fail bang
@@ -2675,7 +2674,7 @@ void py_scan(t_py* x)
                       (method)py_scan_callback, x, PI_DEEP | PI_WANTBOX,
                       &result);
     } else {
-        py_error(x, "scan failed");
+        py_error(x, "object scan failed");
     }
     py_debug(x, "scan result: %d", result);
 }
@@ -2738,13 +2737,12 @@ t_max_err py_send(t_py* x, t_symbol* s, long argc, t_atom* argv)
     t_max_err err = 0;
 
     if (argc < 2) {
-        py_error(x, "need at least 2 args to send msg");
+        py_error(x, "send requires at least 2 arguments");
         goto error;
     }
 
     if ((argv + 0)->a_type != A_SYM) {
-        py_error(
-            x, "1st arg of send needs to be a symbol name of receiver object");
+        py_error(x, "send first argument must be receiver object symbol name");
         goto error;
     }
 
@@ -2762,7 +2760,7 @@ t_max_err py_send(t_py* x, t_symbol* s, long argc, t_atom* argv)
     // // lookup name in registry
     err = hashtab_lookup(py_global_registry, gensym(obj_name), &obj);
     if (err != MAX_ERR_NONE || obj == NULL) {
-        py_error(x, "no object found in the registry");
+        py_error(x, "object not found in registry");
         goto error;
     }
 
@@ -2819,7 +2817,7 @@ t_max_err py_send(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     err = object_method_typed(obj, msg_sym, argc, argv, NULL);
     if (err) {
-        py_error(x, "failed to send a message to object %s", obj_name);
+        py_error(x, "failed to send message to object '%s'", obj_name);
         goto error;
     }
 
@@ -2827,7 +2825,7 @@ t_max_err py_send(t_py* x, t_symbol* s, long argc, t_atom* argv)
     return MAX_ERR_NONE;
 
 error:
-    py_error(x, "send failed");
+    py_error(x, "failed to send message");
     return MAX_ERR_GENERIC;
 }
 
@@ -2920,7 +2918,7 @@ void py_run(t_py* x)
     return;
 
 error:
-    py_handle_error(x, "run x->p_code failed");
+    py_handle_error(x, "failed to run code from editor");
     Py_XDECREF(pval);
     PyGILState_Release(gstate);
     py_bang_failure(x);
@@ -2979,7 +2977,7 @@ void py_okclose(t_py* x, char* s, short* result)
 t_max_err py_edsave(t_py* x, char** text, long size)
 {
     if (!x || !text || !*text) {
-        py_error(x, "py_edsave: invalid parameters");
+        py_error(x, "editor save: invalid parameters");
         return MAX_ERR_GENERIC;
     }
 
@@ -2993,14 +2991,14 @@ t_max_err py_edsave(t_py* x, char** text, long size)
 
         // Input validation before execution
         if (py_validate_code(x, *text, 0) != MAX_ERR_NONE) {
-            py_error(x, "py_edsave: code validation failed");
+            py_error(x, "editor save: code validation failed");
             goto error;
         }
 
         // Use safe execution instead of PyRun_String
         pval = py_safe_run_string(x, *text, Py_file_input);
         if (pval == NULL) {
-            py_error(x, "py_edsave: code execution failed");
+            py_error(x, "editor save: code execution failed");
             goto error;
         }
 
@@ -3012,7 +3010,7 @@ t_max_err py_edsave(t_py* x, char** text, long size)
     return MAX_ERR_NONE;
 
 error:
-    py_handle_error(x, "py_edsave with (possible) execution failed");
+    py_handle_error(x, "editor save with code execution failed");
     Py_XDECREF(pval);
     PyGILState_Release(gstate);
     py_debug(x, "py_edsave: returning 1");
