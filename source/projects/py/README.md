@@ -1,31 +1,64 @@
 # py: a general purpose python3 max external
 
+## Table of Contents
+
+- [Overview](#overview)
+  - [Key Features](#key-features)
+    - [Core](#core)
+    - [Extra](#extra)
+    - [Interobject Communication](#interobject-communication)
+    - [Editing Support](#editing-support)
+    - [Scripting Max with Python via the builtin `api` module](#scripting-max-with-python-via-the-builtin-api-module)
+  - [Deployment Scenarios](#deployment-scenarios)
+- [Quickstart](#quickstart)
+  - [Windows](#windows)
+  - [macOS](#macos)
+  - [Building Experimental Externals using Cmake](#building-experimental-externals-using-cmake)
+  - [Building self-contained Python3 Externals for Packages and Standalones](#building-self-contained-python3-externals-for-packages-and-standalones)
+  - [Automated Test of Build Variations](#automated-test-of-build-variations)
+  - [Using Self-contained Python Externals in a macOS Standalone](#using-self-contained-python-externals-in-a-macos-standalone)
+    - [py external](#py-external)
+    - [pyjs external](#pyjs-external)
+- [Packaging](#packaging)
+  - [The argparse-based interface of builder](#the-argparse-based-interface-of-builder)
+  - [The Project's Makefile frontend](#the-projects-makefile-frontend)
+  - [Notarization Requirements](#notarization-requirements)
+  - [Github Actions](#github-actions)
+  - [Caveats](#caveats)
+  - [Current Status of Builders](#current-status-of-builders)
+  - [Build Variations](#build-variations)
+    - [Packages vs Self-contained Externals](#packages-vs-self-contained-externals)
+  - [The relocatable-python variation](#the-relocatable-python-variation)
+  - [Sidenote about building on a Mac](#sidenote-about-building-on-a-mac)
+  - [Code Style](#code-style)
+- [Caveats](#caveats-1)
+
 ## Overview
 
-This overview will cover the following the `py` external implementation:
+This overview will cover the `py` external implementation:
 
-The `py` external provides a more featureful two-way interface between max and python in a way that feels natural to both languages.
+The `py` external provides a more featureful two-way interface between Max and Python in a way that feels natural to both languages.
 
-The external has access to builtin python modules and the whole universe of 3rd party modules, and further has the option of importing a builtin `api` module which uses [cython](https://cython.org) to wrap selective portions of the max c-api. This allows regular python code to directly access the max-c-api and script Max objects. In addition, a pure python `py_prelude.py` module is pre-loaded in every `py` instance as an extended set of builtins.
+The external has access to built-in Python modules and the whole universe of 3rd party modules, and further has the option of importing a built-in `api` module which uses [Cython](https://cython.org) to wrap selective portions of the Max C-API. This allows regular Python code to directly access the Max C-API and script Max objects. In addition, a pure Python `py_prelude.py` module is pre-loaded in every `py` instance as an extended set of built-ins.
 
-So in summary, `py` is a general purpose Max external that embeds a python3 interpreter and is made up of three integrated parts which make it quite straightforward to extend:
+So in summary, `py` is a general-purpose Max external that embeds a Python 3 interpreter and is made up of three integrated parts which make it quite straightforward to extend:
 
-1. The `py` Max external which is written in c using both the `Max c-api` and the `Python3 c-api`.
+1. The `py` Max external which is written in C using both the `Max C-API` and the `Python 3 C-API`.
 
-2. A pure python module, `py_prelude.py` which is converted to `py_prelude.h` and compiled with `py` and then pre-loaded into the `globals()` namespace of every `py` instance.
+2. A pure Python module, `py_prelude.py`, which is converted to `py_prelude.h` and compiled with `py` and then pre-loaded into the `globals()` namespace of every `py` instance.
 
-3. A powerful builtin `api` module which is derived from a cython-based wrapper of a subset of the `Max c-api`.
+3. A powerful built-in `api` module which is derived from a Cython-based wrapper of a subset of the `Max C-API`.
 
-As of 24, March 2025, the relative size of these modules (in number of tokens) is:
+As of March 24, 2025, the relative size of these modules (in number of tokens) is:
 
 id  | name             | language   | comment       | code          | note
 :-- | :--------------- | :--------- | :------------ | :------------ | :-------------
 1   | `py.c`           | c          | 729           | 1,598         | handwritten
 2   | `py_prelude.py`  | python     | 95            | 181           | handwritten
 3   | `api.pyx`        | cython     | 2,014         | 3,714         | handwritten
-4   | `api.c`         | c          | 3,185         | 147,855       | generated from (3)
+4   | `api.c`          | c          | 3,185         | 147,855       | generated from (3)
 
-The following cheatsheat provides a brief view of key attributes and methods of the `py` external:
+The following cheat sheet provides a brief view of key attributes and methods of the `py` external:
 
 ```text
 globals
@@ -45,23 +78,23 @@ py max external
         pythonpath               : add path to python sys.path
         debug                    : switch debug logging on/off
 
-    methods (messages) 
+    methods (messages)
         core
-            import <module>      : python import to object namespace
-            eval <expression>    : python 'eval' semantics
-            exec <statement>     : python 'exec' semantics
-            execfile <path>      : python 'execfile' semantics
+            import <module>      : Python import to object namespace
+            eval <expression>    : Python 'eval' semantics
+            exec <statement>     : Python 'exec' semantics
+            execfile <path>      : Python 'execfile' semantics
         
         extra
-            assign <var> [arg]   : max-friendly msg assignments to py object namespace
-            call <pyfunc> [arg]  : max-friendly python function calling
-            pipe <arg> [pyfunc]  : process py/max value(s) via a pipe of py funcs
-            fold <f> <n> [arg]   : applies a two-arg function cumulatively to a sequence
-            code <expr|stmt>     : alternative way to eval or exec py code
-            anything <expr|stmt> : anything version of the code method 
+            assign <var> [arg]   : Max-friendly msg assignments to py object namespace
+            call <pyfunc> [arg]  : Max-friendly Python function calling
+            pipe <arg> [pyfunc]  : process py/Max value(s) via a pipe of py funcs
+            fold <f> <n> [arg]   : applies a two-argument function cumulatively to a sequence
+            code <expr|stmt>     : alternative way to eval or exec Python code
+            anything <expr|stmt> : anything version of the code method
 
         time-based
-            sched <t> <fn> [arg] : defer a python function call by t millisecs
+            sched <t> <fn> [arg] : defer a Python function call by t milliseconds
 
         code editor
             read <path>          : read text file into editor
@@ -73,7 +106,7 @@ py max external
             send <msg>           : send an arbitrary message to a named object
 
         meta
-            count                : give a int count of current live py objects
+            count                : give an integer count of current live py objects
 
     inlets
         single inlet             : primary input (anything)
@@ -81,12 +114,12 @@ py max external
     outlets
         left outlet              : primary output (anything)
         middle outlet            : bang on failure
-        right outlet             : bang on success 
+        right outlet             : bang on success
 ```
 
 ### Key Features
 
-The `py` external has the following c-level methods:
+The `py` external has the following C-level methods:
 
 category | method   | param(s)      | in/out | can change ns
 :------- | :--------| :------------ | :----: | :------------:
@@ -107,13 +140,13 @@ interobj | scan     |               | n/a    | no
 interobj | send     | name, msg, .. | n/a    | no
 meta     | count    |               | n/a    | no
 
-Note that he `code` method allows for import/exec/eval of python code, which can be said to make those 'fit-for-purpose' methods redundant. However, it has been retained because it provides additional strictness and provides a helpful prefix in messages which indicates message intent.
+Note that the `code` method allows for import/exec/eval of Python code, which can be said to make those 'fit-for-purpose' methods redundant. However, it has been retained because it provides additional strictness and a helpful prefix in messages which indicates message intent.
 
 #### Core
 
-py/js's *core* features have a one-to-one correspondance to python's [very high layer](https://docs.python.org/3/c-api/veryhigh.html). In the following, when we refer to an *object*, we refer to instances of the `py` external.
+py/js's *core* features have a one-to-one correspondence to Python's [very high layer](https://docs.python.org/3/c-api/veryhigh.html). In the following, when we refer to an *object*, we refer to instances of the `py` external.
 
-- **Per-object namespaces**. Each object has a unique name (which is provided automatically or can be set by the user), and responds to an `import <module>` message which loads the specified python module in its namespace (essentially a `globals` dictionary). Notably, namespaces can be different for each instance.
+- **Per-object namespaces**. Each object has a unique name (which is provided automatically or can be set by the user), and responds to an `import <module>` message which loads the specified Python module in its namespace (essentially a `globals` dictionary). Notably, namespaces can be different for each instance.
 
 - **Eval Messages**. Responds to an `eval <expression>` message in the left inlet which is evaluated in the context of the namespace. `py` objects output results to the left outlet, send a bang from the right outlet upon success or a bang from the middle outlet upon failure.
 
@@ -121,15 +154,15 @@ py/js's *core* features have a one-to-one correspondance to python's [very high 
 
 #### Extra
 
-The *extra* category of methods  makes the `py` object play nice with the max/msp ecosystem:
+The *extra* category of methods makes the `py` object play nice with the Max/MSP ecosystem:
 
-- **Assign Messages**. Responds to an `assign <varname> [x1, x2, ..., xN]` which is equivalent to `<varname> = [x1, x2, ..., xN]` in the python namespace. This is a way of creating variables in the object's python namespace using max message syntax. This produces no output from the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
+- **Assign Messages**. Responds to an `assign <varname> [x1, x2, ..., xN]` which is equivalent to `<varname> = [x1, x2, ..., xN]` in the Python namespace. This is a way of creating variables in the object's Python namespace using Max message syntax. This produces no output from the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
 
-- **Call Messages**. Responds to a `call <func> arg1 arg2 ... argN` kind of message where `func` is a python callable in the py object's namespace. This corresponds to the python `callable(*args)` syntax. This makes it easier to call python functions in a max-friendly way. If the callable does not have variable arguments, it will alternatively try to apply the arguments as a list i.e. `call func(args)`. Future work will try make `call` correspond to a python generic function call: `<callable> [arg1 arg2 ... arg_n] [key1=val1 key2=val2 ... keyN=valN]`. This outputs results to the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
+- **Call Messages**. Responds to a `call <func> arg1 arg2 ... argN` kind of message where `func` is a Python callable in the py object's namespace. This corresponds to the Python `callable(*args)` syntax. This makes it easier to call Python functions in a Max-friendly way. If the callable does not have variable arguments, it will alternatively try to apply the arguments as a list, i.e., `call func(args)`. Future work will try to make `call` correspond to a Python generic function call: `<callable> [arg1 arg2 ... arg_n] [key1=val1 key2=val2 ... keyN=valN]`. This outputs results to the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
 
-- **Pipe message**. Like a `call` in reverse, responds to a `pipe <arg> <f1> <f2> ... <fN>` message. In this sense, a value is *piped* through a chain of python functions in the objects namespace and returns the output to the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
+- **Pipe message**. Like a `call` in reverse, responds to a `pipe <arg> <f1> <f2> ... <fN>` message. In this sense, a value is *piped* through a chain of Python functions in the object's namespace and returns the output to the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
 
-- **Code or Anything Messages**. Responds to a `code <expression || statement>` or (anything) `<expression || statement>` message. Arbitrary python code (expression or statement) can be used here, because the whole message body is converted to a string, the complexity of the code is only limited by Max's parsing and excaping rules. (This is classified as EXPERIMENTAL and evolving).
+- **Code or Anything Messages**. Responds to a `code <expression || statement>` or (anything) `<expression || statement>` message. Arbitrary Python code (expression or statement) can be used here; because the whole message body is converted to a string, the complexity of the code is only limited by Max's parsing and escaping rules. (This is classified as EXPERIMENTAL and evolving).
 
 #### Interobject Communication
 
@@ -139,13 +172,13 @@ The *extra* category of methods  makes the `py` object play nice with the max/ms
 
 #### Editing Support
 
-- **Line REPL**. The `py` object has two bpatcher line `repls`: one, `py_repl_plux.maxpat` which embeds a `py` object and another, `py_repl.maxpat` which has an outlet to connect to one. The repls include a convenient menu with all of the `py` object's methods and also feature `coll`-based history via arrow-up/arrow-down recall of entries in a session. A `coll` can made to save all commands if required.
+- **Line REPL**. The `py` object has two bpatcher line REPLs: one (`py_repl_plus.maxpat`) which embeds a `py` object and another (`py_repl.maxpat`) which has an outlet to connect to one. The REPLs include a convenient menu with all of the `py` object's methods and also feature `coll`-based history via arrow-up/arrow-down recall of entries in a session. A `coll` can be made to save all commands if required.
 
-- **Multiedit REPL**. Another bpatcher, `py_multiedit.maxpat`, combines a `textedit` object for writing multiliine python code to be executed in the respective `py` external's namespace, and a simple line repl strictly for evaluating objects in the namespace.
+- **Multiedit REPL**. Another bpatcher, `py_multiedit.maxpat`, combines a `textedit` object for writing multiline Python code to be executed in the respective `py` external's namespace, and a simple line REPL strictly for evaluating objects in the namespace.
 
 - **External Editor Filewatcher**. `py_extedit.maxpat` is a bpatcher which wraps the `filewatcher` object and opens a *watched* file in an external editor. If the file is saved by the editor, it will be sent out as text via the outlet and can be received, for example, by the `py` object's inlet, to enable a kind of load-on-save workflow.
 
-- **Code Editor**. Double-clicking on the `py` object opens a code-editor. This is populated by a `read` message which reads a file into the editor and saves the filepath to the external's attribute. A `load` message also `reads` the file followed by `execfile`. Saving the text in the editor uses the attribute filepath and execs the saved code to the object's namespace.
+- **Code Editor**. Double-clicking on the `py` object opens a code editor. This is populated by a `read` message which reads a file into the editor and saves the file path to the external's attribute. A `load` message also reads the file followed by `execfile`. Saving the text in the editor uses the attribute file path and executes the saved code to the object's namespace.
 
 - **Experimental Remote Console**. A method (due to [Iain Duncan](https://github.com/iainctduncan)) of sending code to the `py` node via `udp` has been implemented and allows for send-from-editor and send-from-interactive-console capabilities. The clients are still in their infancy, but this method looks promising since you get syntax highlighting, syntax checking, and other features. It assumes you want to treat your `py` nodes as remotely accessible `server/interpreters-in-max`.
 
@@ -776,7 +809,7 @@ The style used in this project is specified in the `.clang-format` file.
 
 - `Numpy`, the popular python numerical analysis package, falls in the above category. In newer versions of Python the situation is improving as above, but in python 3.9.x, it thankfully doesn't crash but gives the following error:
 
-```bash
+```sh
 [py __main__] import numpy: SystemError('Objects/structseq.c:401: bad argument to internal function')
 ```
 

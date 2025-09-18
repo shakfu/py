@@ -752,7 +752,7 @@ void py_error(t_py* x, char* fmt, ...)
     vsnprintf(msg, PY_MAX_ELEMS, fmt, va);
     va_end(va);
 
-    object_post((t_object*)x, "[ERROR] (%s) %s", x->obj.name->s_name, msg);
+    object_error((t_object*)x, "[ERROR] (%s) %s", x->obj.name->s_name, msg);
 }
 
 /**
