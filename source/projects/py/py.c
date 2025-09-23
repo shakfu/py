@@ -115,16 +115,13 @@ void ext_main(void* module_ref)
     //------------------------------------------------------------------------
     // clang-format off
 
-    // testing
-    class_addmethod(c, (method)py_bang,       "bang",                  0);
-
-    // core
+    // core python code handlers
     class_addmethod(c, (method)py_import,     "import",     A_SYM,     0);
     class_addmethod(c, (method)py_eval,       "eval",       A_GIMME,   0);
     class_addmethod(c, (method)py_exec,       "exec",       A_GIMME,   0);
     class_addmethod(c, (method)py_execfile,   "execfile",   A_DEFSYM,  0);
 
-    // core extra
+    // extra python code handlers
     class_addmethod(c, (method)py_apply,      "apply",      A_GIMME,   0);
     class_addmethod(c, (method)py_assign,     "assign",     A_GIMME,   0);
     class_addmethod(c, (method)py_call,       "call",       A_GIMME,   0);
@@ -133,6 +130,12 @@ void ext_main(void* module_ref)
     class_addmethod(c, (method)py_product,    "product",    A_GIMME,   0);
     class_addmethod(c, (method)py_fold,       "fold",       A_GIMME,   0);
     class_addmethod(c, (method)py_shell,      "shell",      A_GIMME,   0);
+
+    // general type handlers
+    class_addmethod(c, (method)py_bang,       "bang",                  0);
+    // class_addmethod(c, (method)py_int,        "int",        A_LONG,    0);
+    // class_addmethod(c, (method)py_float,      "float",      A_FLOAT,   0);
+    class_addmethod(c, (method)py_anything,   "list",       A_GIMME,   0);
     class_addmethod(c, (method)py_anything,   "anything",   A_GIMME,   0);
 
     // time-based
@@ -2155,9 +2158,13 @@ error:
  * @param x pointer to object structure
  * @param argc atom argument count
  * @param argv atom argument vector
+ * @param flags Sets the rules by which atoms are translated into text.
+ *              Values are bit masked as defined by e_max_atom_gettext_flags.
+ *              default: OBEX_UTIL_ATOM_GETTEXT_DEFAULT
+ *
  * @return t_max_err error code
  */
-t_max_err py_eval_text(t_py* x, long argc, t_atom* argv)
+t_max_err py_eval_text(t_py* x, long argc, t_atom* argv, long flags)
 {
     PyGILState_STATE gstate = PyGILState_Ensure();
 
@@ -2167,8 +2174,7 @@ t_max_err py_eval_text(t_py* x, long argc, t_atom* argv)
     PyObject* co = NULL;
     PyObject* pval = NULL;
 
-    t_max_err err = atom_gettext(argc, argv, &textsize, &text,
-                                 OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
+    t_max_err err = atom_gettext(argc, argv, &textsize, &text, flags);
     if (err == MAX_ERR_NONE && textsize && text) {
         py_debug(x, ">>> %s", text);
     } else {
@@ -2232,12 +2238,24 @@ error:
  */
 t_max_err py_code(t_py* x, t_symbol* s, long argc, t_atom* argv)
 {
-    return py_eval_text(x, argc, argv);
+    return py_eval_text(x, argc, argv, OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
 }
 
 
+// void py_int(t_py* x, long value)
+// {
+
+// }
+
+
+// void py_float(t_py* x, double value)
+// {
+
+// }
+
+
 /**
- * @brief Anything method converting all of the atom to text and evaluate as
+ * @brief Anything method converting all atoms to text and evaluate as
  * python code.
  *
  * @param x pointer to object structure
@@ -2249,6 +2267,7 @@ t_max_err py_code(t_py* x, t_symbol* s, long argc, t_atom* argv)
 t_max_err py_anything(t_py* x, t_symbol* s, long argc, t_atom* argv)
 {
     t_atom atoms[PY_MAX_ELEMS];
+    int offset = 0;
 
     if (s == gensym("")) {
         return MAX_ERR_GENERIC;
@@ -2260,21 +2279,33 @@ t_max_err py_anything(t_py* x, t_symbol* s, long argc, t_atom* argv)
         return MAX_ERR_NONE;
     }
 
-    // set symbol as first atom in new atoms array
-    atom_setsym(atoms, s);
+    // handle quoted single symbol case
+    if (argc == 0) {
+        atom_setsym(atoms, s);
+        return py_eval_text(x, 1, atoms,
+            OBEX_UTIL_ATOM_GETTEXT_SYM_NO_QUOTE |
+            OBEX_UTIL_ATOM_GETTEXT_NOESCAPE
+        );
+    }
+
+    if (s != gensym("list")) {
+        // if not list set symbol as first atom in new atoms array
+        atom_setsym(atoms, s);
+        offset = 1;
+    }
 
     for (int i = 0; i < argc; i++) {
         switch ((argv + i)->a_type) {
         case A_FLOAT: {
-            atom_setfloat((atoms + (i + 1)), atom_getfloat(argv + i));
+            atom_setfloat((atoms + (i + offset)), atom_getfloat(argv + i));
             break;
         }
         case A_LONG: {
-            atom_setlong((atoms + (i + 1)), atom_getlong(argv + i));
+            atom_setlong((atoms + (i + offset)), atom_getlong(argv + i));
             break;
         }
         case A_SYM: {
-            atom_setsym((atoms + (i + 1)), atom_getsym(argv + i));
+            atom_setsym((atoms + (i + offset)), atom_getsym(argv + i));
             break;
         }
         default:
@@ -2283,7 +2314,7 @@ t_max_err py_anything(t_py* x, t_symbol* s, long argc, t_atom* argv)
         }
     }
 
-    return py_eval_text(x, argc + 1, atoms);
+    return py_eval_text(x, argc + offset, atoms, OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
 }
 
 /*--------------------------------------------------------------------------*/

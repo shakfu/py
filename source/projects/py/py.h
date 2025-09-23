@@ -96,7 +96,7 @@ void py_postargs(t_symbol *s, long argc, t_atom *argv);
 /* Helpers */
 
 void py_init_builtins(t_py* x);
-t_max_err py_eval_text(t_py* x, long argc, t_atom* argv);
+t_max_err py_eval_text(t_py* x, long argc, t_atom* argv, long flags);
 
 /* security helpers */
 
@@ -119,7 +119,6 @@ void path_join(char* destination, const char* path1, const char* path2);
 /*--------------------------------------------------------------------------*/
 /* Side-effect helpers */
 
-void py_bang(t_py* x);
 void py_bang_success(t_py* x);
 void py_bang_failure(t_py* x);
 void* get_outlet(t_py* x);
@@ -154,6 +153,20 @@ t_max_err py_pipe(t_py* x, t_symbol* s, long argc, t_atom* argv);
 t_max_err py_product(t_py* x, t_symbol* s, long argc, t_atom* argv);
 t_max_err py_fold(t_py* x, t_symbol* s, long argc, t_atom* argv);
 t_max_err py_shell(t_py* x, t_symbol* s, long argc, t_atom* argv);
+
+/*--------------------------------------------------------------------------*/
+/* General Type Handlers */
+
+void py_bang(t_py* x);
+// TODO: 
+// When an int, float, list are sent, they set the PyObject* __LAST_VALUE variable
+// The last function defined via `exec` is compiled to a callable object 
+// and cached as PyObject* or code object __LAST_CALLABLE
+// an int message to py_int will mean: __LAST_CALLABLE(value:long)
+// a float message to py_float will mean: __LAST_CALLABLE(value:double)
+// a bang message will mean call the last callable again with the last value
+// void py_int(t_py* x, long value);
+// void py_float(t_py* x, double value);
 t_max_err py_anything(t_py* x, t_symbol* s, long argc, t_atom* argv);
 
 /*--------------------------------------------------------------------------*/
