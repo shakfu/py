@@ -9,6 +9,9 @@
 /* user configuration */
 #include "py_config.h"
 
+/* function cache */
+#include "py_cache.h"
+
 /* max/msp api */
 #include "api.h"
 
@@ -45,6 +48,7 @@ struct t_py {
         t_symbol* pythonpath;    /*!< path to python directory */
         t_bool debug;            /*!< bool to switch per-object debug state */
         PyObject* globals;       /*!< per object 'globals' python namespace */
+        psc_instance_t* cache;   /*!< python function / code object cache */
     } python;
 
     /* time-based ops */
@@ -446,6 +450,8 @@ void py_init(t_py* x)
     PyObject* main_mod = PyImport_AddModule(x->obj.name->s_name); // borrowed
     x->python.globals = PyModule_GetDict(main_mod); // borrowed reference
     py_init_builtins(x); // does this have to be a separate function?
+    x->python.cache = psc_create_instance(NULL);
+    psc_init(x->python.cache); // init cache
 
     // register the object
     object_register(CLASS_BOX, x->obj.name, x);
@@ -499,6 +505,10 @@ void py_free(t_py* x)
     // and should NOT be decremented. Removed: Py_XDECREF(x->python.globals);
     // python objects cleanup
     py_debug(x, "will be deleted");
+
+    // destroy python cache
+    psc_destroy_instance(x->python.cache);
+    x->python.cache = NULL;
 
     // decrement global object counter (atomic)
     atomic_long new_count = atomic_fetch_add_explicit(&py_global_obj_count, 1, memory_order_relaxed);
