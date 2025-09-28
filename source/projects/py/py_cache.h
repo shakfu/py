@@ -1,6 +1,6 @@
 /**
- * @file py_cache_final.h
- * @brief Complete instance-based Python function cache with smart caching and validation
+ * @file py_cache.h
+ * @brief Python function cache with smart caching and validation
  * @version 5.0 FINAL
  * @author Smart Function Cache System
  * 
@@ -20,11 +20,14 @@
  * - Comprehensive error handling with detailed validation messages
  * 
  * Usage:
- *   #include "py_cache_final.h"
+ *   #include "py_cache.h"
  * 
  *   // Create and initialize instance
  *   psc_instance_t* cache = psc_create_instance("my_cache");
  *   psc_init(cache);
+ *   
+ *   // (Optional) quick check of python function in source code
+ *   psc_check_is_python_function("def square(x): return x*x", "math.py");
  * 
  *   // Add functions (automatically validates and decides whether to cache)
  *   psc_add_function(cache, "def square(x): return x*x", "math.py");
@@ -64,8 +67,12 @@ extern "C" {
 #define PSC_CACHE_SIZE 1024
 #endif
 
-#ifndef PSC_MAX_FUNCTION_NAME
-#define PSC_MAX_FUNCTION_NAME 256
+#ifndef PSC_MAX_FUNCTION_NAME_LENGTH
+#define PSC_MAX_FUNCTION_NAME_LENGTH 256
+#endif
+
+#ifndef PSC_MAX_ERROR_LENGTH
+#define PSC_MAX_ERROR_LENGTH 512
 #endif
 
 #ifndef PSC_MAX_SOURCE_LENGTH
@@ -143,7 +150,7 @@ extern "C" {
 typedef struct psc_instance {
     // === CORE CACHE DATA ===
     struct psc_cache_entry {
-        char function_name[PSC_MAX_FUNCTION_NAME];
+        char function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
         char *source_code;
         PyObject *code_object;
         PyObject *function_object;
@@ -206,16 +213,17 @@ typedef struct psc_instance {
         int initialized;
         psc_rwlock_t lock;
         time_t system_start_time;
-        char last_error[512];
-        char last_validation_error[512];
+        char last_error[PSC_MAX_ERROR_LENGTH];
+        char last_validation_error[PSC_MAX_ERROR_LENGTH];
         char instance_name[64];
+        char last_cached_function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
     } state;
     
     // === COMPLEXITY ANALYSIS WORKSPACE ===
     struct {
         char explanation_buffer[PSC_MAX_EXPLANATION_LENGTH];
-        char temp_function_name[PSC_MAX_FUNCTION_NAME];
-        char validation_error_buffer[512];
+        char temp_function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
+        char validation_error_buffer[PSC_MAX_ERROR_LENGTH];
         int pattern_counts[32]; // Reusable array for pattern counting
     } workspace;
     
@@ -365,8 +373,67 @@ static inline int psc_count_lines(const char *source) {
 }
 
 // ============================================================================
-// COMPREHENSIVE FUNCTION VALIDATION
+// FUNCTION VALIDATION
 // ============================================================================
+
+/**
+ * @brief Quick check if source looks like a Python function
+ * @param instance Cache instance (for debug output)
+ * @param source_code Python source code to validate
+ * @return PSC_VALIDATE_SUCCESS if looks like function, error code otherwise
+ */
+static inline psc_validate_result_t psc_check_is_python_function(
+    psc_instance_t *instance, const char *source_code) 
+{
+    char error_msg[PSC_MAX_ERROR_LENGTH];
+    size_t error_msg_size = PSC_MAX_ERROR_LENGTH;
+    
+    if (!source_code || strlen(source_code) == 0) {
+        snprintf_zero(error_msg, error_msg_size, "Empty source code");
+        return PSC_VALIDATE_NO_FUNCTION;
+    }
+
+    // === Step 1: Check for function definition patterns ===
+    int def_count = 0;
+    const char *def_positions[10]; // Track up to 10 def positions
+    const char *p = source_code;
+    
+    while ((p = strstr(p, "def ")) != NULL) {
+        // Check if this is actually a function def (not inside a string/comment)
+        const char *line_start = p;
+        while (line_start > source_code && *(line_start - 1) != '\n') {
+            line_start--;
+        }
+        
+        // Check if "def " is at start of line (possibly with indentation)
+        int is_function_def = 1;
+        for (const char *check = line_start; check < p; check++) {
+            if (*check != ' ' && *check != '\t') {
+                is_function_def = 0;
+                break;
+            }
+        }
+        
+        if (is_function_def && def_count < 10) {
+            def_positions[def_count++] = p;
+        }
+        
+        p += 4; // Move past "def "
+    }
+    
+    if (def_count == 0) {
+        snprintf_zero(error_msg, error_msg_size, "No function definition found (missing 'def')");
+        return PSC_VALIDATE_NO_FUNCTION;
+    }
+    
+    if (def_count > 1) {
+        snprintf_zero(error_msg, error_msg_size, "Multiple function definitions found (%d). Only single functions supported.", def_count);
+        return PSC_VALIDATE_MULTIPLE_FUNCTIONS;
+    }
+    
+    // success: def_count == 1
+    return PSC_VALIDATE_SUCCESS;
+}
 
 /**
  * @brief Comprehensive validation that source contains exactly one Python function
@@ -798,7 +865,7 @@ static inline struct psc_cache_entry* psc_create_entry(const char *function_name
     
     memset(entry, 0, sizeof(struct psc_cache_entry));
     
-    strncpy_zero(entry->function_name, function_name, PSC_MAX_FUNCTION_NAME - 1);
+    strncpy_zero(entry->function_name, function_name, PSC_MAX_FUNCTION_NAME_LENGTH - 1);
     entry->source_code = strdup(source_code);
     if (!entry->source_code) {
         free(entry);
@@ -1007,6 +1074,7 @@ static inline psc_result_t psc_init(psc_instance_t *instance) {
     instance->state.system_start_time = time(NULL);
     instance->state.last_error[0] = '\0';
     instance->state.last_validation_error[0] = '\0';
+    instance->state.last_cached_function_name[0] = '\0';
     
     return PSC_SUCCESS;
 }
@@ -1068,6 +1136,7 @@ static inline psc_result_t psc_reset(psc_instance_t *instance) {
         instance->state.system_start_time = time(NULL);
         instance->state.last_error[0] = '\0';
         instance->state.last_validation_error[0] = '\0';
+        instance->state.last_cached_function_name[0] = '\0';
         
     } else {
         // Not initialized yet, just do initial init
@@ -1090,16 +1159,16 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     if (!source_code || strlen(source_code) == 0) return PSC_ERROR_INVALID_ARGS;
     
     // === STEP 1: COMPREHENSIVE FUNCTION VALIDATION ===
-    char function_name[PSC_MAX_FUNCTION_NAME];
-    char validation_error[512];
+    char function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
+    char validation_error[PSC_MAX_ERROR_LENGTH];
     
     psc_validate_result_t validation = psc_validate_function_source(
         instance,
         source_code, 
         function_name, 
-        sizeof(function_name),
+        PSC_MAX_FUNCTION_NAME_LENGTH,
         validation_error,
-        sizeof(validation_error)
+        PSC_MAX_ERROR_LENGTH
     );
     
     // Store validation error for debugging
@@ -1199,8 +1268,9 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
             
             psc_rwlock_unlock_wr(&instance->state.lock);
             
-            // Update statistics
+            // Update statistics and track last cached function
             instance->stats.functions_cached++;
+            strncpy_zero(instance->state.last_cached_function_name, function_name, PSC_MAX_FUNCTION_NAME_LENGTH - 1);
             
             // Clean up temporary references
             Py_DECREF(code_obj);
@@ -1218,7 +1288,8 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     instance->hash_table[hash_idx] = entry;
     instance->stats.total_entries++;
     instance->stats.functions_cached++;
-    
+    strncpy_zero(instance->state.last_cached_function_name, function_name, PSC_MAX_FUNCTION_NAME_LENGTH - 1);
+
     psc_rwlock_unlock_wr(&instance->state.lock);
     
     if (instance->config.debug_mode) {
@@ -1288,13 +1359,29 @@ static inline PyObject* psc_call_function(psc_instance_t *instance, const char *
  */
 static inline int psc_has_function(psc_instance_t *instance, const char *function_name) {
     if (!instance || !instance->state.initialized) return 0;
-    
+
     psc_rwlock_rdlock(&instance->state.lock);
     struct psc_cache_entry *entry = psc_find_function_unlocked(instance, function_name);
     int exists = (entry != NULL);
     psc_rwlock_unlock_rd(&instance->state.lock);
-    
+
     return exists;
+}
+
+/**
+ * @brief Get the name of the last cached function
+ * @param instance Cache instance
+ * @return Pointer to the last cached function name, or NULL if none or instance invalid
+ */
+static inline const char* psc_get_last_cached_function_name(psc_instance_t *instance) {
+    if (!instance || !instance->state.initialized) return NULL;
+
+    psc_rwlock_rdlock(&instance->state.lock);
+    const char *name = instance->state.last_cached_function_name[0] != '\0' ?
+                      instance->state.last_cached_function_name : NULL;
+    psc_rwlock_unlock_rd(&instance->state.lock);
+
+    return name;
 }
 
 /**
@@ -1383,8 +1470,8 @@ static inline void psc_explain_decision(psc_instance_t *instance, const char *so
     }
     
     // First validate the function
-    char function_name[PSC_MAX_FUNCTION_NAME];
-    char validation_error[512];
+    char function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
+    char validation_error[PSC_MAX_ERROR_LENGTH];
     psc_validate_result_t validation = psc_validate_function_source(
         instance, source_code, function_name, sizeof(function_name),
         validation_error, sizeof(validation_error)

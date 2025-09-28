@@ -137,7 +137,7 @@ void ext_main(void* module_ref)
 
     // general type handlers
     class_addmethod(c, (method)py_bang,       "bang",                  0);
-    // class_addmethod(c, (method)py_int,        "int",        A_LONG,    0);
+    class_addmethod(c, (method)py_int,        "int",        A_LONG,    0);
     // class_addmethod(c, (method)py_float,      "float",      A_FLOAT,   0);
     class_addmethod(c, (method)py_anything,   "list",       A_GIMME,   0);
     class_addmethod(c, (method)py_anything,   "anything",   A_GIMME,   0);
@@ -1999,6 +1999,15 @@ t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
         goto error;
     }
 
+    // try to add function to cache if it looks like a python function
+    if (psc_check_is_python_function(
+        x->python.cache, atom_getsym(argv)->s_name) == PSC_VALIDATE_SUCCESS) {
+        if (psc_add_function(
+            x->python.cache, atom_getsym(argv)->s_name, "<pyfunc>") == PSC_SUCCESS) {
+            py_debug(x, "cached function");
+        }
+    }
+
     // Input validation
     if (py_validate_code(x, py_argv, 0) != MAX_ERR_NONE) {
         py_error(x, "exec input failed security validation");
@@ -2251,11 +2260,37 @@ t_max_err py_code(t_py* x, t_symbol* s, long argc, t_atom* argv)
     return py_eval_text(x, argc, argv, OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
 }
 
+/**
+ * @brief Handle a long being received.
+ *
+ * @param      x pointer to object structure
+ * @param[in]  value long value
+ */
+void py_int(t_py* x, long value)
+{
+    PyObject *long_value = NULL;// PyLong to be received 
+    PyObject *args = NULL;      // Initialize packed to NULL
+    PyObject *result = NULL;    // Result of the call with packed
 
-// void py_int(t_py* x, long value)
-// {
-
-// }
+    const char* last_func = psc_get_last_cached_function_name(x->python.cache);
+    if (last_func) {
+        post("Last cached function: %s", last_func);
+        long_value = PyLong_FromLong(value);
+        // Pack the arguments into a tuple
+        args = PyTuple_Pack(1, long_value);
+        // Call functions with different parameters
+        result = psc_call_function(x->python.cache, last_func, args, NULL);
+        if (result == NULL) {
+            py_error(x, "could not run cached func with val: %s(%d)", last_func, value);
+        }
+        t_max_err err = py_handle_long_output(x, long_value);
+        if (err != MAX_ERR_NONE) {
+            py_error(x, "Could not output %s result to outlet", last_func);        
+        }
+    } else {
+        py_error(x, "No functions cached yet");
+    }
+}
 
 
 // void py_float(t_py* x, double value)
