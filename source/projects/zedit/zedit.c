@@ -112,6 +112,10 @@ t_max_err zedit_pipe(t_zedit* x, t_symbol* s, long argc, t_atom* argv);
 t_max_err zedit_exec_file_input(t_zedit* x, const char* code);
 t_max_err zedit_exec_single_input(t_zedit* x, const char* code);
 
+// code evaluation methods with output capture
+char* zedit_exec_file_input_with_output(t_zedit* x, const char* code);
+char* zedit_exec_single_input_with_output(t_zedit* x, const char* code);
+
 // Optional Python sandboxing support
 // To enable RestrictedPython sandboxing:
 // 1. Install RestrictedPython: pip install RestrictedPython
@@ -313,14 +317,18 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
                 return;
             }
 
-            // Success! create JSON response
-            mg_http_reply(c, 200, headers,
-                          "{%Q:%Q}\n",
-                          "result", "OK SAVED");
+            // Execute code and capture output
+            char* output = zedit_exec_file_input_with_output((t_zedit*)c->fn_data, code);
 
-            zedit_exec_file_input((t_zedit*)c->fn_data, code);
+            // Create JSON response with output
+            mg_http_reply(c, 200, headers,
+                          "{%Q:%Q, %Q:%Q}\n",
+                          "result", "OK SAVED",
+                          "output", output ? output : "");
+
             post("code executed (length: %zu bytes)", code_len);
             free(code);
+            if (output) free(output);
         } else {
             mg_http_reply(c, 400, headers,
                           "{%Q:%Q}\n", "error", "Parameters missing");
@@ -328,6 +336,48 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
 
     } else if (mg_http_match_uri(hm, "/api/code/run")) {
         object_post((t_object*)c->fn_data, "/api/code/run");
+        char headers[512];
+        snprintf(headers, sizeof(headers), "%sContent-Type: application/json\r\n", sec_headers);
+
+        // Expecting JSON in the HTTP body
+        char *code;
+
+        if ((code = mg_json_get_str(hm->body, "$.content"))) {
+
+            // Input validation: check code length (max 1MB)
+            size_t code_len = strlen(code);
+            if (code_len > 1048576) {
+                mg_http_reply(c, 400, headers,
+                              "{%Q:%Q}\n", "error", "Code too large (max 1MB)");
+                free(code);
+                return;
+            }
+
+            // Input validation: check for null bytes
+            if (memchr(code, '\0', code_len) != NULL) {
+                mg_http_reply(c, 400, headers,
+                              "{%Q:%Q}\n", "error", "Invalid input: null bytes detected");
+                free(code);
+                return;
+            }
+
+            // Execute code and capture output
+            char* output = zedit_exec_file_input_with_output((t_zedit*)c->fn_data, code);
+
+            // Create JSON response with output
+            mg_http_reply(c, 200, headers,
+                          "{%Q:%Q, %Q:%Q}\n",
+                          "result", "OK",
+                          "output", output ? output : "");
+
+            post("code executed (length: %zu bytes)", code_len);
+            free(code);
+            if (output) free(output);
+        } else {
+            mg_http_reply(c, 400, headers,
+                          "{%Q:%Q}\n", "error", "Parameters missing");
+        }
+
     } else if (mg_http_match_uri(hm, "/api/repl/send")) {
         object_post((t_object*)c->fn_data, "/api/repl/run");
         char headers[512];
@@ -353,13 +403,18 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
                 return;
             }
 
-            // Success! create JSON response
+            // Execute code and capture output
+            char* output = zedit_exec_single_input_with_output((t_zedit*)c->fn_data, code);
+
+            // Create JSON response with output
             mg_http_reply(c, 200, headers,
-                          "{%Q:%Q}\n",
-                          "result", "OK");
-            zedit_exec_single_input((t_zedit*)c->fn_data, code);
+                          "{%Q:%Q, %Q:%Q}\n",
+                          "result", "OK",
+                          "output", output ? output : "");
+
             post("repl executed (length: %zu bytes)", code_len);
             free(code);
+            if (output) free(output);
         } else {
             mg_http_reply(c, 400, headers,
                           "{%Q:%Q}\n", "error", "Parameters missing");
@@ -815,6 +870,18 @@ t_max_err zedit_exec_file_input(t_zedit* x, const char* code)
 t_max_err zedit_exec_single_input(t_zedit* x, const char* code)
 {
     return py_exec_single_input(x->py, code);
+}
+
+
+char* zedit_exec_file_input_with_output(t_zedit* x, const char* code)
+{
+    return py_exec_file_input_with_output(x->py, code);
+}
+
+
+char* zedit_exec_single_input_with_output(t_zedit* x, const char* code)
+{
+    return py_exec_single_input_with_output(x->py, code);
 }
 
 

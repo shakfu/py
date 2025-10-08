@@ -73,3 +73,36 @@
 #terminal {
     height: 500px;
 }
+
+#editor-container {
+    height: 400px;
+    overflow: auto;
+}
+
+#output-console {
+    border-top: 1px solid #444;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    overflow: auto;
+    max-height: 300px;
+}
+
+.console-header {
+    background: #2d2d30;
+    color: #ccc;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: bold;
+    border-bottom: 1px solid #444;
+}
+
+#output-content {
+    margin: 0;
+    padding: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    min-height: 100px;
+}

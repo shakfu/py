@@ -263,6 +263,136 @@ make build
 - Blocks system access: `os`, `sys`, `subprocess`, `socket`, etc.
 - See `SANDBOXING_IMPLEMENTATION.md` for details
 
+## Known Issues and Troubleshooting
+
+### Max/MSP Threading and Output Queueing
+
+**Issue**: When running Python code from the web editor or terminal, output may not appear immediately. Instead, it appears only after sending another message to Max/MSP (e.g., clicking a message box).
+
+**Root Cause**: Threading interaction between the HTTP server and Max's main thread:
+
+```
+HTTP Server Thread (systhread)     Max Main Thread
+     |                                    |
+     |--Execute Python code------------->|
+     |<-Capture output-------------------|
+     |                                    |
+     |--Queue output via qelem----------->| ⚠️ Output sits in queue
+     |                                    |
+     |                                    | ← Waiting for next Max message
+     |                                    |
+User sends Max message--------------->| ✓ Queue processes, output appears
+```
+
+**Architecture Details**:
+
+1. **HTTP Server Thread** (`zedit.c:700-730`):
+   - Runs Mongoose HTTP server in separate `systhread`
+   - Handles web requests asynchronously
+   - Cannot directly output to Max console (not on main thread)
+
+2. **Message Queue** (`zedit.c:88-97`):
+   - Uses `qelem` (queue element) for cross-thread communication
+   - Output messages queued via `qelem_set()`
+   - Processed only when Max's scheduler runs
+
+3. **Delayed Output**:
+   - Python execution completes immediately
+   - Output capture works correctly
+   - Output sits in `qelem` queue
+   - Displayed only when Max processes queue (next scheduler tick)
+
+**Verification**: Testing with standalone test-server confirms:
+- ✅ Web app works perfectly (editor and terminal)
+- ✅ Python execution and output capture work correctly
+- ✅ HTTP server and API endpoints function properly
+- ❌ Issue only occurs with Max/MSP integration
+
+**Workarounds**:
+
+1. **User Action Required**: Click any Max message box after running code to flush the queue
+2. **Background Tasks**: Use Max's `metro` or `pipe` to periodically trigger queue processing
+3. **Polling**: Send periodic dummy messages from patcher to force queue updates
+
+**Root Cause Identified**:
+
+The HTTP handlers call `post()` directly from the HTTP server thread:
+
+```c
+// zedit.c:329, 373, 415 - ⚠️ THREAD-UNSAFE!
+post("code executed (length: %zu bytes)", code_len);  // Called from systhread
+```
+
+**Max API Requirement**: All Max API functions (`post`, `object_post`, `outlet_*`) MUST be called from the main thread only. Calling from other threads causes undefined behavior, including delayed/queued output.
+
+**Proper Solution**: Use existing `qelem` mechanism for cross-thread communication:
+
+**Step 1**: Add output buffer to struct (zedit.c:64-76):
+```c
+typedef struct _zedit {
+    t_object x_ob;
+    t_systhread x_systhread;
+    t_systhread_mutex x_mutex;
+    int x_systhread_cancel;
+    void* x_qelem;
+    void* x_outlet;
+    long x_foo;
+    int x_sleeptime;
+    int x_is_running;
+    t_string* x_root_dir;
+    t_py* py;
+    char x_output_buffer[4096];  // ← Add this for queued output
+} t_zedit;
+```
+
+**Step 2**: Store output and trigger queue (in HTTP handlers):
+```c
+// Instead of: post("code executed...");
+systhread_mutex_lock(x->x_mutex);
+snprintf(x->x_output_buffer, sizeof(x->x_output_buffer),
+         "code executed (length: %zu bytes)", code_len);
+systhread_mutex_unlock(x->x_mutex);
+qelem_set(x->x_qelem);  // ← Trigger main thread callback
+```
+
+**Step 3**: Post from main thread (modify zedit_qfn):
+```c
+void zedit_qfn(t_zedit* x) {
+    char output_copy[4096];
+
+    systhread_mutex_lock(x->x_mutex);
+    strncpy(output_copy, x->x_output_buffer, sizeof(output_copy));
+    x->x_output_buffer[0] = '\0';  // Clear buffer
+    systhread_mutex_unlock(x->x_mutex);
+
+    // Safe to call post() here - we're on main thread
+    if (output_copy[0] != '\0') {
+        post("%s", output_copy);
+    }
+}
+```
+
+**Alternative Solutions** (less invasive):
+
+1. **Use `defer_low()`**: Similar to qelem but lower priority
+2. **Use `schedule_delay()`**: Schedule callback on main thread with 0ms delay
+3. **Remove diagnostic posts**: If logging isn't critical, just remove the `post()` calls
+
+**Related Code**:
+- `zedit.c:700-730` - HTTP server thread initialization
+- `zedit.c:88-97` - Queue element setup
+- `zedit.c:417-426` - Output queueing mechanism
+
+**Testing**: To isolate web app issues from Max/MSP threading:
+```bash
+cd source/projects/zedit
+make -f Makefile.test
+./test-server
+```
+Open http://localhost:8000 to test without Max/MSP dependencies.
+
+See `TEST-SERVER-README.md` for standalone testing guide.
+
 ## Future Direction
 
 - use [jquery.terminal](https://github.com/jcubic/jquery.terminal)

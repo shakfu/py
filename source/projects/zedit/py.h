@@ -63,6 +63,10 @@ t_max_err py_pipe(t_py* x, t_symbol* s, long argc, t_atom* argv, void* outlet);
 t_max_err py_exec_file_input(t_py* x, const char* code);
 t_max_err py_exec_single_input(t_py* x, const char* code);
 
+// code execution methods with output capture
+char* py_exec_file_input_with_output(t_py* x, const char* code);
+char* py_exec_single_input_with_output(t_py* x, const char* code);
+
 // get runtime python version
 #define _STR(x) #x
 #define STR(x) _STR(x)
@@ -229,6 +233,9 @@ static const char* py_allowed_modules[] = {
     "json",
     "decimal",
     "fractions",
+    // Required for internal output capture
+    "sys",       // Needed for stdout/stderr redirection
+    "io",        // Needed for StringIO
     // Max-specific modules (if needed)
     NULL  // Sentinel
 };
@@ -1180,6 +1187,294 @@ error:
     Py_XDECREF(pval);
     PyGILState_Release(gstate);
     return MAX_ERR_GENERIC;
+}
+
+
+/**
+ * @brief Execute a c string as a file-length block of python code with output capture
+ *
+ * @param x pointer to object structure
+ * @param code char* python code
+ * @return char* captured output (caller must free), or NULL on error
+ */
+char* py_exec_file_input_with_output(t_py* x, const char* code)
+{
+    // Validate input size
+    size_t code_len = strlen(code);
+    if (code_len > PY_MAX_CODE_SIZE) {
+        py_error(x, "code too large (%zu bytes, max %d)", code_len, PY_MAX_CODE_SIZE);
+        return NULL;
+    }
+
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
+    PyObject* pval = NULL;
+    PyObject* sys_module = NULL;
+    PyObject* io_module = NULL;
+    PyObject* string_io = NULL;
+    PyObject* old_stdout = NULL;
+    PyObject* old_stderr = NULL;
+    PyObject* getvalue_method = NULL;
+    PyObject* output_obj = NULL;
+    char* output_str = NULL;
+
+    // Import sys and io modules
+    sys_module = PyImport_ImportModule("sys");
+    if (sys_module == NULL) {
+        py_error(x, "failed to import sys module");
+        goto error;
+    }
+
+    io_module = PyImport_ImportModule("io");
+    if (io_module == NULL) {
+        py_error(x, "failed to import io module");
+        goto error;
+    }
+
+    // Create StringIO object
+    PyObject* string_io_class = PyObject_GetAttrString(io_module, "StringIO");
+    if (string_io_class == NULL) {
+        py_error(x, "failed to get StringIO class");
+        goto error;
+    }
+    string_io = PyObject_CallObject(string_io_class, NULL);
+    Py_DECREF(string_io_class);
+    if (string_io == NULL) {
+        py_error(x, "failed to create StringIO object");
+        goto error;
+    }
+
+    // Save old stdout and stderr
+    old_stdout = PyObject_GetAttrString(sys_module, "stdout");
+    old_stderr = PyObject_GetAttrString(sys_module, "stderr");
+
+    // Redirect stdout and stderr to StringIO
+    if (PyObject_SetAttrString(sys_module, "stdout", string_io) < 0) {
+        py_error(x, "failed to redirect stdout");
+        goto error;
+    }
+    if (PyObject_SetAttrString(sys_module, "stderr", string_io) < 0) {
+        py_error(x, "failed to redirect stderr");
+        goto error;
+    }
+
+    // Execute code
+    pval = PyRun_String(code, Py_file_input, x->p_globals, x->p_globals);
+
+    // Restore stdout and stderr (even if execution failed)
+    if (old_stdout) {
+        PyObject_SetAttrString(sys_module, "stdout", old_stdout);
+    }
+    if (old_stderr) {
+        PyObject_SetAttrString(sys_module, "stderr", old_stderr);
+    }
+
+    if (pval == NULL) {
+        // Capture error output from StringIO before reporting error
+        getvalue_method = PyObject_GetAttrString(string_io, "getvalue");
+        if (getvalue_method != NULL) {
+            output_obj = PyObject_CallObject(getvalue_method, NULL);
+            if (output_obj != NULL && PyUnicode_Check(output_obj)) {
+                const char* temp_str = PyUnicode_AsUTF8(output_obj);
+                if (temp_str != NULL) {
+                    output_str = strdup(temp_str);
+                }
+            }
+        }
+        goto error;
+    }
+
+    // Get captured output
+    getvalue_method = PyObject_GetAttrString(string_io, "getvalue");
+    if (getvalue_method == NULL) {
+        py_error(x, "failed to get getvalue method");
+        goto error;
+    }
+
+    output_obj = PyObject_CallObject(getvalue_method, NULL);
+    if (output_obj == NULL) {
+        py_error(x, "failed to call getvalue");
+        goto error;
+    }
+
+    if (PyUnicode_Check(output_obj)) {
+        const char* temp_str = PyUnicode_AsUTF8(output_obj);
+        if (temp_str != NULL) {
+            output_str = strdup(temp_str);
+        }
+    }
+
+    // Cleanup
+    Py_XDECREF(pval);
+    Py_XDECREF(sys_module);
+    Py_XDECREF(io_module);
+    Py_XDECREF(string_io);
+    Py_XDECREF(old_stdout);
+    Py_XDECREF(old_stderr);
+    Py_XDECREF(getvalue_method);
+    Py_XDECREF(output_obj);
+    PyGILState_Release(gstate);
+
+    py_log(x, (char*)"py_exec_file_input_with_output");
+    return output_str ? output_str : strdup("");
+
+error:
+    py_handle_error(x, (char*)"py_exec_file_input_with_output");
+    Py_XDECREF(pval);
+    Py_XDECREF(sys_module);
+    Py_XDECREF(io_module);
+    Py_XDECREF(string_io);
+    Py_XDECREF(old_stdout);
+    Py_XDECREF(old_stderr);
+    Py_XDECREF(getvalue_method);
+    Py_XDECREF(output_obj);
+    PyGILState_Release(gstate);
+    return output_str;  // May be NULL or partial output
+}
+
+
+/**
+ * @brief Execute a c string as a statement-length block of python code with output capture
+ *
+ * @param x pointer to object structure
+ * @param code char* python code
+ * @return char* captured output (caller must free), or NULL on error
+ */
+char* py_exec_single_input_with_output(t_py* x, const char* code)
+{
+    // Validate input size
+    size_t code_len = strlen(code);
+    if (code_len > PY_MAX_CODE_SIZE) {
+        py_error(x, "code too large (%zu bytes, max %d)", code_len, PY_MAX_CODE_SIZE);
+        return NULL;
+    }
+
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
+    PyObject* pval = NULL;
+    PyObject* sys_module = NULL;
+    PyObject* io_module = NULL;
+    PyObject* string_io = NULL;
+    PyObject* old_stdout = NULL;
+    PyObject* old_stderr = NULL;
+    PyObject* getvalue_method = NULL;
+    PyObject* output_obj = NULL;
+    char* output_str = NULL;
+
+    // Import sys and io modules
+    sys_module = PyImport_ImportModule("sys");
+    if (sys_module == NULL) {
+        py_error(x, "failed to import sys module");
+        goto error;
+    }
+
+    io_module = PyImport_ImportModule("io");
+    if (io_module == NULL) {
+        py_error(x, "failed to import io module");
+        goto error;
+    }
+
+    // Create StringIO object
+    PyObject* string_io_class = PyObject_GetAttrString(io_module, "StringIO");
+    if (string_io_class == NULL) {
+        py_error(x, "failed to get StringIO class");
+        goto error;
+    }
+    string_io = PyObject_CallObject(string_io_class, NULL);
+    Py_DECREF(string_io_class);
+    if (string_io == NULL) {
+        py_error(x, "failed to create StringIO object");
+        goto error;
+    }
+
+    // Save old stdout and stderr
+    old_stdout = PyObject_GetAttrString(sys_module, "stdout");
+    old_stderr = PyObject_GetAttrString(sys_module, "stderr");
+
+    // Redirect stdout and stderr to StringIO
+    if (PyObject_SetAttrString(sys_module, "stdout", string_io) < 0) {
+        py_error(x, "failed to redirect stdout");
+        goto error;
+    }
+    if (PyObject_SetAttrString(sys_module, "stderr", string_io) < 0) {
+        py_error(x, "failed to redirect stderr");
+        goto error;
+    }
+
+    // Execute code
+    pval = PyRun_String(code, Py_single_input, x->p_globals, x->p_globals);
+
+    // Restore stdout and stderr (even if execution failed)
+    if (old_stdout) {
+        PyObject_SetAttrString(sys_module, "stdout", old_stdout);
+    }
+    if (old_stderr) {
+        PyObject_SetAttrString(sys_module, "stderr", old_stderr);
+    }
+
+    if (pval == NULL) {
+        // Capture error output from StringIO before reporting error
+        getvalue_method = PyObject_GetAttrString(string_io, "getvalue");
+        if (getvalue_method != NULL) {
+            output_obj = PyObject_CallObject(getvalue_method, NULL);
+            if (output_obj != NULL && PyUnicode_Check(output_obj)) {
+                const char* temp_str = PyUnicode_AsUTF8(output_obj);
+                if (temp_str != NULL) {
+                    output_str = strdup(temp_str);
+                }
+            }
+        }
+        goto error;
+    }
+
+    // Get captured output
+    getvalue_method = PyObject_GetAttrString(string_io, "getvalue");
+    if (getvalue_method == NULL) {
+        py_error(x, "failed to get getvalue method");
+        goto error;
+    }
+
+    output_obj = PyObject_CallObject(getvalue_method, NULL);
+    if (output_obj == NULL) {
+        py_error(x, "failed to call getvalue");
+        goto error;
+    }
+
+    if (PyUnicode_Check(output_obj)) {
+        const char* temp_str = PyUnicode_AsUTF8(output_obj);
+        if (temp_str != NULL) {
+            output_str = strdup(temp_str);
+        }
+    }
+
+    // Cleanup
+    Py_XDECREF(pval);
+    Py_XDECREF(sys_module);
+    Py_XDECREF(io_module);
+    Py_XDECREF(string_io);
+    Py_XDECREF(old_stdout);
+    Py_XDECREF(old_stderr);
+    Py_XDECREF(getvalue_method);
+    Py_XDECREF(output_obj);
+    PyGILState_Release(gstate);
+
+    py_log(x, (char*)"py_exec_single_input_with_output");
+    return output_str ? output_str : strdup("");
+
+error:
+    py_handle_error(x, (char*)"py_exec_single_input_with_output");
+    Py_XDECREF(pval);
+    Py_XDECREF(sys_module);
+    Py_XDECREF(io_module);
+    Py_XDECREF(string_io);
+    Py_XDECREF(old_stdout);
+    Py_XDECREF(old_stderr);
+    Py_XDECREF(getvalue_method);
+    Py_XDECREF(output_obj);
+    PyGILState_Release(gstate);
+    return output_str;  // May be NULL or partial output
 }
 
 
