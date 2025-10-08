@@ -18,7 +18,7 @@
  * - Configurable complexity thresholds and debug modes
  * - Improved lifecycle management with psc_reset() and auto-cleanup
  * - Comprehensive error handling with detailed validation messages
- * - Function signature introspection - parameter counts, names, types, *args/**kwargs detection
+ * - Function signature introspection - parameter counts, names, types, *args|**kwargs detection
  * 
  * Usage:
  *   #include "py_cache.h"
@@ -1206,8 +1206,11 @@ static inline void psc_extract_signature(struct psc_cache_entry *entry) {
     if (!code) return;
 
     // Extract argument counts using Python 3.11+ compatible API
-    entry->signature.arg_count = PyCode_GetNumFree((PyObject*)code) >= 0 ?
-        PyCode_GetNumFree((PyObject*)code) : 0;
+    entry->signature.arg_count = PyCode_GetNumFree((PyCodeObject*)code) >= 0 ?
+        PyCode_GetNumFree((PyCodeObject*)code) : 0;
+
+    // entry->signature.arg_count = PyCode_GetNumFree((PyObject*)code) >= 0 ?
+    //     PyCode_GetNumFree((PyObject*)code) : 0;
 
     // Get total local variables count to infer argument count
     // Since we can't access co_argcount directly, we use the inspect module approach

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset=utf8>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>pyjs-editor</title>
+    <script src="js/jquery-3.3.1.min.js"></script>
+    <script src="js/jquery.terminal.min.js"></script>
+    <script src="js/prism.js"></script>
+    <script src="js/prism-terminal.js"></script>
+<!--     
+    <link rel="stylesheet" href="css/normalize.css"/>
+    <link rel="stylesheet" href="css/skeleton.css"/>
+ -->    
+    <link rel="stylesheet" href="css/jquery.terminal.min.css"/>
+    <link rel="stylesheet" href="css/prism-terminal.css"/>
+    <link rel="stylesheet" href="css/app.css"/>
+</head>
+<body>
+    <script>
+    function openModule(evt, module_name) {
+        // Declare all variables
+        var i, tabcontent, tablinks;
+
+        // Get all elements with class="tabcontent" and hide them
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+
+        // Get all elements with class="tablinks" and remove the class "active"
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+
+        // Show the current tab, and add an "active" class to the button that opened the tab
+        document.getElementById(module_name).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
+    </script>
+    <div class="tab">
+      <button class="tablinks" onclick="openModule(event, 'editor')" id="default-tab">Editor</button>
+      <button class="tablinks" onclick="openModule(event, 'terminal')">Terminal</button>
+      <button class="tablinks" onclick="openModule(event, 'help')">Help</button>
+    </div>
+
+    <!-- Tab content -->
+    <div id="editor" class="tabcontent">
+        <div class="button-strip">
+            <button type="button" id="open_btn">Open</button>
+            <button type="button" id="save_btn">Save</button>
+            <button type="button" id="run_btn">Run</button>
+        </div>
+    </div>
+
+    <div id="terminal" class="tabcontent">
+    </div>
+
+    <div id="help" class="tabcontent">
+        <h3>Editor Key commands</h3>
+        <table>
+          <tr>
+            <th>key</th>
+            <th>command</th> 
+          </tr>
+          <tr>
+            <td>Ctrl-ArrowLeft</td>
+            <td>cursorSyntaxLeft</td> 
+          </tr>
+          <tr>
+            <td>Shift-Ctrl-ArrowLeft</td>
+            <td>selectSyntaxLeft</td> 
+          </tr>
+          <tr>
+            <td>Ctrl-ArrowRight:</td>
+            <td>cursorSyntaxRight</td> 
+          </tr>
+          <tr>
+            <td>Shift-Ctrl-ArrowRight</td>
+            <td>selectSyntaxRight</td> 
+          </tr>
+          <tr>
+            <td>Alt-ArrowUp</td>
+            <td>moveLineUp</td> 
+          </tr>
+          <tr>
+            <td>Alt-ArrowDown</td>
+            <td>moveLineDown</td> 
+          </tr>
+          <tr>
+            <td>Shift-Alt-ArrowUp</td>
+            <td>copyLineUp</td> 
+          </tr>
+          <tr>
+            <td>Shift-Alt-ArrowDown</td>
+            <td>copyLineDown</td> 
+          </tr>
+          <tr>
+            <td>Escape</td>
+            <td>simplifySelection</td> 
+          </tr>
+          <tr>
+            <td>Cmd-Enter</td>
+            <td>insertBlankLine</td> 
+          </tr>
+          <tr>
+            <td>Ctrl-l</td>
+            <td>selectLine</td> 
+          </tr>
+          <tr>
+            <td>Cmd-i</td>
+            <td>selectParentSyntax</td> 
+          </tr>
+          <tr>
+            <td>Cmd-[</td>
+            <td>indentLess</td> 
+          </tr>
+          <tr>
+            <td>Cmd-]</td>
+            <td>indentMore</td> 
+          </tr>
+          <tr>
+            <td>Cmd-Alt-\</td>
+            <td>indentSelection</td> 
+          </tr>
+          <tr>
+            <td>Shift-Cmd-k</td>
+            <td>deleteLine</td> 
+          </tr>
+          <tr>
+            <td>Shift-Cmd-\</td>
+            <td>cursorMatchingBracket</td> 
+          </tr>
+          <tr>
+            <td>Cmd-/</td>
+            <td>toggleComment</td> 
+          </tr>
+          <tr>
+            <td>Shift-Alt-a</td>
+            <td>toggleBlockComment</td> 
+          </tr>
+        </table>
+    </div>
+    <div id="msg" class="statusbar"></div>
+    <script src="js/editor.bundle.js"></script>
+</body>
+</html>

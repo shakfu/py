@@ -1,0 +1,120 @@
+/**
+ * prism.js default theme for JavaScript, CSS and HTML
+ * Based on dabblet (http://dabblet.com)
+ * @author Lea Verou
+ * Patched by Jakub T. Jankiewicz to fit jQuery Terminal
+ */
+
+.terminal .token.comment,
+.cmd .token.comment,
+.terminal .token.prolog,
+.cmd .token.prolog,
+.terminal .token.doctype,
+.cmd .token.doctype,
+.terminal .token.cdata,
+.cmd .token.cdata {
+  --color: rgba(43.922%, 50.196%, 56.471% , 0.997);
+}
+
+.terminal .token.punctuation,
+.cmd .token.punctuation {
+  --color: rgba(60%, 60%, 60% , 0.997);
+}
+
+.terminal .token.namespace,
+.cmd .token.namespace {
+  opacity: .7;
+}
+
+.terminal .token.property,
+.cmd .token.property,
+.terminal .token.tag,
+.cmd .token.tag,
+.terminal .token.boolean,
+.cmd .token.boolean,
+.terminal .token.number,
+.cmd .token.number,
+.terminal .token.constant,
+.cmd .token.constant,
+.terminal .token.symbol,
+.cmd .token.symbol,
+.terminal .token.deleted,
+.cmd .token.deleted {
+  --color: rgba(60%, 0%, 33.333% , 0.997);
+}
+
+.terminal .token.selector,
+.cmd .token.selector,
+.terminal .token.attr-name,
+.cmd .token.attr-name,
+.terminal .token.string,
+.cmd .token.string,
+.terminal .token.char,
+.cmd .token.char,
+.terminal .token.builtin,
+.cmd .token.builtin,
+.terminal .token.inserted,
+.cmd .token.inserted {
+  --color: rgba(40%, 60%, 0% , 0.997);
+}
+
+.terminal .token.operator,
+.cmd .token.operator,
+.terminal .token.entity,
+.cmd .token.entity,
+.terminal .token.url,
+.cmd .token.url,
+.terminal .language-css .token.string,
+.cmd .language-css .token.string,
+.terminal .style .token.string,
+.cmd .style .token.string {
+  --color: rgba(60.392%, 43.137%, 22.745% , 0.997);
+  /* This background color was intended by the author of this theme. */
+}
+
+.terminal .token.atrule,
+.cmd .token.atrule,
+.terminal .token.attr-value,
+.cmd .token.attr-value,
+.terminal .token.keyword,
+.cmd .token.keyword {
+  --color: rgba(0%, 46.667%, 66.667% , 0.997);
+}
+
+.terminal .token.function,
+.cmd .token.function,
+.terminal .token.class-name,
+.cmd .token.class-name {
+  --color: rgba(86.667%, 29.02%, 40.784% , 0.997);
+}
+
+.terminal .token.regex,
+.cmd .token.regex,
+.terminal .token.important,
+.cmd .token.important,
+.terminal .token.variable,
+.cmd .token.variable {
+  --color: rgba(93.333%, 60%, 0% , 0.997);
+}
+
+.terminal .token.important,
+.cmd .token.important,
+.terminal .token.bold,
+.cmd .token.bold {
+  font-weight: bold;
+}
+
+.terminal .token.italic,
+.cmd .token.italic {
+  font-style: italic;
+}
+
+.terminal .token.entity,
+.cmd .token.entity {
+  cursor: help;
+}
+.token {
+   color: var(--color);
+  background: var(--background);
+  --original-color: var(--color);
+}

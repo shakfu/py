@@ -1,0 +1,18 @@
+{
+  "dependencies": {
+    "@codemirror/lang-python": "^6.1.2",
+    "@codemirror/theme-one-dark": "^6.1.1",
+    "@rollup/plugin-commonjs": "^24.1.0",
+    "@rollup/plugin-node-resolve": "^15.3.1",
+    "@rollup/plugin-terser": "^0.4.1",
+    "codemirror": "^6.0.1",
+    "highlight.js": "^11.7.0",
+    "jquery.terminal": "^2.35.3",
+    "prettier": "^2.8.7",
+    "prismjs": "^1.30.0",
+    "prismjs-components-importer": "^0.2.0",
+    "rollup": "^3.29.5",
+    "rollup-plugin-import-css": "^3.5.8",
+    "terser": "^5.44.0"
+  }
+}

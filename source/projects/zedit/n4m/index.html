@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset=utf8>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>pyjs-editor</title>
+    <style>
+    .cm-editor { height: 380px; border: 1px solid #ddd}
+    .cm-scroller { overflow: auto; }
+    h4 {
+        font-family: Helvetica, Arial, sans-serif;
+        background-color: #CCCCCC;
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+        line-height: 1.6;
+    }
+    </style>
+</head>
+<body>
+    <div id="msg"></div>
+    <h4 style="background-color: #CCCCCC;">pyjs-editor</h4>
+    <div id="editor"></div>
+    <button type="button" id="open_btn">Open</button>
+    <button type="button" id="save_btn">Save</button>
+    <button type="button" id="run_btn">Run</button>
+    <script type=module src="js/editor.min.js"></script>
+</body>
+</html>
