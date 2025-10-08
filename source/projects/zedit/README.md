@@ -4,8 +4,10 @@ This subproject provides an example of a python3 external whith the following fe
 
 - Embeds a python interpreter via the mamba single header python3 c library
 - Embeds the c-based mongoose webserver
-- Provides a web-based code-editor
-- Provides a web-based interactive terminal
+- Provides a web-based code-editor based on [codemirror]()
+- Provides a web-based interactive terminal based on [jquery-terminal](https://terminal.jcubic.pl/#download)
+
+
 
 This ui in this project is very powerfull using typescript/javascript-based web technologies. This is probably overkill for a python3 external, but illustratrive nonetheless of the potential achieved by embedding an small webserver in an external.
 
