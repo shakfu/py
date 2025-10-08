@@ -10,6 +10,7 @@
 #include "py_config.h"
 
 /* function cache */
+#define PSC_OVERRIDE_CACHE_ALL_FUNCTIONS 1
 #include "py_cache.h"
 
 /* max/msp api */

@@ -63,6 +63,8 @@ extern "C" {
 // ============================================================================
 
 // Configuration constants - override before including this header
+// Set PSC_OVERRIDE_CACHE_ALL_FUNCTIONS to 1 to force caching of all functions
+// regardless of complexity analysis (useful for testing/debugging)
 #ifndef PSC_CACHE_SIZE
 #define PSC_CACHE_SIZE 1024
 #endif
@@ -95,8 +97,8 @@ extern "C" {
 #define PSC_MAX_EXPLANATION_LENGTH 2048
 #endif
 
-#ifndef PSC_MAX_DECISON_REASON_LENGTH
-#define PSC_MAX_DECISON_REASON_LENGTH 256
+#ifndef PSC_MAX_DECISION_REASON_LENGTH
+#define PSC_MAX_DECISION_REASON_LENGTH 256
 #endif
 
 // Thread support detection and abstraction
@@ -178,7 +180,7 @@ typedef struct psc_instance {
             int builtin_function_calls;
             int complexity_score;
             int was_cached;
-            char decision_reason[PSC_MAX_DECISON_REASON_LENGTH];
+            char decision_reason[PSC_MAX_DECISION_REASON_LENGTH];
         } analysis;
     } *hash_table[PSC_CACHE_SIZE];
     
@@ -206,6 +208,7 @@ typedef struct psc_instance {
         int adaptive_threshold;
         int debug_mode;
         int strict_validation;
+        int override_cache_all;
     } config;
     
     // === SYSTEM STATE ===
@@ -260,6 +263,225 @@ typedef enum {
 } psc_validate_result_t;
 
 // ============================================================================
+// PUBLIC API PROTOTYPES
+// ============================================================================
+
+/**
+ * @section Instance Management
+ * Functions for creating, initializing, resetting, and destroying cache instances
+ */
+
+/**
+ * @brief Create a new cache instance
+ * @param instance_name Optional name for the instance (can be NULL)
+ * @return Pointer to new instance or NULL on failure
+ */
+static inline psc_instance_t* psc_create_instance(const char *instance_name);
+
+/**
+ * @brief Initialize a cache instance
+ * @param instance Cache instance to initialize
+ * @return PSC_SUCCESS on success, error code on failure
+ */
+static inline psc_result_t psc_init(psc_instance_t *instance);
+
+/**
+ * @brief Reset cache instance to clean state for reuse
+ * @param instance Cache instance to reset
+ * @return PSC_SUCCESS on success, error code on failure
+ */
+static inline psc_result_t psc_reset(psc_instance_t *instance);
+
+/**
+ * @brief Destroy a cache instance and free all memory
+ * @param instance Cache instance to destroy (automatically cleans up first)
+ */
+static inline void psc_destroy_instance(psc_instance_t *instance);
+
+/**
+ * @section Function Validation
+ * Functions for validating Python function source code
+ */
+
+/**
+ * @brief Quick check if source looks like a Python function
+ * @param instance Cache instance (for debug output)
+ * @param source_code Python source code to validate
+ * @return PSC_VALIDATE_SUCCESS if looks like function, error code otherwise
+ */
+static inline psc_validate_result_t psc_check_is_python_function(
+    psc_instance_t *instance, const char *source_code);
+
+/**
+ * @brief Comprehensive validation that source contains exactly one Python function
+ * @param instance Cache instance (for debug output)
+ * @param source_code Python source code to validate
+ * @param function_name Buffer to store extracted function name
+ * @param name_buffer_size Size of function name buffer
+ * @param error_msg Buffer to store detailed error message
+ * @param error_msg_size Size of error message buffer
+ * @param compiled_out Optional output parameter for compiled code object (can be NULL)
+ * @return PSC_VALIDATE_SUCCESS if valid function, error code otherwise
+ */
+static inline psc_validate_result_t psc_validate_function_source(
+    psc_instance_t *instance,
+    const char *source_code,
+    char *function_name,
+    size_t name_buffer_size,
+    char *error_msg,
+    size_t error_msg_size,
+    PyObject **compiled_out);
+
+/**
+ * @section Core Cache Operations
+ * Functions for adding and calling cached functions
+ */
+
+/**
+ * @brief Add a function to cache with comprehensive validation and smart caching decision
+ * @param instance Cache instance
+ * @param source_code Python source code containing function definition
+ * @param filename Filename for debugging purposes
+ * @return PSC_SUCCESS on success, error codes on failure
+ */
+static inline psc_result_t psc_add_function(psc_instance_t *instance,
+                                           const char *source_code,
+                                           const char *filename);
+
+/**
+ * @brief Call a cached function with arguments
+ * @param instance Cache instance
+ * @param function_name Name of the cached function
+ * @param args Tuple of positional arguments (can be NULL)
+ * @param kwargs Dictionary of keyword arguments (can be NULL)
+ * @return PyObject* result or NULL on error
+ */
+static inline PyObject* psc_call_function(psc_instance_t *instance,
+                                         const char *function_name,
+                                         PyObject *args,
+                                         PyObject *kwargs);
+
+/**
+ * @section Query and Utility Functions
+ * Functions for checking cache state and retrieving information
+ */
+
+/**
+ * @brief Check if a function exists in the cache
+ * @param instance Cache instance
+ * @param function_name Name of the function to check
+ * @return 1 if exists, 0 otherwise
+ */
+static inline int psc_has_function(psc_instance_t *instance,
+                                   const char *function_name);
+
+/**
+ * @brief Get the name of the last cached function
+ * @param instance Cache instance
+ * @return Pointer to the last cached function name, or NULL if none or instance invalid
+ */
+static inline const char* psc_get_last_cached_function_name(psc_instance_t *instance);
+
+/**
+ * @section Statistics and Analysis
+ * Functions for retrieving cache statistics and analyzing caching decisions
+ */
+
+/**
+ * @brief Get comprehensive system statistics
+ * @param instance Cache instance
+ * @param stats_buffer Buffer to store formatted statistics string
+ * @param buffer_size Size of the stats buffer
+ */
+static inline void psc_get_stats_string(psc_instance_t *instance,
+                                       char *stats_buffer,
+                                       size_t buffer_size);
+
+/**
+ * @brief Explain why a function would or wouldn't be cached
+ * @param instance Cache instance
+ * @param source_code Python source code to analyze
+ * @param explanation_buffer Buffer to store explanation
+ * @param buffer_size Size of explanation buffer
+ */
+static inline void psc_explain_decision(psc_instance_t *instance,
+                                       const char *source_code,
+                                       char *explanation_buffer,
+                                       size_t buffer_size);
+
+/**
+ * @section Configuration
+ * Functions for configuring cache behavior
+ */
+
+/**
+ * @brief Configure system parameters
+ * @param instance Cache instance
+ * @param threshold Complexity threshold for caching decisions
+ * @param debug_mode Enable debug output (1) or disable (0)
+ */
+static inline void psc_configure(psc_instance_t *instance,
+                                int threshold,
+                                int debug_mode);
+
+/**
+ * @brief Configure advanced system parameters
+ * @param instance Cache instance
+ * @param threshold Complexity threshold for caching decisions
+ * @param debug_mode Enable debug output (1) or disable (0)
+ * @param strict_validation Enable strict function validation (1) or disable (0)
+ */
+static inline void psc_configure_advanced(psc_instance_t *instance,
+                                         int threshold,
+                                         int debug_mode,
+                                         int strict_validation);
+
+/**
+ * @section Convenience Macros
+ * Macros for simplified function calling
+ */
+
+// Call function with no arguments
+#define PSC_CALL_NOARGS(instance, func_name) \
+    psc_call_function(instance, func_name, NULL, NULL)
+
+// Call function with 1 argument
+#define PSC_CALL_1ARG(instance, func_name, arg1) \
+    psc_call_function(instance, func_name, PyTuple_Pack(1, arg1), NULL)
+
+// Call function with 2 arguments
+#define PSC_CALL_2ARGS(instance, func_name, arg1, arg2) \
+    psc_call_function(instance, func_name, PyTuple_Pack(2, arg1, arg2), NULL)
+
+// Call function with 3 arguments
+#define PSC_CALL_3ARGS(instance, func_name, arg1, arg2, arg3) \
+    psc_call_function(instance, func_name, PyTuple_Pack(3, arg1, arg2, arg3), NULL)
+
+// Check result and handle errors
+#define PSC_CHECK_RESULT(result, instance, action) do { \
+    if (result != PSC_SUCCESS) { \
+        if ((instance)->config.debug_mode) { \
+            error("PSC[%s]: %s failed with code %d\n", \
+                   (instance)->state.instance_name, action, result); \
+        } \
+        return result; \
+    } \
+} while(0)
+
+// Safe call with error checking
+#define PSC_SAFE_CALL(instance, func_name, args) ({ \
+    PyObject *_result = psc_call_function(instance, func_name, args, NULL); \
+    if (!_result && PyErr_Occurred()) { \
+        if ((instance)->config.debug_mode) { \
+            error("PSC[%s]: Call to '%s' failed\n", \
+                   (instance)->state.instance_name, func_name); \
+            PyErr_Print(); \
+        } \
+    } \
+    _result; \
+})
+
+// ============================================================================
 // INSTANCE MANAGEMENT
 // ============================================================================
 
@@ -299,22 +521,25 @@ static inline void psc_destroy_instance(psc_instance_t *instance) {
     // Automatically cleanup if initialized
     if (instance->state.initialized) {
         psc_rwlock_wrlock(&instance->state.lock);
-        
+
         // Free all cache entries
         for (int i = 0; i < PSC_CACHE_SIZE; i++) {
             struct psc_cache_entry *current = instance->hash_table[i];
             while (current) {
                 struct psc_cache_entry *next = current->next;
                 free(current->source_code);
-                Py_XDECREF(current->code_object);
-                Py_XDECREF(current->function_object);
-                Py_XDECREF(current->globals_dict);
+                // Only decref Python objects if interpreter is still initialized
+                if (Py_IsInitialized()) {
+                    Py_XDECREF(current->code_object);
+                    Py_XDECREF(current->function_object);
+                    Py_XDECREF(current->globals_dict);
+                }
                 free(current);
                 current = next;
             }
             instance->hash_table[i] = NULL;
         }
-        
+
         psc_rwlock_unlock_wr(&instance->state.lock);
         psc_rwlock_destroy(&instance->state.lock);
     }
@@ -340,18 +565,60 @@ static inline size_t psc_hash_string(const char *str) {
 }
 
 /**
- * Count occurrences of a pattern in source code
+ * Check if position in source is inside a string literal or comment
+ */
+static inline int psc_is_in_string_or_comment(const char *source, const char *pos) {
+    const char *p = source;
+    int in_string = 0;
+    char string_char = 0;
+    int in_comment = 0;
+
+    while (p < pos) {
+        if (in_comment) {
+            if (*p == '\n') in_comment = 0;
+        } else if (in_string) {
+            if (*p == '\\' && *(p + 1)) {
+                p++; // Skip escaped character
+            } else if (*p == string_char) {
+                in_string = 0;
+                string_char = 0;
+            }
+        } else {
+            if (*p == '#') {
+                in_comment = 1;
+            } else if (*p == '"' || *p == '\'') {
+                // Check for triple quotes
+                if (p + 2 < pos && *(p+1) == *p && *(p+2) == *p) {
+                    string_char = *p;
+                    in_string = 2; // Triple quote mode
+                    p += 2;
+                } else {
+                    string_char = *p;
+                    in_string = 1;
+                }
+            }
+        }
+        p++;
+    }
+
+    return in_string || in_comment;
+}
+
+/**
+ * Count occurrences of a pattern in source code (excluding strings and comments)
  */
 static inline int psc_count_pattern(const char *source, const char *pattern) {
     int count = 0;
     const char *p = source;
     size_t pattern_len = strlen(pattern);
-    
+
     while ((p = strstr(p, pattern)) != NULL) {
-        count++;
+        if (!psc_is_in_string_or_comment(source, p)) {
+            count++;
+        }
         p += pattern_len;
     }
-    
+
     return count;
 }
 
@@ -443,6 +710,7 @@ static inline psc_validate_result_t psc_check_is_python_function(
  * @param name_buffer_size Size of function name buffer
  * @param error_msg Buffer to store detailed error message
  * @param error_msg_size Size of error message buffer
+ * @param compiled_out Optional output parameter for compiled code object (can be NULL)
  * @return PSC_VALIDATE_SUCCESS if valid function, error code otherwise
  */
 static inline psc_validate_result_t psc_validate_function_source(
@@ -451,7 +719,8 @@ static inline psc_validate_result_t psc_validate_function_source(
     char *function_name,
     size_t name_buffer_size,
     char *error_msg,
-    size_t error_msg_size) {
+    size_t error_msg_size,
+    PyObject **compiled_out) {
     
     clock_t validation_start = clock();
     
@@ -551,7 +820,7 @@ static inline psc_validate_result_t psc_validate_function_source(
     }
     
     if (*paren_pos != '(') {
-        snprintf_zero(error_msg, error_msg_size, "Expected '(' after function name, found '%c'", *paren_pos ? *paren_pos : EOF);
+        snprintf_zero(error_msg, error_msg_size, "Expected '(' after function name, found '%c'", *paren_pos ? *paren_pos : ' ');
         return PSC_VALIDATE_INVALID_SYNTAX;
     }
     
@@ -562,7 +831,7 @@ static inline psc_validate_result_t psc_validate_function_source(
         if (PyErr_Occurred()) {
             PyObject *ptype, *pvalue, *ptraceback;
             PyErr_Fetch(&ptype, &pvalue, &ptraceback);
-            
+
             if (pvalue) {
                 PyObject *str_exc = PyObject_Str(pvalue);
                 if (str_exc) {
@@ -573,17 +842,22 @@ static inline psc_validate_result_t psc_validate_function_source(
                     Py_DECREF(str_exc);
                 }
             }
-            
+
             Py_XDECREF(ptype);
             Py_XDECREF(pvalue);
             Py_XDECREF(ptraceback);
         }
-        
+
         if (error_msg[0] == '\0') {
             snprintf_zero(error_msg, error_msg_size, "Python compilation failed");
         }
-        
+
         return PSC_VALIDATE_INVALID_SYNTAX;
+    }
+
+    // Store compiled object if requested (caller takes ownership)
+    if (compiled_out) {
+        *compiled_out = compiled;
     }
     
     // === Step 5: Verify it actually defines the expected function ===
@@ -593,29 +867,29 @@ static inline psc_validate_result_t psc_validate_function_source(
         if (!globals || !locals) {
             Py_XDECREF(globals);
             Py_XDECREF(locals);
-            Py_DECREF(compiled);
+            if (!compiled_out) Py_DECREF(compiled);
             snprintf_zero(error_msg, error_msg_size, "Memory allocation failed during validation");
             return PSC_VALIDATE_INVALID_SYNTAX;
         }
-        
+
         PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
-        
+
         PyObject *result = PyEval_EvalCode(compiled, globals, locals);
-        
+
         if (!result) {
-            Py_DECREF(compiled);
+            if (!compiled_out) Py_DECREF(compiled);
             Py_DECREF(globals);
             Py_DECREF(locals);
             if (PyErr_Occurred()) PyErr_Clear();
             snprintf_zero(error_msg, error_msg_size, "Failed to execute function definition");
             return PSC_VALIDATE_INVALID_SYNTAX;
         }
-        
+
         // Check if the expected function was defined
         PyObject *func_obj = PyDict_GetItemString(locals, function_name);
         if (!func_obj) {
             Py_DECREF(result);
-            Py_DECREF(compiled);
+            if (!compiled_out) Py_DECREF(compiled);
             Py_DECREF(globals);
             Py_DECREF(locals);
             snprintf_zero(error_msg, error_msg_size, "Function '%s' was not defined by the source code", function_name);
@@ -624,21 +898,23 @@ static inline psc_validate_result_t psc_validate_function_source(
         
         if (!PyFunction_Check(func_obj)) {
             Py_DECREF(result);
-            Py_DECREF(compiled);
+            if (!compiled_out) Py_DECREF(compiled);
             Py_DECREF(globals);
             Py_DECREF(locals);
             snprintf_zero(error_msg, error_msg_size, "'%s' is not a function (it's a %s)", function_name, Py_TYPE(func_obj)->tp_name);
             return PSC_VALIDATE_NOT_A_FUNCTION;
         }
-        
+
         // Cleanup
         Py_DECREF(result);
         Py_DECREF(globals);
         Py_DECREF(locals);
     }
-    
-    // Cleanup compilation object
-    Py_DECREF(compiled);
+
+    // Cleanup compilation object only if not returned to caller
+    if (!compiled_out) {
+        Py_DECREF(compiled);
+    }
     
     // Update validation time statistics
     if (instance) {
@@ -776,61 +1052,68 @@ static inline void psc_generate_explanation(struct psc_cache_entry *entry) {
 /**
  * Smart caching decision engine
  */
-static inline int psc_should_cache_function(psc_instance_t *instance, const char *source_code, 
+static inline int psc_should_cache_function(psc_instance_t *instance, const char *source_code,
                                            struct psc_cache_entry *entry) {
     if (!source_code || strlen(source_code) == 0) {
         strncpy_zero(entry->analysis.decision_reason, "Empty source code",
-            PSC_MAX_DECISON_REASON_LENGTH);
+            PSC_MAX_DECISION_REASON_LENGTH);
         return 0;
     }
-    
+
     // Perform complexity analysis
     psc_analyze_complexity(instance, source_code, entry);
+
+    // Check if override is enabled to cache all functions
+    if (instance->config.override_cache_all) {
+        strncpy_zero(entry->analysis.decision_reason, "Override: cache all functions",
+            PSC_MAX_DECISION_REASON_LENGTH);
+        return 1;
+    }
     
     // Quick filters for obviously simple functions
     size_t length = strlen(source_code);
-    
+
     // Very short functions without imports or decorators
-    if ((int)length < instance->config.max_simple_length && 
-        entry->analysis.import_statements == 0 && 
+    if ((int)length < instance->config.max_simple_length &&
+        entry->analysis.import_statements == 0 &&
         entry->analysis.decorator_count == 0) {
         strncpy_zero(entry->analysis.decision_reason, "Too short and simple",
-            PSC_MAX_DECISON_REASON_LENGTH);
+            PSC_MAX_DECISION_REASON_LENGTH);
         return 0;
     }
-    
+
     // Single-line functions without complexity
-    if (entry->analysis.line_count < instance->config.min_lines_for_cache && 
+    if (entry->analysis.line_count < instance->config.min_lines_for_cache &&
         entry->analysis.import_statements == 0 &&
         entry->analysis.lambda_functions == 0 &&
         entry->analysis.complex_operations == 0) {
         strncpy_zero(entry->analysis.decision_reason, "Too few lines, no complexity",
-            PSC_MAX_DECISON_REASON_LENGTH);
+            PSC_MAX_DECISION_REASON_LENGTH);
         return 0;
     }
-    
+
     // Always cache functions with high-cost features
     if (entry->analysis.import_statements > 0) {
         strncpy_zero(entry->analysis.decision_reason, "Has import statements",
-            PSC_MAX_DECISON_REASON_LENGTH);
+            PSC_MAX_DECISION_REASON_LENGTH);
         return 1;
     }
-    
+
     if (entry->analysis.decorator_count > 0) {
         strncpy_zero(entry->analysis.decision_reason, "Has decorators",
-            PSC_MAX_DECISON_REASON_LENGTH);
+            PSC_MAX_DECISION_REASON_LENGTH);
         return 1;
     }
-    
+
     if (entry->analysis.complex_operations > 0) {
         strncpy_zero(entry->analysis.decision_reason, "Has complex operations",
-            PSC_MAX_DECISON_REASON_LENGTH);
+            PSC_MAX_DECISION_REASON_LENGTH);
         return 1;
     }
-    
+
     if (entry->analysis.nested_functions > 0) {
         strncpy_zero(entry->analysis.decision_reason, "Has nested functions",
-            PSC_MAX_DECISON_REASON_LENGTH);
+            PSC_MAX_DECISION_REASON_LENGTH);
         return 1;
     }
     
@@ -1068,6 +1351,7 @@ static inline psc_result_t psc_init(psc_instance_t *instance) {
     instance->config.adaptive_threshold = 0;
     instance->config.debug_mode = 0;
     instance->config.strict_validation = 1; // Enable strict validation by default
+    instance->config.override_cache_all = 0; // Disabled by default
     
     // Initialize system state
     instance->state.initialized = 1;
@@ -1113,6 +1397,7 @@ static inline psc_result_t psc_reset(psc_instance_t *instance) {
         int old_adaptive = instance->config.adaptive_threshold;
         int old_debug = instance->config.debug_mode;
         int old_strict = instance->config.strict_validation;
+        int old_override = instance->config.override_cache_all;
         
         memset(&instance->stats, 0, sizeof(instance->stats));
         
@@ -1131,6 +1416,7 @@ static inline psc_result_t psc_reset(psc_instance_t *instance) {
         instance->config.adaptive_threshold = old_adaptive;
         instance->config.debug_mode = old_debug;
         instance->config.strict_validation = old_strict;
+        instance->config.override_cache_all = old_override;
         
         // Reset system state
         instance->state.system_start_time = time(NULL);
@@ -1161,14 +1447,16 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     // === STEP 1: COMPREHENSIVE FUNCTION VALIDATION ===
     char function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
     char validation_error[PSC_MAX_ERROR_LENGTH];
-    
+    PyObject *compiled_code = NULL;
+
     psc_validate_result_t validation = psc_validate_function_source(
         instance,
-        source_code, 
-        function_name, 
+        source_code,
+        function_name,
         PSC_MAX_FUNCTION_NAME_LENGTH,
         validation_error,
-        PSC_MAX_ERROR_LENGTH
+        PSC_MAX_ERROR_LENGTH,
+        instance->config.strict_validation ? &compiled_code : NULL
     );
     
     // Store validation error for debugging
@@ -1176,12 +1464,15 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     
     if (validation != PSC_VALIDATE_SUCCESS) {
         instance->stats.validation_failures++;
-        
+
+        // Clean up compiled code if validation failed
+        Py_XDECREF(compiled_code);
+
         if (instance->config.debug_mode) {
-            error("PSC[%s]: Function validation failed: %s\n", 
+            error("PSC[%s]: Function validation failed: %s\n",
                    instance->state.instance_name, validation_error);
         }
-        
+
         // Map validation errors to cache errors
         switch (validation) {
             case PSC_VALIDATE_NO_FUNCTION:
@@ -1217,19 +1508,73 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     
     if (!should_cache) {
         instance->stats.functions_skipped++;
+        // Clean up compiled code from validation
+        Py_XDECREF(compiled_code);
         if (instance->config.debug_mode) {
-            post("PSC[%s]: Skipping function '%s' - %s\n", 
+            post("PSC[%s]: Skipping function '%s' - %s\n",
                    instance->state.instance_name, function_name, temp_entry.analysis.decision_reason);
         }
         return PSC_ERROR_FUNCTION_TOO_SIMPLE;
     }
-    
+
     // === STEP 3: COMPILATION AND CACHING ===
     PyObject *code_obj, *func_obj, *globals_dict;
-    psc_result_t compile_result = psc_compile_function(instance, source_code, filename, 
-                                                      &code_obj, &func_obj, &globals_dict, function_name);
-    if (compile_result != PSC_SUCCESS) {
-        return compile_result;
+
+    // Reuse compiled code from validation if available, otherwise compile now
+    if (compiled_code) {
+        code_obj = compiled_code;
+        // Create globals and execute to get function object
+        globals_dict = PyDict_New();
+        if (!globals_dict) {
+            Py_DECREF(code_obj);
+            return PSC_ERROR_MEMORY;
+        }
+
+        PyDict_SetItemString(globals_dict, "__builtins__", PyEval_GetBuiltins());
+
+        // Add commonly used modules
+        const char *common_modules[] = {"math", "time", "random", "os", "sys", "json", "re", NULL};
+        for (int i = 0; common_modules[i] != NULL; i++) {
+            PyObject *module = PyImport_ImportModule(common_modules[i]);
+            if (module) {
+                PyDict_SetItemString(globals_dict, common_modules[i], module);
+                Py_DECREF(module);
+            }
+        }
+        if (PyErr_Occurred()) PyErr_Clear();
+
+        PyObject *locals_dict = PyDict_New();
+        if (!locals_dict) {
+            Py_DECREF(code_obj);
+            Py_DECREF(globals_dict);
+            return PSC_ERROR_MEMORY;
+        }
+
+        PyObject *result = PyEval_EvalCode(code_obj, globals_dict, locals_dict);
+        if (!result) {
+            Py_DECREF(code_obj);
+            Py_DECREF(globals_dict);
+            Py_DECREF(locals_dict);
+            return PSC_ERROR_COMPILE;
+        }
+        Py_DECREF(result);
+
+        func_obj = PyDict_GetItemString(locals_dict, function_name);
+        if (!func_obj || !PyFunction_Check(func_obj)) {
+            Py_DECREF(code_obj);
+            Py_DECREF(globals_dict);
+            Py_DECREF(locals_dict);
+            return PSC_ERROR_COMPILE;
+        }
+        Py_INCREF(func_obj);
+        Py_DECREF(locals_dict);
+    } else {
+        // Compile from scratch
+        psc_result_t compile_result = psc_compile_function(instance, source_code, filename,
+                                                          &code_obj, &func_obj, &globals_dict, function_name);
+        if (compile_result != PSC_SUCCESS) {
+            return compile_result;
+        }
     }
     
     // Create cache entry
@@ -1326,28 +1671,35 @@ static inline PyObject* psc_call_function(psc_instance_t *instance, const char *
     }
     
     psc_rwlock_rdlock(&instance->state.lock);
-    
+
     struct psc_cache_entry *entry = psc_find_function_unlocked(instance, function_name);
     if (!entry) {
         instance->stats.cache_misses++;
         psc_rwlock_unlock_rd(&instance->state.lock);
-        PyErr_Format(PyExc_KeyError, "Function '%s' not found in cache '%s'", 
+        PyErr_Format(PyExc_KeyError, "Function '%s' not found in cache '%s'",
                      function_name, instance->state.instance_name);
         return NULL;
     }
-    
+
     instance->stats.cache_hits++;
-    
-    // Call the cached function
+
+    // Increment reference count so function object stays alive after we unlock
+    PyObject *func_obj = entry->function_object;
+    Py_INCREF(func_obj);
+
+    psc_rwlock_unlock_rd(&instance->state.lock);
+
+    // Call the cached function (lock is released, so we don't block other threads)
     PyObject *result;
     if (kwargs && PyDict_Size(kwargs) > 0) {
-        result = PyObject_Call(entry->function_object, args ? args : PyTuple_New(0), kwargs);
+        result = PyObject_Call(func_obj, args ? args : PyTuple_New(0), kwargs);
     } else {
-        result = PyObject_CallObject(entry->function_object, args);
+        result = PyObject_CallObject(func_obj, args);
     }
-    
-    psc_rwlock_unlock_rd(&instance->state.lock);
-    
+
+    // Release our temporary reference
+    Py_DECREF(func_obj);
+
     return result;
 }
 
@@ -1474,7 +1826,7 @@ static inline void psc_explain_decision(psc_instance_t *instance, const char *so
     char validation_error[PSC_MAX_ERROR_LENGTH];
     psc_validate_result_t validation = psc_validate_function_source(
         instance, source_code, function_name, sizeof(function_name),
-        validation_error, sizeof(validation_error)
+        validation_error, sizeof(validation_error), NULL
     );
     
     if (validation != PSC_VALIDATE_SUCCESS) {
@@ -1560,46 +1912,6 @@ static inline void psc_configure_advanced(psc_instance_t *instance, int threshol
     instance->config.strict_validation = strict_validation;
     psc_rwlock_unlock_wr(&instance->state.lock);
 }
-
-// ============================================================================
-// CONVENIENCE MACROS
-// ============================================================================
-
-#define PSC_CALL_NOARGS(instance, func_name) \
-    psc_call_function(instance, func_name, NULL, NULL)
-
-#define PSC_CALL_1ARG(instance, func_name, arg1) \
-    psc_call_function(instance, func_name, PyTuple_Pack(1, arg1), NULL)
-
-#define PSC_CALL_2ARGS(instance, func_name, arg1, arg2) \
-    psc_call_function(instance, func_name, PyTuple_Pack(2, arg1, arg2), NULL)
-
-#define PSC_CALL_3ARGS(instance, func_name, arg1, arg2, arg3) \
-    psc_call_function(instance, func_name, PyTuple_Pack(3, arg1, arg2, arg3), NULL)
-
-// Helper macros for error checking
-#define PSC_CHECK_RESULT(result, instance, action) do { \
-    if (result != PSC_SUCCESS) { \
-        if ((instance)->config.debug_mode) { \
-            error("PSC[%s]: %s failed with code %d\n", \
-                   (instance)->state.instance_name, action, result); \
-        } \
-        return result; \
-    } \
-} while(0)
-
-#define PSC_SAFE_CALL(instance, func_name, args) ({ \
-    PyObject *_result = psc_call_function(instance, func_name, args, NULL); \
-    if (!_result && PyErr_Occurred()) { \
-        if ((instance)->config.debug_mode) { \
-            error("PSC[%s]: Call to '%s' failed\n", \
-                   (instance)->state.instance_name, func_name); \
-            PyErr_Print(); \
-        } \
-    } \
-    _result; \
-})
-
 
 #ifdef __cplusplus
 }
@@ -1695,6 +2007,7 @@ static inline void psc_configure_advanced(psc_instance_t *instance, int threshol
  *   - max_simple_length: Maximum length for "simple" functions (default: 80)
  *   - debug_mode: Enable debug output (default: 0)
  *   - strict_validation: Enable comprehensive validation (default: 1)
+ *   - override_cache_all: Force cache all functions (default: 0)
  * 
  * MEMORY MANAGEMENT:
  *   - All Python objects properly reference counted
