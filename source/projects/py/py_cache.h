@@ -18,6 +18,7 @@
  * - Configurable complexity thresholds and debug modes
  * - Improved lifecycle management with psc_reset() and auto-cleanup
  * - Comprehensive error handling with detailed validation messages
+ * - Function signature introspection - parameter counts, names, types, *args/**kwargs detection
  * 
  * Usage:
  *   #include "py_cache.h"
@@ -34,7 +35,12 @@
  * 
  *   // Call functions with different parameters
  *   PyObject* result = psc_call_function(cache, "square", args, NULL);
- * 
+ *
+ *   // (Optional) Inspect function signature
+ *   int arg_count, has_varargs;
+ *   psc_get_function_signature(cache, "square", &arg_count, NULL, &has_varargs, NULL);
+ *   const char* const* param_names = psc_get_function_param_names(cache, "square");
+ *
  *   // Reset for reuse (optional)
  *   psc_reset(cache);
  * 
@@ -162,6 +168,19 @@ typedef struct psc_instance {
         time_t last_access;
         int access_count;
         struct psc_cache_entry *next;
+
+        // Function signature information
+        struct {
+            int arg_count;              // Number of positional arguments
+            int kwonly_arg_count;       // Number of keyword-only arguments
+            int total_arg_count;        // Total arguments (arg_count + kwonly_arg_count)
+            int has_varargs;            // Has *args
+            int has_varkwargs;          // Has **kwargs
+            int has_defaults;           // Has default values
+            int has_annotations;        // Has type annotations
+            char **param_names;         // Array of parameter names (NULL-terminated)
+            PyObject *annotations_dict; // Type annotations dictionary (borrowed ref)
+        } signature;
         
         // Embedded complexity analysis for this entry
         struct {
@@ -381,6 +400,42 @@ static inline int psc_has_function(psc_instance_t *instance,
  * @return Pointer to the last cached function name, or NULL if none or instance invalid
  */
 static inline const char* psc_get_last_cached_function_name(psc_instance_t *instance);
+
+/**
+ * @brief Get function signature information
+ * @param instance Cache instance
+ * @param function_name Name of the cached function
+ * @param arg_count Output: number of positional arguments (can be NULL)
+ * @param kwonly_arg_count Output: number of keyword-only arguments (can be NULL)
+ * @param has_varargs Output: 1 if has *args, 0 otherwise (can be NULL)
+ * @param has_varkwargs Output: 1 if has **kwargs, 0 otherwise (can be NULL)
+ * @return PSC_SUCCESS if function found, PSC_ERROR_NOT_FOUND otherwise
+ */
+static inline psc_result_t psc_get_function_signature(psc_instance_t *instance,
+                                                     const char *function_name,
+                                                     int *arg_count,
+                                                     int *kwonly_arg_count,
+                                                     int *has_varargs,
+                                                     int *has_varkwargs);
+
+/**
+ * @brief Get function parameter names
+ * @param instance Cache instance
+ * @param function_name Name of the cached function
+ * @return NULL-terminated array of parameter name strings, or NULL if not found
+ *         Caller should NOT free the returned array (it's owned by the cache)
+ */
+static inline const char* const* psc_get_function_param_names(psc_instance_t *instance,
+                                                               const char *function_name);
+
+/**
+ * @brief Get function type annotations dictionary
+ * @param instance Cache instance
+ * @param function_name Name of the cached function
+ * @return Python dictionary of annotations (borrowed reference), or NULL if not found/no annotations
+ */
+static inline PyObject* psc_get_function_annotations(psc_instance_t *instance,
+                                                     const char *function_name);
 
 /**
  * @section Statistics and Analysis
@@ -1132,13 +1187,144 @@ static inline int psc_should_cache_function(psc_instance_t *instance, const char
 }
 
 // ============================================================================
+// SIGNATURE EXTRACTION
+// ============================================================================
+
+/**
+ * Extract signature information from a Python function object
+ */
+static inline void psc_extract_signature(struct psc_cache_entry *entry) {
+    if (!entry || !entry->function_object) return;
+
+    PyObject *func = entry->function_object;
+
+    // Initialize signature
+    memset(&entry->signature, 0, sizeof(entry->signature));
+
+    // Get the code object from the function
+    PyCodeObject *code = (PyCodeObject*)PyFunction_GetCode(func);
+    if (!code) return;
+
+    // Extract argument counts using Python 3.11+ compatible API
+    entry->signature.arg_count = PyCode_GetNumFree((PyObject*)code) >= 0 ?
+        PyCode_GetNumFree((PyObject*)code) : 0;
+
+    // Get total local variables count to infer argument count
+    // Since we can't access co_argcount directly, we use the inspect module approach
+    PyObject *inspect_module = PyImport_ImportModule("inspect");
+    if (inspect_module) {
+        PyObject *signature_func = PyObject_GetAttrString(inspect_module, "signature");
+        if (signature_func) {
+            PyObject *sig = PyObject_CallFunctionObjArgs(signature_func, func, NULL);
+            if (sig) {
+                PyObject *params = PyObject_GetAttrString(sig, "parameters");
+                if (params) {
+                    PyObject *items = PyMapping_Items(params);
+                    if (items && PyList_Check(items)) {
+                        int total = PyList_Size(items);
+                        entry->signature.total_arg_count = total;
+
+                        // Count different parameter types
+                        int pos_args = 0;
+                        int kwonly_args = 0;
+
+                        // Allocate array for parameter names
+                        entry->signature.param_names = (char**)calloc(total + 1, sizeof(char*));
+
+                        for (int i = 0; i < total; i++) {
+                            PyObject *item = PyList_GetItem(items, i);
+                            if (item && PyTuple_Check(item) && PyTuple_Size(item) >= 2) {
+                                PyObject *name_obj = PyTuple_GetItem(item, 0);
+                                PyObject *param_obj = PyTuple_GetItem(item, 1);
+
+                                // Store parameter name
+                                if (name_obj && PyUnicode_Check(name_obj)) {
+                                    const char *name_str = PyUnicode_AsUTF8(name_obj);
+                                    if (name_str && entry->signature.param_names) {
+                                        entry->signature.param_names[i] = strdup(name_str);
+                                    }
+                                }
+
+                                // Check parameter kind
+                                PyObject *kind = PyObject_GetAttrString(param_obj, "kind");
+                                if (kind) {
+                                    PyObject *kind_name = PyObject_GetAttrString(kind, "name");
+                                    if (kind_name && PyUnicode_Check(kind_name)) {
+                                        const char *kind_str = PyUnicode_AsUTF8(kind_name);
+                                        if (kind_str) {
+                                            if (strcmp(kind_str, "VAR_POSITIONAL") == 0) {
+                                                entry->signature.has_varargs = 1;
+                                            } else if (strcmp(kind_str, "VAR_KEYWORD") == 0) {
+                                                entry->signature.has_varkwargs = 1;
+                                            } else if (strcmp(kind_str, "KEYWORD_ONLY") == 0) {
+                                                kwonly_args++;
+                                            } else if (strcmp(kind_str, "POSITIONAL_OR_KEYWORD") == 0 ||
+                                                     strcmp(kind_str, "POSITIONAL_ONLY") == 0) {
+                                                pos_args++;
+                                            }
+                                        }
+                                        Py_DECREF(kind_name);
+                                    }
+                                    Py_DECREF(kind);
+                                }
+
+                                // Check if parameter has default value
+                                PyObject *default_val = PyObject_GetAttrString(param_obj, "default");
+                                if (default_val) {
+                                    PyObject *empty = PyObject_GetAttrString(param_obj, "empty");
+                                    if (empty && default_val != empty) {
+                                        entry->signature.has_defaults = 1;
+                                    }
+                                    Py_XDECREF(empty);
+                                    Py_DECREF(default_val);
+                                }
+                            }
+                        }
+
+                        entry->signature.arg_count = pos_args;
+                        entry->signature.kwonly_arg_count = kwonly_args;
+
+                        if (entry->signature.param_names) {
+                            entry->signature.param_names[total] = NULL; // NULL-terminate
+                        }
+
+                        Py_DECREF(items);
+                    }
+                    Py_DECREF(params);
+                }
+                Py_DECREF(sig);
+            } else {
+                // Clear any error from signature inspection
+                PyErr_Clear();
+            }
+            Py_DECREF(signature_func);
+        }
+        Py_DECREF(inspect_module);
+    }
+
+    // Clear any errors from import
+    if (PyErr_Occurred()) PyErr_Clear();
+
+    // Check for annotations
+    PyObject *annotations = PyFunction_GetAnnotations(func);
+    entry->signature.has_annotations = (annotations != NULL &&
+                                       PyDict_Size(annotations) > 0);
+    entry->signature.annotations_dict = annotations; // Borrowed reference
+
+    // Check for defaults
+    PyObject *defaults = PyFunction_GetDefaults(func);
+    entry->signature.has_defaults = entry->signature.has_defaults ||
+                                    (defaults != NULL && PyTuple_Size(defaults) > 0);
+}
+
+// ============================================================================
 // MEMORY MANAGEMENT
 // ============================================================================
 
 /**
  * Create a new cache entry
  */
-static inline struct psc_cache_entry* psc_create_entry(const char *function_name, 
+static inline struct psc_cache_entry* psc_create_entry(const char *function_name,
                                                       const char *source_code,
                                                       PyObject *code_object,
                                                       PyObject *function_object,
@@ -1168,7 +1354,10 @@ static inline struct psc_cache_entry* psc_create_entry(const char *function_name
     Py_INCREF(code_object);
     Py_INCREF(function_object);
     Py_INCREF(globals_dict);
-    
+
+    // Extract function signature information
+    psc_extract_signature(entry);
+
     return entry;
 }
 
@@ -1177,11 +1366,20 @@ static inline struct psc_cache_entry* psc_create_entry(const char *function_name
  */
 static inline void psc_free_entry(struct psc_cache_entry *entry) {
     if (!entry) return;
-    
+
     free(entry->source_code);
     Py_XDECREF(entry->code_object);
     Py_XDECREF(entry->function_object);
     Py_XDECREF(entry->globals_dict);
+
+    // Free signature parameter names
+    if (entry->signature.param_names) {
+        for (int i = 0; entry->signature.param_names[i] != NULL; i++) {
+            free(entry->signature.param_names[i]);
+        }
+        free(entry->signature.param_names);
+    }
+
     free(entry);
 }
 
@@ -1734,6 +1932,85 @@ static inline const char* psc_get_last_cached_function_name(psc_instance_t *inst
     psc_rwlock_unlock_rd(&instance->state.lock);
 
     return name;
+}
+
+/**
+ * @brief Get function signature information
+ * @param instance Cache instance
+ * @param function_name Name of the cached function
+ * @param arg_count Output: number of positional arguments (can be NULL)
+ * @param kwonly_arg_count Output: number of keyword-only arguments (can be NULL)
+ * @param has_varargs Output: 1 if has *args, 0 otherwise (can be NULL)
+ * @param has_varkwargs Output: 1 if has **kwargs, 0 otherwise (can be NULL)
+ * @return PSC_SUCCESS if function found, PSC_ERROR_NOT_FOUND otherwise
+ */
+static inline psc_result_t psc_get_function_signature(psc_instance_t *instance,
+                                                     const char *function_name,
+                                                     int *arg_count,
+                                                     int *kwonly_arg_count,
+                                                     int *has_varargs,
+                                                     int *has_varkwargs) {
+    if (!instance || !instance->state.initialized) return PSC_ERROR_NOT_INITIALIZED;
+    if (!function_name) return PSC_ERROR_INVALID_ARGS;
+
+    psc_rwlock_rdlock(&instance->state.lock);
+
+    struct psc_cache_entry *entry = psc_find_function_unlocked(instance, function_name);
+    if (!entry) {
+        psc_rwlock_unlock_rd(&instance->state.lock);
+        return PSC_ERROR_NOT_FOUND;
+    }
+
+    // Copy signature information to output parameters
+    if (arg_count) *arg_count = entry->signature.arg_count;
+    if (kwonly_arg_count) *kwonly_arg_count = entry->signature.kwonly_arg_count;
+    if (has_varargs) *has_varargs = entry->signature.has_varargs;
+    if (has_varkwargs) *has_varkwargs = entry->signature.has_varkwargs;
+
+    psc_rwlock_unlock_rd(&instance->state.lock);
+    return PSC_SUCCESS;
+}
+
+/**
+ * @brief Get function parameter names
+ * @param instance Cache instance
+ * @param function_name Name of the cached function
+ * @return NULL-terminated array of parameter name strings, or NULL if not found
+ *         Caller should NOT free the returned array (it's owned by the cache)
+ */
+static inline const char* const* psc_get_function_param_names(psc_instance_t *instance,
+                                                               const char *function_name) {
+    if (!instance || !instance->state.initialized) return NULL;
+    if (!function_name) return NULL;
+
+    psc_rwlock_rdlock(&instance->state.lock);
+
+    struct psc_cache_entry *entry = psc_find_function_unlocked(instance, function_name);
+    const char* const* names = entry ? (const char* const*)entry->signature.param_names : NULL;
+
+    psc_rwlock_unlock_rd(&instance->state.lock);
+    return names;
+}
+
+/**
+ * @brief Get function type annotations dictionary
+ * @param instance Cache instance
+ * @param function_name Name of the cached function
+ * @return Python dictionary of annotations (borrowed reference), or NULL if not found/no annotations
+ */
+static inline PyObject* psc_get_function_annotations(psc_instance_t *instance,
+                                                     const char *function_name) {
+    if (!instance || !instance->state.initialized) return NULL;
+    if (!function_name) return NULL;
+
+    psc_rwlock_rdlock(&instance->state.lock);
+
+    struct psc_cache_entry *entry = psc_find_function_unlocked(instance, function_name);
+    PyObject *annotations = (entry && entry->signature.has_annotations) ?
+                           entry->signature.annotations_dict : NULL;
+
+    psc_rwlock_unlock_rd(&instance->state.lock);
+    return annotations;
 }
 
 /**
