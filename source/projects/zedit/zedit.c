@@ -20,12 +20,19 @@
 
 #define PY_MAX_ELEMS 1024
 
+// Feature flags - comment out to disable
+#define ENABLE_AUTH 1              // Authentication token (REQUIRED for web frontend)
+// #define ENABLE_RATE_LIMITING 1     // Rate limiting per IP (optional)
+// #define ENABLE_SECURITY_HEADERS 1  // Security headers in HTTP responses (optional)
+// #define ENABLE_INPUT_VALIDATION 1  // Input validation (null bytes, size limits) (optional)
+#define ENABLE_OUTPUT_CAPTURE 1    // Capture Python output in API responses (REQUIRED for web REPL)
+
 // static global constants
 #if defined RELEASE
 static const char* s_listening_address = "http://localhost:8000";
 static const char* s_subpath = "/Contents/Resources/public";
 #else
-static const char* s_listening_address = "http://localhost:8000";
+static const char* s_listening_address = "http://0.0.0.0:8000";
 static const char* s_subpath = "/source/projects/zedit/webroot";
 #endif
 
@@ -48,9 +55,12 @@ static const char* s_ssi_pattern = "#.shtml";
 static const char* s_root_dir = NULL;
 
 // security: session token for authentication
+#ifdef ENABLE_AUTH
 static char s_auth_token[64] = {0};
+#endif
 
 // security: rate limiting (requests per IP)
+#ifdef ENABLE_RATE_LIMITING
 #define MAX_REQUESTS_PER_MINUTE 60
 typedef struct {
     char ip[64];
@@ -59,6 +69,7 @@ typedef struct {
 } rate_limit_entry_t;
 
 static rate_limit_entry_t rate_limits[10] = {0};
+#endif
 
 
 typedef struct _zedit {
@@ -113,8 +124,10 @@ t_max_err zedit_exec_file_input(t_zedit* x, const char* code);
 t_max_err zedit_exec_single_input(t_zedit* x, const char* code);
 
 // code evaluation methods with output capture
+#ifdef ENABLE_OUTPUT_CAPTURE
 char* zedit_exec_file_input_with_output(t_zedit* x, const char* code);
 char* zedit_exec_single_input_with_output(t_zedit* x, const char* code);
+#endif
 
 // Optional Python sandboxing support
 // To enable RestrictedPython sandboxing:
@@ -130,10 +143,16 @@ const char* zedit_apply_sandbox(const char* code);
 
 // web
 // void do_build_objects(t_zedit* x, t_symbol *s, short argc, t_atom *argv);
+#ifdef ENABLE_AUTH
 void generate_auth_token(void);
 int validate_auth_token(const char* token);
+#endif
+#ifdef ENABLE_RATE_LIMITING
 int check_rate_limit(const char* ip);
+#endif
+#ifdef ENABLE_SECURITY_HEADERS
 void add_security_headers(struct mg_connection *c);
+#endif
 void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, void *fn_data);
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data);
 t_string* get_path_to_webroot(t_class* klass);
@@ -142,6 +161,7 @@ t_string* get_path_to_webroot(t_class* klass);
 
 // -------------------------------------------------------------------------------------
 
+#ifdef ENABLE_AUTH
 // Generate a random authentication token
 void generate_auth_token(void) {
     const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -159,7 +179,9 @@ int validate_auth_token(const char* token) {
     }
     return (strcmp(token, s_auth_token) == 0);
 }
+#endif
 
+#ifdef ENABLE_RATE_LIMITING
 // Check rate limit for IP address
 int check_rate_limit(const char* ip) {
     if (ip == NULL) return 0;
@@ -199,12 +221,15 @@ int check_rate_limit(const char* ip) {
     rate_limits[oldest_idx].window_start = now;
     return 1;
 }
+#endif
 
+#ifdef ENABLE_SECURITY_HEADERS
 // Add security headers to response
 void add_security_headers(struct mg_connection *c) {
     // These headers are added via custom header string in mg_http_reply
     // This function is a placeholder for documentation
 }
+#endif
 
 
 // void do_build_objects(t_zedit* x, t_symbol *s, short argc, t_atom *argv)
@@ -228,12 +253,10 @@ void add_security_headers(struct mg_connection *c) {
 // http message handler
 void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, void *fn_data)
 {
-    post("MG_EV_HTTP_MSG");
     struct mg_http_message *hm = (struct mg_http_message*)ev_data;
-    struct mg_http_message tmp = {0};
-    struct mg_str unknown = mg_str_n("?", 1);
-    struct mg_str *cl;
+    (void)ev;  // unused parameter
 
+#ifdef ENABLE_SECURITY_HEADERS
     // Security headers for all responses
     const char* sec_headers =
         "X-Frame-Options: DENY\r\n"
@@ -241,7 +264,11 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
         "X-XSS-Protection: 1; mode=block\r\n"
         "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'\r\n"
         "Referrer-Policy: no-referrer\r\n";
+#else
+    const char* sec_headers = "";
+#endif
 
+#ifdef ENABLE_RATE_LIMITING
     // Rate limiting for API endpoints
     if (mg_http_match_uri(hm, "/api/*")) {
         char client_ip[64] = {0};
@@ -253,7 +280,9 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
             return;
         }
     }
+#endif
 
+#ifdef ENABLE_AUTH
     // Check authentication for all /api/* endpoints except /api/auth
     if (mg_http_match_uri(hm, "/api/*") && !mg_http_match_uri(hm, "/api/auth")) {
         struct mg_str *auth_header = mg_http_get_header(hm, "X-Auth-Token");
@@ -280,6 +309,7 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
                       "{%Q:%Q}\n", "token", s_auth_token);
         return;
     }
+#endif
 
     // On /api/hello requests, send dynamic JSON response
     if (mg_http_match_uri(hm, "/api/hello")) {
@@ -300,6 +330,7 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
         if ((file_id = mg_json_get_long(hm->body, "$.file_id", 100) &&
             (code = mg_json_get_str(hm->body, "$.content")))) {
 
+#ifdef ENABLE_INPUT_VALIDATION
             // Input validation: check code length (max 1MB)
             size_t code_len = strlen(code);
             if (code_len > 1048576) {
@@ -316,7 +347,9 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
                 free(code);
                 return;
             }
+#endif
 
+#ifdef ENABLE_OUTPUT_CAPTURE
             // Execute code and capture output
             char* output = zedit_exec_file_input_with_output((t_zedit*)c->fn_data, code);
 
@@ -326,9 +359,20 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
                           "result", "OK SAVED",
                           "output", output ? output : "");
 
-            post("code executed (length: %zu bytes)", code_len);
-            free(code);
+            post("code executed (length: %zu bytes)", strlen(code));
             if (output) free(output);
+#else
+            // Execute code without output capture
+            zedit_exec_file_input((t_zedit*)c->fn_data, code);
+
+            // Create JSON response
+            mg_http_reply(c, 200, headers,
+                          "{%Q:%Q}\n",
+                          "result", "OK SAVED");
+
+            post("code executed (length: %zu bytes)", strlen(code));
+#endif
+            free(code);
         } else {
             mg_http_reply(c, 400, headers,
                           "{%Q:%Q}\n", "error", "Parameters missing");
@@ -344,6 +388,7 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
 
         if ((code = mg_json_get_str(hm->body, "$.content"))) {
 
+#ifdef ENABLE_INPUT_VALIDATION
             // Input validation: check code length (max 1MB)
             size_t code_len = strlen(code);
             if (code_len > 1048576) {
@@ -360,7 +405,9 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
                 free(code);
                 return;
             }
+#endif
 
+#ifdef ENABLE_OUTPUT_CAPTURE
             // Execute code and capture output
             char* output = zedit_exec_file_input_with_output((t_zedit*)c->fn_data, code);
 
@@ -370,25 +417,44 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
                           "result", "OK",
                           "output", output ? output : "");
 
-            post("code executed (length: %zu bytes)", code_len);
-            free(code);
+            post("code executed (length: %zu bytes)", strlen(code));
             if (output) free(output);
+#else
+            // Execute code without output capture
+            zedit_exec_file_input((t_zedit*)c->fn_data, code);
+
+            // Create JSON response
+            mg_http_reply(c, 200, headers,
+                          "{%Q:%Q}\n",
+                          "result", "OK");
+
+            post("code executed (length: %zu bytes)", strlen(code));
+#endif
+            free(code);
         } else {
             mg_http_reply(c, 400, headers,
                           "{%Q:%Q}\n", "error", "Parameters missing");
         }
 
     } else if (mg_http_match_uri(hm, "/api/repl/send")) {
-        object_post((t_object*)c->fn_data, "/api/repl/run");
+        object_post((t_object*)c->fn_data, "/api/repl/send");
         char headers[512];
         snprintf(headers, sizeof(headers), "%sContent-Type: application/json\r\n", sec_headers);
         char *code;
 
-        if ((code = mg_json_get_str(hm->body, "$.content"))) {
+        post("[DEBUG] Received /api/repl/send request");
+        post("[DEBUG] Request body length: %d", (int)hm->body.len);
+        post("[DEBUG] Request body: %.*s", (int)hm->body.len, hm->body.ptr);
 
+        if ((code = mg_json_get_str(hm->body, "$.content"))) {
+            post("[DEBUG] Extracted code: '%s'", code);
+            post("[DEBUG] Code length: %zu bytes", strlen(code));
+
+#ifdef ENABLE_INPUT_VALIDATION
             // Input validation: check code length (max 100KB for REPL)
             size_t code_len = strlen(code);
             if (code_len > 102400) {
+                post("[DEBUG] Code too large, rejecting");
                 mg_http_reply(c, 400, headers,
                               "{%Q:%Q}\n", "error", "Code too large (max 100KB for REPL)");
                 free(code);
@@ -397,14 +463,19 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
 
             // Input validation: check for null bytes
             if (memchr(code, '\0', code_len) != NULL) {
+                post("[DEBUG] Null bytes detected, rejecting");
                 mg_http_reply(c, 400, headers,
                               "{%Q:%Q}\n", "error", "Invalid input: null bytes detected");
                 free(code);
                 return;
             }
+#endif
 
+#ifdef ENABLE_OUTPUT_CAPTURE
+            post("[DEBUG] Executing with output capture");
             // Execute code and capture output
             char* output = zedit_exec_single_input_with_output((t_zedit*)c->fn_data, code);
+            post("[DEBUG] Execution complete, output: '%s'", output ? output : "(null)");
 
             // Create JSON response with output
             mg_http_reply(c, 200, headers,
@@ -412,10 +483,24 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
                           "result", "OK",
                           "output", output ? output : "");
 
-            post("repl executed (length: %zu bytes)", code_len);
-            free(code);
+            post("[DEBUG] Response sent to client");
             if (output) free(output);
+#else
+            post("[DEBUG] Executing WITHOUT output capture");
+            // Execute code without output capture
+            t_max_err err = zedit_exec_single_input((t_zedit*)c->fn_data, code);
+            post("[DEBUG] Execution complete, error code: %d", err);
+
+            // Create JSON response
+            mg_http_reply(c, 200, headers,
+                          "{%Q:%Q}\n",
+                          "result", "OK");
+
+            post("[DEBUG] Response sent to client");
+#endif
+            free(code);
         } else {
+            post("[DEBUG] Failed to extract code from JSON body");
             mg_http_reply(c, 400, headers,
                           "{%Q:%Q}\n", "error", "Parameters missing");
         }
@@ -424,8 +509,6 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
         mg_http_reply(c, 200, "", "{\"result\": \"%.*s\"}\n", (int) hm->uri.len,
                 hm->uri.ptr);
     } else {
-        // mg_http_reply(c, 500, NULL, "\n");
-        // OR
         // static file server configuration
         struct mg_http_serve_opts opts = {
             .root_dir = s_root_dir,
@@ -433,108 +516,16 @@ void handle_event_http_message(struct mg_connection *c, int ev, void *ev_data, v
         };
         mg_http_serve_dir(c, hm, &opts);
     }
-    mg_http_parse((char *) c->send.buf, c->send.len, &tmp);
-    cl = mg_http_get_header(&tmp, "Content-Length");
-    if (cl == NULL) cl = &unknown;
-    post("%.*s %.*s %.*s %.*s", (int) hm->method.len, hm->method.ptr,
-             (int) hm->uri.len, hm->uri.ptr, (int) tmp.uri.len, tmp.uri.ptr,
-             (int) cl->len, cl->ptr);
 }
 
 
-// zedit main function
+// zedit main function - simplified to match working test-server.c
 static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data)
 {
-    switch(ev) {
-    
-    case MG_EV_ERROR: { // Error -> char *error_message
-        char *error_message = strdup((char*)ev_data);
-        error("MG_EV_ERROR: %s", error_message);
-    }   break;
-
-    case MG_EV_OPEN:    // Connection created -> NULL
-        post("MG_EV_OPEN");
-        // c->is_hexdumping = 1;
-        break;
-
-    case MG_EV_POLL: {  // mg_mgr_poll iteration -> uint64_t *milliseconds
-        // uint64_t *milliseconds = (uint64_t*)ev_data;
-        // post("MG_EV_POLL: %d", milliseconds);
-    }   break;
-
-    case MG_EV_RESOLVE: // host name is resolved
-        post("MG_EV_RESOLVE");
-        break;
-
-    case MG_EV_CONNECT: // connection established
-        post("MG_EV_CONNECT");
-        break;
-
-    case MG_EV_ACCEPT:  // connection accepted
-        post("MG_EV_ACCEPT");
-        break;
-
-    case MG_EV_TLS_HS:  // TLS handshake succeeded
-        post("MG_EV_TLS_HS");
-        break;
-
-    case MG_EV_READ:    // data received from socket -> long *bytes_read
-        post("MG_EV_READ");
-        break;
-
-    case MG_EV_WRITE:   // data written to socket -> long *bytes_written
-        post("MG_EV_WRITE");
-        break;
-
-    case MG_EV_CLOSE:   // connection closed
-        post("MG_EV_CLOSE");
-        break;
-
-    case MG_EV_HTTP_MSG: // http request/respose -> struct mg_http_message *
+    if (ev == MG_EV_HTTP_MSG) {
         handle_event_http_message(c, ev, ev_data, fn_data);
-        break;
-
-    case MG_EV_HTTP_CHUNK: // HTTP chunk (partial msg) -> struct mg_http_message *
-        post("MG_EV_HTTP_CHUNK");
-        break;
-
-    case MG_EV_WS_OPEN: // Websocket handshake done -> struct mg_http_message *
-        post("MG_EV_WS_OPEN");
-        break;
-
-    case MG_EV_WS_MSG: // Websocket msg, text or bin ->sstruct mg_ws_message *
-        post("MG_EV_WS_MSG");
-        break;
-
-    case MG_EV_WS_CTL: // Websocket control msg -> struct mg_ws_message *
-        post("MG_EV_WS_MSG");
-        break;
-
-    case MG_EV_MQTT_CMD: // /MQTT low-level command -> struct mg_mqtt_message *
-        post("MG_EV_MQTT_CMD");
-        break;
-
-    case MG_EV_MQTT_MSG: // MQTT PUBLISH received -> struct mg_mqtt_message *
-        post("MG_EV_MQTT_MSG");
-        break;
-
-    case MG_EV_MQTT_OPEN: // MQTT CONNACK received -> int *connack_status_code
-        post("MG_EV_MQTT_OPEN");
-        break;
-
-    case MG_EV_SNTP_TIME: // SNTP time received -> uint64_t *milliseconds
-        post("MG_EV_SNTP_TIME");
-        break;
-
-    case MG_EV_USER: // Starting ID for user events
-        post("MG_EV_USER");
-        break;
-
-    default:
-        break;
-
     }
-    (void) fn_data;
+    (void)fn_data;
 }
 
 
@@ -666,14 +657,18 @@ void zedit_start(t_zedit* x)
 
     // create new thread + begin execution
     if (x->x_systhread == NULL && !x->x_is_running) {
+#ifdef ENABLE_AUTH
         // Generate new authentication token
         generate_auth_token();
+#endif
 
         post("Mongoose version : v%s", MG_VERSION);
         post("Listening on     : %s", s_listening_address);
         post("Web root         : [%s]", s_root_dir);
+#ifdef ENABLE_AUTH
         post("Auth token       : %s", s_auth_token);
         post("IMPORTANT: Use this token in X-Auth-Token header for API requests");
+#endif
 
         systhread_create((method)zedit_threadproc, x, 0, 0, 0,
                          &x->x_systhread);
@@ -702,11 +697,15 @@ void zedit_stop(t_zedit* x)
     unsigned int ret;
 
     if (x->x_systhread) {
-        post("stopping webserver thread");
+        post("[STOP] Requesting webserver thread to stop...");
         x->x_systhread_cancel = true;         // tell the thread to stop
+
+        post("[STOP] Waiting for thread to exit (this may take up to 1 second)...");
         systhread_join(x->x_systhread, &ret); // wait for the thread to stop
+
         x->x_systhread = NULL;
         x->x_is_running = false;
+        post("[STOP] Webserver thread stopped (exit code: %u)", ret);
     }
 }
 
@@ -720,51 +719,53 @@ void zedit_cancel(t_zedit* x)
 
 void* zedit_threadproc(t_zedit* x)
 {
-    // char listening_address[100];
-    // int max_len = sizeof listening_address;
-    // snprintf_zero(listening_address, max_len, s_listening_address, x->x_port);
+    post("[THREAD] Webserver thread started");
 
-    // loop until told to stop
-    while (1) {
+    struct mg_mgr mgr;
+    struct mg_connection *conn;
 
-        struct mg_mgr mgr;
-        struct mg_connection *conn;
-        mg_log_set(s_debug_level);
-        mg_mgr_init(&mgr); // Init manager
+    mg_log_set(s_debug_level);
+    mg_mgr_init(&mgr); // Init manager
+    post("[THREAD] Mongoose manager initialized");
 
-        // Setup listener with optional TLS support
-        conn = mg_http_listen(&mgr, s_listening_address, fn, x);
+    // Setup listener with optional TLS support
+    conn = mg_http_listen(&mgr, s_listening_address, fn, x);
 
-        // Enable TLS if certificates are configured
-        if (conn != NULL && s_tls_cert != NULL && s_tls_key != NULL) {
-            struct mg_tls_opts tls_opts = {
-                .cert = s_tls_cert,
-                .certkey = s_tls_key
-            };
-            mg_tls_init(conn, &tls_opts);
-            post("TLS/HTTPS enabled");
-        }
-
-        for (;;) {
-            mg_mgr_poll(&mgr, 1000); // Event loop
-            if (x->x_systhread_cancel)
-                break;
-        }
-        mg_mgr_free(&mgr); // Cleanup
-        break;
-
-        // systhread_mutex_lock(x->x_mutex);
-        // x->x_foo++; // fiddle with shared data
-        // systhread_mutex_unlock(x->x_mutex);
-
-        // qelem_set(x->x_qelem); // notify main thread using qelem mechanism
-
-        // systhread_sleep(x->x_sleeptime); // sleep a bit
+    if (!conn) {
+        error("[THREAD] Failed to create listener on %s", s_listening_address);
+        mg_mgr_free(&mgr);
+        x->x_systhread_cancel = false;
+        systhread_exit(1);
+        return NULL;
     }
+
+    post("[THREAD] HTTP listener created on %s", s_listening_address);
+
+    // Enable TLS if certificates are configured
+    if (conn != NULL && s_tls_cert != NULL && s_tls_key != NULL) {
+        struct mg_tls_opts tls_opts = {
+            .cert = s_tls_cert,
+            .certkey = s_tls_key
+        };
+        mg_tls_init(conn, &tls_opts);
+        post("[THREAD] TLS/HTTPS enabled");
+    }
+
+    post("[THREAD] Entering event loop...");
+
+    // Event loop
+    while (!x->x_systhread_cancel) {
+        mg_mgr_poll(&mgr, 1000); // Poll with 1 second timeout
+    }
+
+    post("[THREAD] Cancel requested, cleaning up...");
+    mg_mgr_free(&mgr); // Cleanup
+    post("[THREAD] Mongoose manager freed");
 
     // reset cancel flag for next time, in case the thread is created again
     x->x_systhread_cancel = false;
 
+    post("[THREAD] Webserver thread exiting normally");
     systhread_exit(0); // this can return a value to systhread_join();
     return NULL;
 }
@@ -825,12 +826,14 @@ void* zedit_new(void)
 
     x->py = py_init(zedit_class); // This is all that is need to init the `py` obj
 
+#ifdef ENABLE_AUTH
     // Initialize random seed for auth token generation
     static int seed_initialized = 0;
     if (!seed_initialized) {
         srand((unsigned int)time(NULL));
         seed_initialized = 1;
     }
+#endif
 
     // set global
     s_root_dir = string_getptr(x->x_root_dir);
@@ -873,16 +876,24 @@ t_max_err zedit_exec_single_input(t_zedit* x, const char* code)
 }
 
 
+#ifdef ENABLE_OUTPUT_CAPTURE
 char* zedit_exec_file_input_with_output(t_zedit* x, const char* code)
 {
-    return py_exec_file_input_with_output(x->py, code);
+    post("[EXEC] Calling py_exec_file_input_with_output...");
+    char* result = py_exec_file_input_with_output(x->py, code);
+    post("[EXEC] py_exec_file_input_with_output returned: %s", result ? result : "(null)");
+    return result;
 }
 
 
 char* zedit_exec_single_input_with_output(t_zedit* x, const char* code)
 {
-    return py_exec_single_input_with_output(x->py, code);
+    post("[EXEC] Calling py_exec_single_input_with_output...");
+    char* result = py_exec_single_input_with_output(x->py, code);
+    post("[EXEC] py_exec_single_input_with_output returned: %s", result ? result : "(null)");
+    return result;
 }
+#endif
 
 
 t_max_err zedit_execfile(t_zedit* x, t_symbol* s)

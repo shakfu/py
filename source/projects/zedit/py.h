@@ -458,6 +458,14 @@ t_py* py_init(t_class* c)
 
     Py_XDECREF(p_name);
 
+    // CRITICAL: Release GIL so other threads (like webserver) can execute Python code
+    // After Py_Initialize(), the main thread holds the GIL. We must release it
+    // so that other threads can call PyGILState_Ensure() successfully.
+    // Note: In Python 3.7+, PyEval_InitThreads() is deprecated and called automatically
+    PyEval_SaveThread();  // Releases GIL and saves thread state
+
+    py_log(x, (char*)"Python initialized and GIL released for multi-threading");
+
     return x;
 }
 
