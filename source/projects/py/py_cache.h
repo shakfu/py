@@ -845,27 +845,37 @@ static inline psc_validate_result_t psc_validate_function_source(
     while (*name_end && (isalnum(*name_end) || *name_end == '_')) {
         name_end++;
     }
-    
+
     size_t name_len = name_end - name_start;
+
+    // post("PSC: DEBUG - Extracted function name: name_start='%.*s', name_len=%zu\n",
+    //        (int)name_len, name_start, name_len);
+
     if (name_len == 0) {
         snprintf_zero(error_msg, error_msg_size, "Invalid function name");
         return PSC_VALIDATE_INVALID_NAME;
     }
-    
+
     if (name_len >= name_buffer_size) {
         snprintf_zero(error_msg, error_msg_size, "Function name too long (%zu chars, max %zu)", name_len, name_buffer_size - 1);
         return PSC_VALIDATE_INVALID_NAME;
     }
-    
+
     // Check that function name starts with letter or underscore
     if (!isalpha(*name_start) && *name_start != '_') {
         snprintf_zero(error_msg, error_msg_size, "Function name must start with letter or underscore, not '%c'", *name_start);
         return PSC_VALIDATE_INVALID_NAME;
     }
-    
-    // Copy function name
-    strncpy_zero(function_name, name_start, name_len);
-    function_name[name_len] = '\0';
+
+    // Copy function name - use memcpy to avoid any strncpy issues
+    if (name_len < name_buffer_size) {
+        memcpy(function_name, name_start, name_len);
+        function_name[name_len] = '\0';
+        // post("PSC: DEBUG - Copied function name: '%s' (length %zu)\n", function_name, name_len);
+    } else {
+        snprintf_zero(error_msg, error_msg_size, "Function name buffer too small");
+        return PSC_VALIDATE_INVALID_NAME;
+    }
     
     // === Step 3: Validate function signature ===
     // Check for opening parenthesis after name
@@ -1670,8 +1680,11 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
         Py_XDECREF(compiled_code);
 
         if (instance->config.debug_mode) {
-            error("PSC[%s]: Function validation failed: %s\n",
+            // Always log validation failures
+            post("PSC[%s]: VALIDATION FAILED: %s\n",
                    instance->state.instance_name, validation_error);
+            post("PSC[%s]: Source code snippet: %.100s...\n",
+                   instance->state.instance_name, source_code);
         }
 
         // Map validation errors to cache errors
@@ -1690,10 +1703,11 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
                 return PSC_ERROR_VALIDATION_FAILED;
         }
     }
-    
+
     if (instance->config.debug_mode) {
-        post("PSC[%s]: Validation passed: %s\n", 
-               instance->state.instance_name, validation_error);
+        // Always log successful validation
+        post("PSC[%s]: Validation passed for function '%s'\n",
+               instance->state.instance_name, function_name);
     }
     
     // === STEP 2: SMART CACHING DECISION ===
@@ -1711,11 +1725,22 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
         instance->stats.functions_skipped++;
         // Clean up compiled code from validation
         Py_XDECREF(compiled_code);
-        if (instance->config.debug_mode) {
-            post("PSC[%s]: Skipping function '%s' - %s\n",
-                   instance->state.instance_name, function_name, temp_entry.analysis.decision_reason);
+        if (instance->config.debug_mode) {        
+            // Always log skip decisions
+            post("PSC[%s]: NOT CACHING function '%s' - %s (score=%d)\n",
+                   instance->state.instance_name, function_name,
+                   temp_entry.analysis.decision_reason,
+                   temp_entry.analysis.complexity_score);
         }
         return PSC_ERROR_FUNCTION_TOO_SIMPLE;
+    }
+
+    if (instance->config.debug_mode) {
+        // Always log caching decisions
+        post("PSC[%s]: WILL CACHE function '%s' - %s (score=%d)\n",
+               instance->state.instance_name, function_name,
+               temp_entry.analysis.decision_reason,
+               temp_entry.analysis.complexity_score);
     }
 
     // === STEP 3: COMPILATION AND CACHING ===
@@ -1837,12 +1862,13 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     strncpy_zero(instance->state.last_cached_function_name, function_name, PSC_MAX_FUNCTION_NAME_LENGTH - 1);
 
     psc_rwlock_unlock_wr(&instance->state.lock);
-    
-    if (instance->config.debug_mode) {
-        post("PSC[%s]: Cached function '%s' - %s\n", 
-               instance->state.instance_name, function_name, entry->analysis.decision_reason);
+
+    if (instance->config.debug_mode) {  
+        // Always log successful caching
+        post("PSC[%s]: SUCCESSFULLY CACHED function '%s' - now have %zu functions in cache\n",
+               instance->state.instance_name, function_name, instance->stats.total_entries);
     }
-    
+
     // Clean up temporary references
     Py_DECREF(code_obj);
     Py_DECREF(func_obj);
@@ -1877,12 +1903,18 @@ static inline PyObject* psc_call_function(psc_instance_t *instance, const char *
     if (!entry) {
         instance->stats.cache_misses++;
         psc_rwlock_unlock_rd(&instance->state.lock);
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: CACHE MISS - function '%s' not found in cache\n",
+                   instance->state.instance_name, function_name);
+        }
         PyErr_Format(PyExc_KeyError, "Function '%s' not found in cache '%s'",
                      function_name, instance->state.instance_name);
         return NULL;
     }
 
     instance->stats.cache_hits++;
+    // post("PSC[%s]: CACHE HIT - calling function '%s'\n",
+    //        instance->state.instance_name, function_name);
 
     // Increment reference count so function object stays alive after we unlock
     PyObject *func_obj = entry->function_object;
@@ -1896,6 +1928,14 @@ static inline PyObject* psc_call_function(psc_instance_t *instance, const char *
         result = PyObject_Call(func_obj, args ? args : PyTuple_New(0), kwargs);
     } else {
         result = PyObject_CallObject(func_obj, args);
+    }
+
+    if (result) {
+        // post("PSC[%s]: Function '%s' executed successfully\n",
+        //        instance->state.instance_name, function_name);
+    } else {
+        error("PSC[%s]: ERROR - Function '%s' execution failed\n",
+               instance->state.instance_name, function_name);
     }
 
     // Release our temporary reference
@@ -1927,12 +1967,23 @@ static inline int psc_has_function(psc_instance_t *instance, const char *functio
  * @return Pointer to the last cached function name, or NULL if none or instance invalid
  */
 static inline const char* psc_get_last_cached_function_name(psc_instance_t *instance) {
-    if (!instance || !instance->state.initialized) return NULL;
+    if (!instance || !instance->state.initialized) {
+        error("PSC: ERROR - Cannot get last cached function: instance invalid or not initialized\n");
+        return NULL;
+    }
 
     psc_rwlock_rdlock(&instance->state.lock);
     const char *name = instance->state.last_cached_function_name[0] != '\0' ?
                       instance->state.last_cached_function_name : NULL;
     psc_rwlock_unlock_rd(&instance->state.lock);
+
+    if (name) {
+        // post("PSC[%s]: Last cached function is '%s'\n",
+        //        instance->state.instance_name, name);
+    } else {
+        // post("PSC[%s]: No functions cached yet\n",
+        //        instance->state.instance_name);
+    }
 
     return name;
 }

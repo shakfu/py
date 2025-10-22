@@ -139,7 +139,7 @@ void ext_main(void* module_ref)
     // general type handlers
     class_addmethod(c, (method)py_bang,       "bang",                  0);
     class_addmethod(c, (method)py_int,        "int",        A_LONG,    0);
-    // class_addmethod(c, (method)py_float,      "float",      A_FLOAT,   0);
+    class_addmethod(c, (method)py_float,      "float",      A_FLOAT,   0);
     class_addmethod(c, (method)py_anything,   "list",       A_GIMME,   0);
     class_addmethod(c, (method)py_anything,   "anything",   A_GIMME,   0);
 
@@ -452,7 +452,16 @@ void py_init(t_py* x)
     x->python.globals = PyModule_GetDict(main_mod); // borrowed reference
     py_init_builtins(x); // does this have to be a separate function?
     x->python.cache = psc_create_instance(NULL);
+    x->python.cache->config.debug_mode = 0;
     psc_init(x->python.cache); // init cache
+
+    // Enable override to cache all functions (PSC_OVERRIDE_CACHE_ALL_FUNCTIONS is defined)
+    #ifdef PSC_OVERRIDE_CACHE_ALL_FUNCTIONS
+    if (x->python.cache) {
+        x->python.cache->config.override_cache_all = PSC_OVERRIDE_CACHE_ALL_FUNCTIONS;
+        post("py: Enabled override_cache_all = %d\n", PSC_OVERRIDE_CACHE_ALL_FUNCTIONS);
+    }
+    #endif
 
     // register the object
     object_register(CLASS_BOX, x->obj.name, x);
@@ -1685,15 +1694,15 @@ t_max_err py_handle_dict_output(t_py* x, PyObject* pdict)
     if (PyDict_Check(pdict)) {
 
         // depends on definition in py_prelude.h
-        pfun = PyDict_GetItemString(x->python.globals, "out_dict"); // borrowed
+        pfun = PyDict_GetItemString(x->python.globals, "dict_to_list"); // borrowed
         if (pfun == NULL) {
-            py_error(x, "failed to retrieve 'out_dict' function from globals");
+            py_error(x, "failed to retrieve 'dict_to_list' function from globals");
             goto error;
         }
 
         pval = PyObject_CallFunctionObjArgs(pfun, pdict, NULL); // new
         if (pval == NULL) {
-            py_error(x, "'out_dict' function call failed to retrieve result");
+            py_error(x, "'dict_to_list' function call failed to retrieve result");
             goto error;
         }
 
@@ -2076,13 +2085,42 @@ t_max_err py_execfile(t_py* x, t_symbol* s)
 
     pval = PyRun_File(fhandle, x->editor.code_filepath->s_name, Py_file_input,
                       x->python.globals, x->python.globals);
+
+    fclose(fhandle);
+
     if (pval == NULL) {
-        fclose(fhandle);
         goto error;
     }
 
+    // Try to cache any function definitions from the file
+    // Read the file content to scan for functions
+    FILE* scan_fhandle = fopen(x->editor.code_filepath->s_name, "r");
+    if (scan_fhandle != NULL) {
+        fseek(scan_fhandle, 0, SEEK_END);
+        long file_size = ftell(scan_fhandle);
+        fseek(scan_fhandle, 0, SEEK_SET);
+
+        if (file_size > 0 && file_size < PSC_MAX_SOURCE_LENGTH) {
+            char* file_content = (char*)malloc(file_size + 1);
+            if (file_content != NULL) {
+                size_t read_size = fread(file_content, 1, file_size, scan_fhandle);
+                file_content[read_size] = '\0';
+
+                // Check if the file contains a function definition
+                if (psc_check_is_python_function(x->python.cache, file_content) == PSC_VALIDATE_SUCCESS) {
+                    if (psc_add_function(x->python.cache, file_content,
+                                       x->editor.code_filepath->s_name) == PSC_SUCCESS) {
+                        py_debug(x, "cached function from file: %s", x->editor.code_filepath->s_name);
+                    }
+                }
+
+                free(file_content);
+            }
+        }
+        fclose(scan_fhandle);
+    }
+
     // success cleanup
-    fclose(fhandle);
     Py_DECREF(pval);
     PyGILState_Release(gstate);
     py_bang_success(x);
@@ -2269,35 +2307,183 @@ t_max_err py_code(t_py* x, t_symbol* s, long argc, t_atom* argv)
  */
 void py_int(t_py* x, long value)
 {
-    PyObject *long_value = NULL;// PyLong to be received 
-    PyObject *args = NULL;      // Initialize packed to NULL
-    PyObject *result = NULL;    // Result of the call with packed
+    // post("py_int: Received int value: %ld\n", value);
 
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
+    PyObject *long_value = NULL;
+    PyObject *args = NULL;
+    PyObject *result = NULL;
+    int arg_count = 0;
+    int has_varargs = 0;
+
+    py_debug(x, "py_int: Getting last cached function name...");
     const char* last_func = psc_get_last_cached_function_name(x->python.cache);
-    if (last_func) {
-        post("Last cached function: %s", last_func);
-        long_value = PyLong_FromLong(value);
-        // Pack the arguments into a tuple
-        args = PyTuple_Pack(1, long_value);
-        // Call functions with different parameters
-        result = psc_call_function(x->python.cache, last_func, args, NULL);
-        if (result == NULL) {
-            py_error(x, "could not run cached func with val: %s(%d)", last_func, value);
-        }
-        t_max_err err = py_handle_long_output(x, long_value);
-        if (err != MAX_ERR_NONE) {
-            py_error(x, "Could not output %s result to outlet", last_func);        
-        }
+    if (!last_func) {
+        py_error(x, "py_int: ERROR - No functions cached yet");
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    py_debug(x, "py_int: Will try to call cached function '%s' with value %ld", last_func, value);
+
+    // Check if the cached function has the right signature for an int
+    // post("py_int: Getting function signature for '%s'...\n", last_func);
+    psc_result_t sig_result = psc_get_function_signature(
+        x->python.cache, last_func, &arg_count, NULL, &has_varargs, NULL);
+
+    if (sig_result != PSC_SUCCESS) {
+        py_error(x, "py_int: ERROR - Could not get signature for cached function '%s'", last_func);
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    py_debug(x, "py_int: Function '%s' has %d args, has_varargs=%d", last_func, arg_count, has_varargs);
+
+    // Check if function accepts exactly 1 argument (or has *args)
+    if (arg_count != 1 && !has_varargs) {
+        py_error(x, "py_int: ERROR - Function '%s' expects %d args, cannot call with single int\n",
+             last_func, arg_count);
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    py_debug(x, "Calling cached function '%s' with int: %ld", last_func, value);
+
+    long_value = PyLong_FromLong(value);
+    if (long_value == NULL) {
+        py_error(x, "Failed to create Python long from value");
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    args = PyTuple_Pack(1, long_value);
+    Py_DECREF(long_value);
+
+    if (args == NULL) {
+        py_error(x, "Failed to pack arguments");
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    result = psc_call_function(x->python.cache, last_func, args, NULL);
+    Py_DECREF(args);
+
+    if (result == NULL) {
+        py_handle_error(x, "Could not run cached func: %s(%ld)", last_func, value);
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    t_max_err err = py_handle_output(x, result);
+    PyGILState_Release(gstate);
+
+    if (err != MAX_ERR_NONE) {
+        py_error(x, "Could not output %s result to outlet", last_func);
+        py_bang_failure(x);
     } else {
-        py_error(x, "No functions cached yet");
+        py_bang_success(x);
     }
 }
 
 
-// void py_float(t_py* x, double value)
-// {
+/**
+ * @brief Handle a float being received.
+ *
+ * @param      x pointer to object structure
+ * @param[in]  value float value
+ */
+void py_float(t_py* x, double value)
+{
+    py_debug(x, "py_float: Received float value: %f", value);
 
-// }
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
+    PyObject *float_value = NULL;
+    PyObject *args = NULL;
+    PyObject *result = NULL;
+    int arg_count = 0;
+    int has_varargs = 0;
+
+    py_debug(x, "py_float: Getting last cached function name...");
+    const char* last_func = psc_get_last_cached_function_name(x->python.cache);
+    if (!last_func) {
+        py_error(x, "py_float: ERROR - No functions cached yet");
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    py_debug(x, "py_float: Will try to call cached function '%s' with value %f", last_func, value);
+
+    // Check if the cached function has the right signature for a float
+    psc_result_t sig_result = psc_get_function_signature(
+        x->python.cache, last_func, &arg_count, NULL, &has_varargs, NULL);
+
+    if (sig_result != PSC_SUCCESS) {
+        py_error(x, "Could not get signature for cached function: %s", last_func);
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    // Check if function accepts exactly 1 argument (or has *args)
+    if (arg_count != 1 && !has_varargs) {
+        py_error(x, "Cached function '%s' expects %d args, cannot call with single float",
+                 last_func, arg_count);
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    py_debug(x, "Calling cached function '%s' with float: %f", last_func, value);
+
+    float_value = PyFloat_FromDouble(value);
+    if (float_value == NULL) {
+        py_error(x, "Failed to create Python float from value");
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    args = PyTuple_Pack(1, float_value);
+    Py_DECREF(float_value);
+
+    if (args == NULL) {
+        py_error(x, "Failed to pack arguments");
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    result = psc_call_function(x->python.cache, last_func, args, NULL);
+    Py_DECREF(args);
+
+    if (result == NULL) {
+        py_handle_error(x, "Could not run cached func: %s(%f)", last_func, value);
+        PyGILState_Release(gstate);
+        py_bang_failure(x);
+        return;
+    }
+
+    t_max_err err = py_handle_output(x, result);
+    PyGILState_Release(gstate);
+
+    if (err != MAX_ERR_NONE) {
+        py_error(x, "Could not output %s result to outlet", last_func);
+        py_bang_failure(x);
+    } else {
+        py_bang_success(x);
+    }
+}
 
 
 /**
@@ -2750,6 +2936,101 @@ t_max_err py_shell(t_py* x, t_symbol* s, long argc, t_atom* argv)
  */
 t_max_err py_call(t_py* x, t_symbol* s, long argc, t_atom* argv)
 {
+    // Need at least function name
+    if (argc < 1) {
+        py_error(x, "call requires at least a function name");
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+
+    // First argument should be the function name
+    if (argv[0].a_type != A_SYM) {
+        // Not a symbol, fall back to original behavior
+        return py_func_to_text(x, "call", s, argc, argv);
+    }
+
+    const char* func_name = atom_getsym(argv)->s_name;
+
+    // Check if this function is in the cache
+    const char* last_func = psc_get_last_cached_function_name(x->python.cache);
+
+    // Try to call from cache if the function name matches the last cached function
+    // or if we can find it in the cache
+    if (last_func && strcmp(last_func, func_name) == 0) {
+        PyGILState_STATE gstate;
+        gstate = PyGILState_Ensure();
+
+        PyObject* args = NULL;
+        PyObject* result = NULL;
+        int arg_count = 0;
+        int has_varargs = 0;
+
+        // Get function signature
+        psc_result_t sig_result = psc_get_function_signature(
+            x->python.cache, func_name, &arg_count, NULL, &has_varargs, NULL);
+
+        if (sig_result != PSC_SUCCESS) {
+            PyGILState_Release(gstate);
+            // Fall back to original behavior if we can't get signature
+            return py_func_to_text(x, "call", s, argc, argv);
+        }
+
+        // Check if argument count matches (argc-1 because first is function name)
+        int provided_args = argc - 1;
+        if (arg_count != provided_args && !has_varargs) {
+            py_error(x, "Cached function '%s' expects %d args, got %d",
+                     func_name, arg_count, provided_args);
+            PyGILState_Release(gstate);
+            py_bang_failure(x);
+            return MAX_ERR_GENERIC;
+        }
+
+        py_debug(x, "Calling cached function '%s' with %d arguments", func_name, provided_args);
+
+        // Convert remaining atoms to Python tuple
+        PyObject* arg_list = py_atoms_to_list(x, argc, argv, 1);
+        if (arg_list == NULL) {
+            PyGILState_Release(gstate);
+            py_bang_failure(x);
+            return MAX_ERR_GENERIC;
+        }
+
+        // Convert list to tuple for function call
+        args = PyList_AsTuple(arg_list);
+        Py_DECREF(arg_list);
+
+        if (args == NULL) {
+            py_error(x, "Failed to convert arguments to tuple");
+            PyGILState_Release(gstate);
+            py_bang_failure(x);
+            return MAX_ERR_GENERIC;
+        }
+
+        // Call the cached function
+        result = psc_call_function(x->python.cache, func_name, args, NULL);
+        Py_DECREF(args);
+
+        if (result == NULL) {
+            py_handle_error(x, "Could not run cached function: %s", func_name);
+            PyGILState_Release(gstate);
+            py_bang_failure(x);
+            return MAX_ERR_GENERIC;
+        }
+
+        t_max_err err = py_handle_output(x, result);
+        PyGILState_Release(gstate);
+
+        if (err != MAX_ERR_NONE) {
+            py_error(x, "Could not output %s result to outlet", func_name);
+            py_bang_failure(x);
+            return MAX_ERR_GENERIC;
+        }
+
+        py_bang_success(x);
+        return MAX_ERR_NONE;
+    }
+
+    // Fall back to original behavior if not in cache
     return py_func_to_text(x, "call", s, argc, argv);
 }
 

@@ -11,7 +11,7 @@ For each cached function, the following signature information is automatically e
 ### Parameter Counts
 - **`arg_count`** - Number of positional or positional-or-keyword parameters
 - **`kwonly_arg_count`** - Number of keyword-only parameters
-- **`total_arg_count`** - Total number of parameters (excluding *args/**kwargs)
+- **`total_arg_count`** - Total number of parameters (excluding `*args/**kwargs`)
 
 ### Special Parameter Flags
 - **`has_varargs`** - Boolean: function accepts `*args`
@@ -124,13 +124,13 @@ The introspection system handles all Python function signature patterns:
 
 | Pattern | Example | Detection |
 |---------|---------|-----------|
-| Simple | `def func(a, b)` | ✅ 2 positional args |
-| Defaults | `def func(a, b=10)` | ✅ Detects defaults |
-| Varargs | `def func(*args)` | ✅ `has_varargs = 1` |
-| Kwargs | `def func(**kwargs)` | ✅ `has_varkwargs = 1` |
-| Keyword-only | `def func(a, *, b)` | ✅ Separates kwonly args |
-| Type hints | `def func(a: int) -> str` | ✅ Stores annotations |
-| Complex | `def func(a, b=1, *args, c, **kw)` | ✅ All features |
+| Simple | `def func(a, b)` | [x] 2 positional args |
+| Defaults | `def func(a, b=10)` | [x] Detects defaults |
+| Varargs | `def func(*args)` | [x] `has_varargs = 1` |
+| Kwargs | `def func(**kwargs)` | [x] `has_varkwargs = 1` |
+| Keyword-only | `def func(a, *, b)` | [x] Separates kwonly args |
+| Type hints | `def func(a: int) -> str` | [x] Stores annotations |
+| Complex | `def func(a, b=1, *args, c, **kw)` | [x] All features |
 
 ## Implementation Details
 

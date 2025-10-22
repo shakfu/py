@@ -166,7 +166,7 @@ void py_bang(t_py* x);
 // a float message to py_float will mean: __LAST_CALLABLE(value:double)
 // a bang message will mean call the last callable again with the last value
 void py_int(t_py* x, long value);
-// void py_float(t_py* x, double value);
+void py_float(t_py* x, double value);
 t_max_err py_anything(t_py* x, t_symbol* s, long argc, t_atom* argv);
 
 /*--------------------------------------------------------------------------*/
