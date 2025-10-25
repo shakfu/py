@@ -859,11 +859,24 @@ static inline void psc_extract_signature(struct psc_cache_entry *entry) {
     // Get total local variables count to infer argument count
     // Since we can't access co_argcount directly, we use the inspect module approach
     PyObject *inspect_module = PyImport_ImportModule("inspect");
-    if (inspect_module) {
+    if (!inspect_module) {
+        post("PSC: WARNING - Failed to import inspect module\n");
+        PyErr_Clear();
+    } else {
         PyObject *signature_func = PyObject_GetAttrString(inspect_module, "signature");
-        if (signature_func) {
+        if (!signature_func) {
+            post("PSC: WARNING - Failed to get inspect.signature\n");
+            PyErr_Clear();
+        } else {
             PyObject *sig = PyObject_CallFunctionObjArgs(signature_func, func, NULL);
-            if (sig) {
+            if (!sig) {
+                post("PSC: WARNING - Failed to get signature for function\n");
+                if (PyErr_Occurred()) {
+                    post("PSC: Error details:\n");
+                    PyErr_Print();
+                }
+                PyErr_Clear();
+            } else {
                 PyObject *params = PyObject_GetAttrString(sig, "parameters");
                 if (params) {
                     PyObject *items = PyMapping_Items(params);
@@ -940,14 +953,11 @@ static inline void psc_extract_signature(struct psc_cache_entry *entry) {
                     Py_DECREF(params);
                 }
                 Py_DECREF(sig);
-            } else {
-                // Clear any error from signature inspection
-                PyErr_Clear();
-            }
+            } // else already handled above
             Py_DECREF(signature_func);
-        }
+        } // else already handled above
         Py_DECREF(inspect_module);
-    }
+    } // else already handled above
 
     // Clear any errors from import
     if (PyErr_Occurred()) PyErr_Clear();
@@ -1139,17 +1149,62 @@ static inline psc_result_t psc_compile_function(psc_instance_t *instance, const 
     // Without this, recursive functions like fibonacci will fail with NameError
     PyDict_SetItemString(*globals_dict, function_name, *func_obj);
 
+    if (instance->config.debug_mode) {
+        post("PSC[%s]: Function '%s' compiled, enable_memoization=%d\n",
+             instance->state.instance_name, function_name, instance->config.enable_memoization);
+    }
+
     // Apply automatic memoization to prevent hanging on recursive functions
     // Only if enabled in configuration (experimental feature, disabled by default)
     if (instance->config.enable_memoization) {
+    if (instance->config.debug_mode) {
+        post("PSC[%s]: ENTERING MEMOIZATION CODE for '%s'\n",
+             instance->state.instance_name, function_name);
+    }
+    // CRITICAL: Clear any pre-existing Python errors before attempting memoization
+    // Max/MSP environment may have lingering error state that causes decorator application to fail
+    if (PyErr_Occurred()) {
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: WARNING - Clearing pre-existing Python error before memoization\n",
+                 instance->state.instance_name);
+            PyErr_Print();
+        }
+        PyErr_Clear();
+    }
+
     // Import functools and wrap function with lru_cache
     PyObject *functools = PyImport_ImportModule("functools");
-    if (functools) {
+    if (!functools) {
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Failed to import functools for memoization\n",
+                 instance->state.instance_name);
+        }
+        PyErr_Clear();
+    } else {
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Imported functools, attempting memoization for '%s'\n",
+                 instance->state.instance_name, function_name);
+        }
+
         PyObject *lru_cache = PyObject_GetAttrString(functools, "lru_cache");
-        if (lru_cache && PyCallable_Check(lru_cache)) {
+        if (!lru_cache || !PyCallable_Check(lru_cache)) {
+            if (instance->config.debug_mode) {
+                post("PSC[%s]: Failed to get lru_cache attribute\n",
+                     instance->state.instance_name);
+            }
+            if (lru_cache) Py_DECREF(lru_cache);
+            PyErr_Clear();
+        } else {
             // Call lru_cache(maxsize=128) to create decorator
             PyObject *kwargs = PyDict_New();
-            if (kwargs) {
+            if (!kwargs) {
+                if (instance->config.debug_mode) {
+                    post("PSC[%s]: Failed to create kwargs dict\n",
+                         instance->state.instance_name);
+                }
+                Py_DECREF(lru_cache);
+                PyErr_Clear();
+            } else {
                 PyObject *maxsize = PyLong_FromLong(128);
                 PyDict_SetItemString(kwargs, "maxsize", maxsize);
                 Py_DECREF(maxsize);
@@ -1159,31 +1214,54 @@ static inline psc_result_t psc_compile_function(psc_instance_t *instance, const 
                 Py_DECREF(empty_tuple);
                 Py_DECREF(kwargs);
 
-                if (decorator && PyCallable_Check(decorator)) {
+                if (!decorator || !PyCallable_Check(decorator)) {
+                    if (instance->config.debug_mode) {
+                        post("PSC[%s]: Failed to create decorator from lru_cache\n",
+                             instance->state.instance_name);
+                        if (PyErr_Occurred()) PyErr_Print();
+                    }
+                    if (decorator) Py_DECREF(decorator);
+                    PyErr_Clear();
+                } else {
+                    if (instance->config.debug_mode) {
+                        post("PSC[%s]: Created decorator, applying to function '%s'\n",
+                             instance->state.instance_name, function_name);
+                        post("PSC[%s]:   func_obj is function: %d, callable: %d\n",
+                             instance->state.instance_name,
+                             PyFunction_Check(*func_obj),
+                             PyCallable_Check(*func_obj));
+                    }
+
                     // Apply decorator: memoized_func = decorator(func)
                     PyObject *args = PyTuple_Pack(1, *func_obj);
                     PyObject *memoized_func = PyObject_CallObject(decorator, args);
                     Py_DECREF(args);
 
-                    if (memoized_func) {
+                    if (!memoized_func) {
+                        // Memoization failed - log but continue with unmemoized function
+                        if (instance->config.debug_mode) {
+                            post("PSC[%s]: ERROR - Decorator call failed for '%s'\n",
+                                 instance->state.instance_name, function_name);
+                            if (PyErr_Occurred()) {
+                                post("PSC[%s]: Python error during decoration:\n",
+                                     instance->state.instance_name);
+                                PyErr_Print();
+                            }
+                        }
+                        PyErr_Clear();
+                    } else {
+                        if (instance->config.debug_mode) {
+                            post("PSC[%s]: Successfully memoized '%s'\n",
+                                 instance->state.instance_name, function_name);
+                        }
+
                         // Replace original function with memoized version
                         Py_DECREF(*func_obj);
                         *func_obj = memoized_func;
                         // Update globals with memoized version
                         PyDict_SetItemString(*globals_dict, function_name, memoized_func);
-                    } else {
-                        // Memoization failed - log but continue with unmemoized function
-                        if (instance->config.debug_mode && PyErr_Occurred()) {
-                            error("PSC[%s]: Memoization failed for '%s'\n",
-                                   instance->state.instance_name, function_name);
-                            PyErr_Print();
-                        }
-                        PyErr_Clear();
                     }
                     Py_DECREF(decorator);
-                } else {
-                    if (decorator) Py_DECREF(decorator);
-                    PyErr_Clear();
                 }
             }
             Py_DECREF(lru_cache);
@@ -1252,9 +1330,9 @@ static inline psc_result_t psc_init(psc_instance_t *instance) {
     }
 
     // Set default configuration
-    instance->config.debug_mode = 0;
+    instance->config.debug_mode = 1; // TESTING: Enable debug output
     instance->config.strict_validation = 1; // Enable strict validation by default
-    instance->config.enable_memoization = 0; // Disabled by default (experimental feature)
+    instance->config.enable_memoization = 1; // TESTING: Enabled to debug memoization issues
 
     // Initialize system state
     instance->state.initialized = 1;
@@ -1339,7 +1417,11 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     if (!instance) return PSC_ERROR_NULL_INSTANCE;
     if (!instance->state.initialized) return PSC_ERROR_NOT_INITIALIZED;
     if (!source_code || strlen(source_code) == 0) return PSC_ERROR_INVALID_ARGS;
-    
+
+    // DEBUG: Log configuration at entry
+    post("PSC[%s]: psc_add_function ENTRY: debug_mode=%d, enable_memoization=%d\n",
+         instance->state.instance_name, instance->config.debug_mode, instance->config.enable_memoization);
+
     // === STEP 1: COMPREHENSIVE FUNCTION VALIDATION ===
     char function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
     char validation_error[PSC_MAX_ERROR_LENGTH];
@@ -1396,6 +1478,7 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
 
     // === STEP 2: COMPILATION AND CACHING ===
     PyObject *code_obj, *func_obj, *globals_dict;
+    PyObject *original_func_obj = NULL; // Save original function before memoization for signature extraction
 
     // Reuse compiled code from validation if available, otherwise compile now
     if (compiled_code) {
@@ -1445,18 +1528,68 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
         }
         Py_INCREF(func_obj);
 
+        // CRITICAL: Save original function for signature extraction
+        // Memoization will wrap this, but we need the original signature
+        original_func_obj = func_obj;
+        Py_INCREF(original_func_obj);
+
         // CRITICAL: Add function to its own globals for recursive calls
         PyDict_SetItemString(globals_dict, function_name, func_obj);
+
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Validation reuse path - enable_memoization=%d\n",
+                 instance->state.instance_name, instance->config.enable_memoization);
+        }
 
         // Apply automatic memoization to prevent hanging on recursive functions
         // Only if enabled in configuration (experimental feature, disabled by default)
         if (instance->config.enable_memoization) {
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Attempting memoization in validation reuse path for '%s'\n",
+                 instance->state.instance_name, function_name);
+        }
+
+        // CRITICAL: Clear any pre-existing Python errors before attempting memoization
+        if (PyErr_Occurred()) {
+            if (instance->config.debug_mode) {
+                post("PSC[%s]: WARNING - Clearing pre-existing error before memoization\n",
+                     instance->state.instance_name);
+                PyErr_Print();
+            }
+            PyErr_Clear();
+        }
+
         PyObject *functools = PyImport_ImportModule("functools");
-        if (functools) {
+        if (!functools) {
+            if (instance->config.debug_mode) {
+                post("PSC[%s]: Failed to import functools\n", instance->state.instance_name);
+            }
+            PyErr_Clear();
+        } else {
+            if (instance->config.debug_mode) {
+                post("PSC[%s]: Imported functools successfully\n", instance->state.instance_name);
+            }
+
             PyObject *lru_cache = PyObject_GetAttrString(functools, "lru_cache");
-            if (lru_cache && PyCallable_Check(lru_cache)) {
+            if (!lru_cache || !PyCallable_Check(lru_cache)) {
+                if (instance->config.debug_mode) {
+                    post("PSC[%s]: Failed to get lru_cache\n", instance->state.instance_name);
+                }
+                if (lru_cache) Py_DECREF(lru_cache);
+                PyErr_Clear();
+            } else {
+                if (instance->config.debug_mode) {
+                    post("PSC[%s]: Got lru_cache, creating decorator\n", instance->state.instance_name);
+                }
+
                 PyObject *kwargs = PyDict_New();
-                if (kwargs) {
+                if (!kwargs) {
+                    if (instance->config.debug_mode) {
+                        post("PSC[%s]: Failed to create kwargs\n", instance->state.instance_name);
+                    }
+                    Py_DECREF(lru_cache);
+                    PyErr_Clear();
+                } else {
                     PyObject *maxsize = PyLong_FromLong(128);
                     PyDict_SetItemString(kwargs, "maxsize", maxsize);
                     Py_DECREF(maxsize);
@@ -1466,34 +1599,60 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
                     Py_DECREF(empty_tuple);
                     Py_DECREF(kwargs);
 
-                    if (decorator && PyCallable_Check(decorator)) {
+                    if (!decorator || !PyCallable_Check(decorator)) {
+                        if (instance->config.debug_mode) {
+                            post("PSC[%s]: Failed to create decorator\n", instance->state.instance_name);
+                            if (PyErr_Occurred()) PyErr_Print();
+                        }
+                        if (decorator) Py_DECREF(decorator);
+                        PyErr_Clear();
+                    } else {
+                        if (instance->config.debug_mode) {
+                            post("PSC[%s]: Created decorator, applying to function\n", instance->state.instance_name);
+                            post("PSC[%s]:   func_obj is function: %d, callable: %d\n",
+                                 instance->state.instance_name,
+                                 PyFunction_Check(func_obj), PyCallable_Check(func_obj));
+                        }
+
                         PyObject *args = PyTuple_Pack(1, func_obj);
                         PyObject *memoized_func = PyObject_CallObject(decorator, args);
                         Py_DECREF(args);
 
-                        if (memoized_func) {
+                        if (!memoized_func) {
+                            if (instance->config.debug_mode) {
+                                post("PSC[%s]: ERROR - Decorator call failed for '%s'\n",
+                                     instance->state.instance_name, function_name);
+                                if (PyErr_Occurred()) {
+                                    post("PSC[%s]: Python error during decoration:\n",
+                                         instance->state.instance_name);
+                                    PyErr_Print();
+                                }
+                            }
+                            PyErr_Clear();
+                        } else {
+                            if (instance->config.debug_mode) {
+                                post("PSC[%s]: Successfully memoized '%s'\n",
+                                     instance->state.instance_name, function_name);
+                            }
+
                             Py_DECREF(func_obj);
                             func_obj = memoized_func;
                             PyDict_SetItemString(globals_dict, function_name, memoized_func);
-                        } else {
-                            if (instance->config.debug_mode && PyErr_Occurred()) {
-                                error("PSC[%s]: Memoization failed for '%s'\n",
-                                       instance->state.instance_name, function_name);
-                                PyErr_Print();
-                            }
-                            PyErr_Clear();
                         }
                         Py_DECREF(decorator);
-                    } else {
-                        if (decorator) Py_DECREF(decorator);
-                        PyErr_Clear();
                     }
                 }
                 Py_DECREF(lru_cache);
             }
             Py_DECREF(functools);
         }
-        if (PyErr_Occurred()) PyErr_Clear();
+        if (PyErr_Occurred()) {
+            if (instance->config.debug_mode) {
+                post("PSC[%s]: Clearing any remaining errors after memoization\n",
+                     instance->state.instance_name);
+            }
+            PyErr_Clear();
+        }
         } // End enable_memoization
 
         Py_DECREF(locals_dict);
@@ -1507,13 +1666,59 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     }
     
     // Create cache entry
+    // NOTE: If memoization was applied in validation reuse path, func_obj is the memoized wrapper
+    // but we need to extract signature from the original function
     struct psc_cache_entry *entry = psc_create_entry(function_name, source_code,
                                                     code_obj, func_obj, globals_dict);
     if (!entry) {
         Py_DECREF(code_obj);
         Py_DECREF(func_obj);
         Py_DECREF(globals_dict);
+        // Clean up original_func_obj if it exists (validation reuse path)
+        if (compiled_code && instance->config.enable_memoization) {
+            // original_func_obj was created in validation reuse path
+            // It will be cleaned up below
+        }
         return PSC_ERROR_MEMORY;
+    }
+
+    // If we saved the original function for signature extraction, fix the signature now
+    if (compiled_code && instance->config.enable_memoization) {
+        // CRITICAL: Clear any error state from memoization before extracting signature
+        // The SystemError left by lru_cache decoration will cause inspect module import to fail
+        if (PyErr_Occurred()) {
+            if (instance->config.debug_mode) {
+                PyObject *ptype, *pvalue, *ptraceback;
+                PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+                const char *error_type = ptype ? ((PyTypeObject*)ptype)->tp_name : "Unknown";
+                post("PSC[%s]: Clearing error before signature extraction: %s\n",
+                     instance->state.instance_name, error_type);
+                Py_XDECREF(ptype);
+                Py_XDECREF(pvalue);
+                Py_XDECREF(ptraceback);
+            } else {
+                PyErr_Clear();
+            }
+        }
+
+        // Re-extract signature from original function before memoization
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Re-extracting signature from original function (before memoization)\n",
+                 instance->state.instance_name);
+        }
+
+        // Temporarily swap function_object to extract correct signature
+        PyObject *temp = entry->function_object;
+        entry->function_object = original_func_obj;
+        psc_extract_signature(entry);
+        entry->function_object = temp; // Restore memoized wrapper
+
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Corrected signature: arg_count=%d\n",
+                 instance->state.instance_name, entry->signature.arg_count);
+        }
+
+        Py_DECREF(original_func_obj); // Clean up saved reference
     }
 
     // Insert into cache with write lock
@@ -1572,7 +1777,46 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     Py_DECREF(code_obj);
     Py_DECREF(func_obj);
     Py_DECREF(globals_dict);
-    
+
+    // CRITICAL: Ensure no error state leaks from cache operations
+    if (PyErr_Occurred()) {
+        if (instance->config.debug_mode) {
+            // Fetch error without printing to avoid side effects
+            PyObject *ptype, *pvalue, *ptraceback;
+            PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+
+            const char *error_type = ptype ? ((PyTypeObject*)ptype)->tp_name : "Unknown";
+            post("PSC[%s]: WARNING - Python error state detected at end of psc_add_function\n",
+                 instance->state.instance_name);
+            post("PSC[%s]:   Error type: %s\n", instance->state.instance_name, error_type);
+
+            if (pvalue) {
+                PyObject *str_exc = PyObject_Str(pvalue);
+                if (str_exc) {
+                    const char *err_msg = PyUnicode_AsUTF8(str_exc);
+                    if (err_msg) {
+                        post("PSC[%s]:   Error message: %s\n", instance->state.instance_name, err_msg);
+                    }
+                    Py_DECREF(str_exc);
+                }
+            }
+
+            post("PSC[%s]:   Clearing this error to prevent compilation failure\n",
+                 instance->state.instance_name);
+
+            Py_XDECREF(ptype);
+            Py_XDECREF(pvalue);
+            Py_XDECREF(ptraceback);
+        } else {
+            PyErr_Clear();
+        }
+    } else {
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Clean exit from psc_add_function - no error state\n",
+                 instance->state.instance_name);
+        }
+    }
+
     return PSC_SUCCESS;
 }
 
