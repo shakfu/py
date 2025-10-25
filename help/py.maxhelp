@@ -36,6 +36,19 @@
 						"showontab" : 2,
 						"boxes" : [ 							{
 								"box" : 								{
+									"id" : "obj-3",
+									"linecount" : 7,
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 458.0, 380.0, 189.0, 102.0 ],
+									"text" : "cache \"def fib(n):\n    from functools import lru_cache\n    @lru_cache(maxsize=None)\n    def _fib(n):\n        if n <= 1: return n\n        return _fib(n-1) + _fib(n-2)\n    return _fib(n)\""
+								}
+
+							}
+, 							{
+								"box" : 								{
 									"id" : "obj-5",
 									"linecount" : 5,
 									"maxclass" : "message",
@@ -269,8 +282,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ],
-									"text" : "1"
+									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ]
 								}
 
 							}
@@ -329,6 +341,13 @@
 								"patchline" : 								{
 									"destination" : [ "obj-7", 0 ],
 									"source" : [ "obj-28", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-3", 0 ]
 								}
 
 							}
@@ -778,8 +797,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ],
-									"text" : "1"
+									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ]
 								}
 
 							}
@@ -1171,8 +1189,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ],
-									"text" : "1"
+									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ]
 								}
 
 							}
@@ -1644,8 +1661,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ],
-									"text" : "1"
+									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ]
 								}
 
 							}
@@ -3272,14 +3288,16 @@
 , 							{
 								"box" : 								{
 									"id" : "obj-21",
+									"linecount" : 3,
 									"maxclass" : "message",
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 35.0, 353.0, 160.0, 22.0 ],
+									"patching_rect" : [ 35.0, 353.0, 160.0, 49.0 ],
 									"presentation" : 1,
-									"presentation_rect" : [ 76.0, 353.0, 52.0, 22.0 ],
-									"text" : "1"
+									"presentation_linecount" : 11,
+									"presentation_rect" : [ 76.0, 353.0, 52.0, 156.0 ],
+									"text" : "\"3.14.0 (main, Oct  7 2025, 09:34:52) [Clang 17.0.0 (clang-1700.0.13.3)]\""
 								}
 
 							}

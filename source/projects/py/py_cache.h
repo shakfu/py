@@ -175,6 +175,7 @@ typedef struct psc_instance {
     struct {
         int debug_mode;
         int strict_validation;
+        int enable_memoization;  // Enable automatic LRU caching for recursive functions
     } config;
     
     // === SYSTEM STATE ===
@@ -401,10 +402,12 @@ static inline void psc_get_stats_string(psc_instance_t *instance,
  * @param instance Cache instance
  * @param debug_mode Enable debug output (1) or disable (0)
  * @param strict_validation Enable strict function validation (1) or disable (0)
+ * @param enable_memoization Enable automatic LRU caching (1) or disable (0) - EXPERIMENTAL
  */
 static inline void psc_configure(psc_instance_t *instance,
                                 int debug_mode,
-                                int strict_validation);
+                                int strict_validation,
+                                int enable_memoization);
 
 /**
  * @section Convenience Macros
@@ -557,43 +560,40 @@ static inline psc_validate_result_t psc_check_is_python_function(
     }
 
     // === Step 1: Check for function definition patterns ===
+    // Only count TOP-LEVEL (non-indented) function definitions
+    // This allows nested helper functions inside the main function
     int def_count = 0;
     const char *def_positions[10]; // Track up to 10 def positions
     const char *p = source_code;
-    
+
     while ((p = strstr(p, "def ")) != NULL) {
-        // Check if this is actually a function def (not inside a string/comment)
+        // Find start of line containing this "def"
         const char *line_start = p;
         while (line_start > source_code && *(line_start - 1) != '\n') {
             line_start--;
         }
-        
-        // Check if "def " is at start of line (possibly with indentation)
-        int is_function_def = 1;
-        for (const char *check = line_start; check < p; check++) {
-            if (*check != ' ' && *check != '\t') {
-                is_function_def = 0;
-                break;
-            }
-        }
-        
-        if (is_function_def && def_count < 10) {
+
+        // Check if "def" is at the very start of the line (no indentation)
+        // If line_start == p, then "def" is at column 0 (top-level)
+        int is_top_level = (line_start == p);
+
+        if (is_top_level && def_count < 10) {
             def_positions[def_count++] = p;
         }
-        
+
         p += 4; // Move past "def "
     }
-    
+
     if (def_count == 0) {
-        snprintf_zero(error_msg, error_msg_size, "No function definition found (missing 'def')");
+        snprintf_zero(error_msg, error_msg_size, "No top-level function definition found (missing 'def' at column 0)");
         return PSC_VALIDATE_NO_FUNCTION;
     }
-    
+
     if (def_count > 1) {
-        snprintf_zero(error_msg, error_msg_size, "Multiple function definitions found (%d). Only single functions supported.", def_count);
+        snprintf_zero(error_msg, error_msg_size, "Multiple top-level function definitions found (%d). Only single functions supported.", def_count);
         return PSC_VALIDATE_MULTIPLE_FUNCTIONS;
     }
-    
+
     // success: def_count == 1
     return PSC_VALIDATE_SUCCESS;
 }
@@ -630,40 +630,37 @@ static inline psc_validate_result_t psc_validate_function_source(
     error_msg[0] = '\0';
     
     // === Step 1: Check for function definition patterns ===
+    // Only count TOP-LEVEL (non-indented) function definitions
+    // This allows nested helper functions inside the main function
     int def_count = 0;
     const char *def_positions[10]; // Track up to 10 def positions
     const char *p = source_code;
-    
+
     while ((p = strstr(p, "def ")) != NULL) {
-        // Check if this is actually a function def (not inside a string/comment)
+        // Find start of line containing this "def"
         const char *line_start = p;
         while (line_start > source_code && *(line_start - 1) != '\n') {
             line_start--;
         }
-        
-        // Check if "def " is at start of line (possibly with indentation)
-        int is_function_def = 1;
-        for (const char *check = line_start; check < p; check++) {
-            if (*check != ' ' && *check != '\t') {
-                is_function_def = 0;
-                break;
-            }
-        }
-        
-        if (is_function_def && def_count < 10) {
+
+        // Check if "def" is at the very start of the line (no indentation)
+        // If line_start == p, then "def" is at column 0 (top-level)
+        int is_top_level = (line_start == p);
+
+        if (is_top_level && def_count < 10) {
             def_positions[def_count++] = p;
         }
-        
+
         p += 4; // Move past "def "
     }
-    
+
     if (def_count == 0) {
-        snprintf_zero(error_msg, error_msg_size, "No function definition found (missing 'def')");
+        snprintf_zero(error_msg, error_msg_size, "No top-level function definition found (missing 'def' at column 0)");
         return PSC_VALIDATE_NO_FUNCTION;
     }
-    
+
     if (def_count > 1) {
-        snprintf_zero(error_msg, error_msg_size, "Multiple function definitions found (%d). Only single functions supported.", def_count);
+        snprintf_zero(error_msg, error_msg_size, "Multiple top-level function definitions found (%d). Only single functions supported.", def_count);
         return PSC_VALIDATE_MULTIPLE_FUNCTIONS;
     }
     
@@ -1142,6 +1139,63 @@ static inline psc_result_t psc_compile_function(psc_instance_t *instance, const 
     // Without this, recursive functions like fibonacci will fail with NameError
     PyDict_SetItemString(*globals_dict, function_name, *func_obj);
 
+    // Apply automatic memoization to prevent hanging on recursive functions
+    // Only if enabled in configuration (experimental feature, disabled by default)
+    if (instance->config.enable_memoization) {
+    // Import functools and wrap function with lru_cache
+    PyObject *functools = PyImport_ImportModule("functools");
+    if (functools) {
+        PyObject *lru_cache = PyObject_GetAttrString(functools, "lru_cache");
+        if (lru_cache && PyCallable_Check(lru_cache)) {
+            // Call lru_cache(maxsize=128) to create decorator
+            PyObject *kwargs = PyDict_New();
+            if (kwargs) {
+                PyObject *maxsize = PyLong_FromLong(128);
+                PyDict_SetItemString(kwargs, "maxsize", maxsize);
+                Py_DECREF(maxsize);
+
+                PyObject *empty_tuple = PyTuple_New(0);
+                PyObject *decorator = PyObject_Call(lru_cache, empty_tuple, kwargs);
+                Py_DECREF(empty_tuple);
+                Py_DECREF(kwargs);
+
+                if (decorator && PyCallable_Check(decorator)) {
+                    // Apply decorator: memoized_func = decorator(func)
+                    PyObject *args = PyTuple_Pack(1, *func_obj);
+                    PyObject *memoized_func = PyObject_CallObject(decorator, args);
+                    Py_DECREF(args);
+
+                    if (memoized_func) {
+                        // Replace original function with memoized version
+                        Py_DECREF(*func_obj);
+                        *func_obj = memoized_func;
+                        // Update globals with memoized version
+                        PyDict_SetItemString(*globals_dict, function_name, memoized_func);
+                    } else {
+                        // Memoization failed - log but continue with unmemoized function
+                        if (instance->config.debug_mode && PyErr_Occurred()) {
+                            error("PSC[%s]: Memoization failed for '%s'\n",
+                                   instance->state.instance_name, function_name);
+                            PyErr_Print();
+                        }
+                        PyErr_Clear();
+                    }
+                    Py_DECREF(decorator);
+                } else {
+                    if (decorator) Py_DECREF(decorator);
+                    PyErr_Clear();
+                }
+            }
+            Py_DECREF(lru_cache);
+        }
+        Py_DECREF(functools);
+    }
+    // Clear any remaining errors from memoization (non-critical feature)
+    if (PyErr_Occurred()) {
+        PyErr_Clear();
+    }
+    } // End enable_memoization
+
     Py_DECREF(locals_dict);
 
     // Update compilation time statistics
@@ -1200,6 +1254,7 @@ static inline psc_result_t psc_init(psc_instance_t *instance) {
     // Set default configuration
     instance->config.debug_mode = 0;
     instance->config.strict_validation = 1; // Enable strict validation by default
+    instance->config.enable_memoization = 0; // Disabled by default (experimental feature)
 
     // Initialize system state
     instance->state.initialized = 1;
@@ -1242,6 +1297,7 @@ static inline psc_result_t psc_reset(psc_instance_t *instance) {
         // Reset statistics but preserve configuration
         int old_debug = instance->config.debug_mode;
         int old_strict = instance->config.strict_validation;
+        int old_memoization = instance->config.enable_memoization;
 
         memset(&instance->stats, 0, sizeof(instance->stats));
 
@@ -1256,6 +1312,7 @@ static inline psc_result_t psc_reset(psc_instance_t *instance) {
         // Restore configuration
         instance->config.debug_mode = old_debug;
         instance->config.strict_validation = old_strict;
+        instance->config.enable_memoization = old_memoization;
 
         // Reset system state
         instance->state.system_start_time = time(NULL);
@@ -1390,6 +1447,54 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
 
         // CRITICAL: Add function to its own globals for recursive calls
         PyDict_SetItemString(globals_dict, function_name, func_obj);
+
+        // Apply automatic memoization to prevent hanging on recursive functions
+        // Only if enabled in configuration (experimental feature, disabled by default)
+        if (instance->config.enable_memoization) {
+        PyObject *functools = PyImport_ImportModule("functools");
+        if (functools) {
+            PyObject *lru_cache = PyObject_GetAttrString(functools, "lru_cache");
+            if (lru_cache && PyCallable_Check(lru_cache)) {
+                PyObject *kwargs = PyDict_New();
+                if (kwargs) {
+                    PyObject *maxsize = PyLong_FromLong(128);
+                    PyDict_SetItemString(kwargs, "maxsize", maxsize);
+                    Py_DECREF(maxsize);
+
+                    PyObject *empty_tuple = PyTuple_New(0);
+                    PyObject *decorator = PyObject_Call(lru_cache, empty_tuple, kwargs);
+                    Py_DECREF(empty_tuple);
+                    Py_DECREF(kwargs);
+
+                    if (decorator && PyCallable_Check(decorator)) {
+                        PyObject *args = PyTuple_Pack(1, func_obj);
+                        PyObject *memoized_func = PyObject_CallObject(decorator, args);
+                        Py_DECREF(args);
+
+                        if (memoized_func) {
+                            Py_DECREF(func_obj);
+                            func_obj = memoized_func;
+                            PyDict_SetItemString(globals_dict, function_name, memoized_func);
+                        } else {
+                            if (instance->config.debug_mode && PyErr_Occurred()) {
+                                error("PSC[%s]: Memoization failed for '%s'\n",
+                                       instance->state.instance_name, function_name);
+                                PyErr_Print();
+                            }
+                            PyErr_Clear();
+                        }
+                        Py_DECREF(decorator);
+                    } else {
+                        if (decorator) Py_DECREF(decorator);
+                        PyErr_Clear();
+                    }
+                }
+                Py_DECREF(lru_cache);
+            }
+            Py_DECREF(functools);
+        }
+        if (PyErr_Occurred()) PyErr_Clear();
+        } // End enable_memoization
 
         Py_DECREF(locals_dict);
     } else {
@@ -1715,13 +1820,15 @@ static inline void psc_get_stats_string(psc_instance_t *instance, char *stats_bu
  * @param instance Cache instance
  * @param debug_mode Enable debug output (1) or disable (0)
  * @param strict_validation Enable strict function validation (1) or disable (0)
+ * @param enable_memoization Enable automatic LRU caching for recursive functions (1) or disable (0)
  */
-static inline void psc_configure(psc_instance_t *instance, int debug_mode, int strict_validation) {
+static inline void psc_configure(psc_instance_t *instance, int debug_mode, int strict_validation, int enable_memoization) {
     if (!instance || !instance->state.initialized) return;
 
     psc_rwlock_wrlock(&instance->state.lock);
     instance->config.debug_mode = debug_mode;
     instance->config.strict_validation = strict_validation;
+    instance->config.enable_memoization = enable_memoization;
     psc_rwlock_unlock_wr(&instance->state.lock);
 }
 

@@ -2117,11 +2117,27 @@ t_max_err py_cache(t_py* x, t_symbol* s, long argc, t_atom* argv)
     }
 
     // try to add function to cache if it looks like a python function
-    if (psc_check_is_python_function(
-        x->python.cache, atom_getsym(argv)->s_name) == PSC_VALIDATE_SUCCESS) {
-        if (psc_add_function(
-            x->python.cache, atom_getsym(argv)->s_name, "<pyfunc>") == PSC_SUCCESS) {
+    psc_validate_result_t validate_result = psc_check_is_python_function(
+        x->python.cache, atom_getsym(argv)->s_name);
+
+    if (validate_result == PSC_VALIDATE_SUCCESS) {
+        psc_result_t cache_result = psc_add_function(
+            x->python.cache, atom_getsym(argv)->s_name, "<pyfunc>");
+
+        if (cache_result == PSC_SUCCESS) {
             py_debug(x, "cached function");
+        } else {
+            py_error(x, "Failed to cache function, error code: %d", cache_result);
+            if (x->python.cache->state.last_validation_error[0] != '\0') {
+                py_error(x, "Validation error: %s",
+                         x->python.cache->state.last_validation_error);
+            }
+        }
+    } else {
+        py_error(x, "Function validation failed, code: %d", validate_result);
+        if (x->python.cache->state.last_validation_error[0] != '\0') {
+            py_error(x, "Validation error: %s",
+                     x->python.cache->state.last_validation_error);
         }
     }
 
