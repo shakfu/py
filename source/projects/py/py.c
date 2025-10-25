@@ -10,7 +10,6 @@
 #include "py_config.h"
 
 /* function cache */
-#define PSC_OVERRIDE_CACHE_ALL_FUNCTIONS 1
 #include "py_cache.h"
 
 /* max/msp api */
@@ -458,14 +457,6 @@ void py_init(t_py* x)
     x->python.cache = psc_create_instance(NULL);
     x->python.cache->config.debug_mode = 0;
     psc_init(x->python.cache); // init cache
-
-    // Enable override to cache all functions (PSC_OVERRIDE_CACHE_ALL_FUNCTIONS is defined)
-    #ifdef PSC_OVERRIDE_CACHE_ALL_FUNCTIONS
-    if (x->python.cache) {
-        x->python.cache->config.override_cache_all = PSC_OVERRIDE_CACHE_ALL_FUNCTIONS;
-        post("py: Enabled override_cache_all = %d\n", PSC_OVERRIDE_CACHE_ALL_FUNCTIONS);
-    }
-    #endif
 
     // register the object
     object_register(CLASS_BOX, x->obj.name, x);

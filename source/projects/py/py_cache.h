@@ -1,49 +1,46 @@
 /**
  * @file py_cache.h
- * @brief Python function cache with smart caching and validation
- * @version 5.0 FINAL
- * @author Smart Function Cache System
- * 
- * A complete, production-ready, thread-safe function caching system that uses
- * instance-based design with comprehensive function validation and smart caching decisions.
- * 
+ * @brief Python function cache with explicit caching and validation
+ * @version 6.0
+ * @author Function Cache System
+ *
+ * A complete, production-ready, thread-safe function caching system with
+ * instance-based design and comprehensive function validation.
+ *
  * Features:
  * - Instance-based design - no global state, multiple independent caches
+ * - Explicit caching model - user decides what to cache (via cache/cachefile handlers)
  * - Comprehensive function validation - ensures source contains valid Python function
- * - Automatic smart caching decisions based on source code complexity analysis
  * - Thread-safe with cross-platform locking (Windows/Unix/fallback)
  * - Unified data structure for all cache state and statistics
  * - Memory leak prevention with proper reference counting
  * - Performance statistics and monitoring with per-instance tracking
- * - Configurable complexity thresholds and debug modes
+ * - Configurable debug modes and strict validation
  * - Improved lifecycle management with psc_reset() and auto-cleanup
  * - Comprehensive error handling with detailed validation messages
  * - Function signature introspection - parameter counts, names, types, *args|**kwargs detection
- * 
+ *
  * Usage:
  *   #include "py_cache.h"
- * 
+ *
  *   // Create and initialize instance
  *   psc_instance_t* cache = psc_create_instance("my_cache");
  *   psc_init(cache);
- *   
- *   // (Optional) quick check of python function in source code
- *   psc_check_is_python_function("def square(x): return x*x", "math.py");
- * 
- *   // Add functions (automatically validates and decides whether to cache)
+ *
+ *   // Validate and cache a function
  *   psc_add_function(cache, "def square(x): return x*x", "math.py");
- * 
- *   // Call functions with different parameters
+ *
+ *   // Call cached functions
  *   PyObject* result = psc_call_function(cache, "square", args, NULL);
  *
- *   // (Optional) Inspect function signature
+ *   // Inspect function signature
  *   int arg_count, has_varargs;
  *   psc_get_function_signature(cache, "square", &arg_count, NULL, &has_varargs, NULL);
  *   const char* const* param_names = psc_get_function_param_names(cache, "square");
  *
  *   // Reset for reuse (optional)
  *   psc_reset(cache);
- * 
+ *
  *   // Final cleanup and destroy
  *   psc_destroy_instance(cache);
  */
@@ -69,8 +66,6 @@ extern "C" {
 // ============================================================================
 
 // Configuration constants - override before including this header
-// Set PSC_OVERRIDE_CACHE_ALL_FUNCTIONS to 1 to force caching of all functions
-// regardless of complexity analysis (useful for testing/debugging)
 #ifndef PSC_CACHE_SIZE
 #define PSC_CACHE_SIZE 1024
 #endif
@@ -85,26 +80,6 @@ extern "C" {
 
 #ifndef PSC_MAX_SOURCE_LENGTH
 #define PSC_MAX_SOURCE_LENGTH 16384
-#endif
-
-#ifndef PSC_CACHE_THRESHOLD_SCORE
-#define PSC_CACHE_THRESHOLD_SCORE 25
-#endif
-
-#ifndef PSC_MIN_LINES_FOR_CACHE
-#define PSC_MIN_LINES_FOR_CACHE 3
-#endif
-
-#ifndef PSC_MAX_SIMPLE_LENGTH
-#define PSC_MAX_SIMPLE_LENGTH 80
-#endif
-
-#ifndef PSC_MAX_EXPLANATION_LENGTH
-#define PSC_MAX_EXPLANATION_LENGTH 2048
-#endif
-
-#ifndef PSC_MAX_DECISION_REASON_LENGTH
-#define PSC_MAX_DECISION_REASON_LENGTH 256
 #endif
 
 // Thread support detection and abstraction
@@ -181,26 +156,6 @@ typedef struct psc_instance {
             char **param_names;         // Array of parameter names (NULL-terminated)
             PyObject *annotations_dict; // Type annotations dictionary (borrowed ref)
         } signature;
-        
-        // Embedded complexity analysis for this entry
-        struct {
-            int line_count;
-            int char_count;
-            int import_statements;
-            int decorator_count;
-            int loop_constructs;
-            int comprehensions;
-            int lambda_functions;
-            int complex_operations;
-            int nested_functions;
-            int exception_handling;
-            int string_operations;
-            int mathematical_operations;
-            int builtin_function_calls;
-            int complexity_score;
-            int was_cached;
-            char decision_reason[PSC_MAX_DECISION_REASON_LENGTH];
-        } analysis;
     } *hash_table[PSC_CACHE_SIZE];
     
     // === PERFORMANCE STATISTICS ===
@@ -208,11 +163,8 @@ typedef struct psc_instance {
         size_t total_entries;
         size_t cache_hits;
         size_t cache_misses;
-        size_t functions_analyzed;
         size_t functions_cached;
-        size_t functions_skipped;
         size_t validation_failures;
-        double total_analysis_time;
         double total_compilation_time;
         double total_validation_time;
         double hit_ratio;
@@ -221,13 +173,8 @@ typedef struct psc_instance {
     
     // === CONFIGURATION ===
     struct {
-        int cache_threshold_score;
-        int min_lines_for_cache;
-        int max_simple_length;
-        int adaptive_threshold;
         int debug_mode;
         int strict_validation;
-        int override_cache_all;
     } config;
     
     // === SYSTEM STATE ===
@@ -240,15 +187,7 @@ typedef struct psc_instance {
         char instance_name[64];
         char last_cached_function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
     } state;
-    
-    // === COMPLEXITY ANALYSIS WORKSPACE ===
-    struct {
-        char explanation_buffer[PSC_MAX_EXPLANATION_LENGTH];
-        char temp_function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
-        char validation_error_buffer[PSC_MAX_ERROR_LENGTH];
-        int pattern_counts[32]; // Reusable array for pattern counting
-    } workspace;
-    
+
 } psc_instance_t;
 
 // ============================================================================
@@ -263,12 +202,12 @@ typedef enum {
     PSC_ERROR_NOT_FOUND = -4,
     PSC_ERROR_INVALID_ARGS = -5,
     PSC_ERROR_NOT_INITIALIZED = -6,
-    PSC_ERROR_FUNCTION_TOO_SIMPLE = -7,
-    PSC_ERROR_NULL_INSTANCE = -8,
-    PSC_ERROR_VALIDATION_FAILED = -9,
-    PSC_ERROR_NO_FUNCTION_DEF = -10,
-    PSC_ERROR_MULTIPLE_FUNCTIONS = -11,
-    PSC_ERROR_INVALID_FUNCTION_NAME = -12
+    PSC_ERROR_NULL_INSTANCE = -7,
+    PSC_ERROR_VALIDATION_FAILED = -8,
+    PSC_ERROR_NO_FUNCTION_DEF = -9,
+    PSC_ERROR_MULTIPLE_FUNCTIONS = -10,
+    PSC_ERROR_INVALID_FUNCTION_NAME = -11,
+    PSC_ERROR_COMPILATION = -12
 } psc_result_t;
 
 // Validation-specific error codes
@@ -453,18 +392,6 @@ static inline void psc_get_stats_string(psc_instance_t *instance,
                                        size_t buffer_size);
 
 /**
- * @brief Explain why a function would or wouldn't be cached
- * @param instance Cache instance
- * @param source_code Python source code to analyze
- * @param explanation_buffer Buffer to store explanation
- * @param buffer_size Size of explanation buffer
- */
-static inline void psc_explain_decision(psc_instance_t *instance,
-                                       const char *source_code,
-                                       char *explanation_buffer,
-                                       size_t buffer_size);
-
-/**
  * @section Configuration
  * Functions for configuring cache behavior
  */
@@ -472,24 +399,12 @@ static inline void psc_explain_decision(psc_instance_t *instance,
 /**
  * @brief Configure system parameters
  * @param instance Cache instance
- * @param threshold Complexity threshold for caching decisions
- * @param debug_mode Enable debug output (1) or disable (0)
- */
-static inline void psc_configure(psc_instance_t *instance,
-                                int threshold,
-                                int debug_mode);
-
-/**
- * @brief Configure advanced system parameters
- * @param instance Cache instance
- * @param threshold Complexity threshold for caching decisions
  * @param debug_mode Enable debug output (1) or disable (0)
  * @param strict_validation Enable strict function validation (1) or disable (0)
  */
-static inline void psc_configure_advanced(psc_instance_t *instance,
-                                         int threshold,
-                                         int debug_mode,
-                                         int strict_validation);
+static inline void psc_configure(psc_instance_t *instance,
+                                int debug_mode,
+                                int strict_validation);
 
 /**
  * @section Convenience Macros
@@ -619,80 +534,6 @@ static inline size_t psc_hash_string(const char *str) {
     return hash % PSC_CACHE_SIZE;
 }
 
-/**
- * Check if position in source is inside a string literal or comment
- */
-static inline int psc_is_in_string_or_comment(const char *source, const char *pos) {
-    const char *p = source;
-    int in_string = 0;
-    char string_char = 0;
-    int in_comment = 0;
-
-    while (p < pos) {
-        if (in_comment) {
-            if (*p == '\n') in_comment = 0;
-        } else if (in_string) {
-            if (*p == '\\' && *(p + 1)) {
-                p++; // Skip escaped character
-            } else if (*p == string_char) {
-                in_string = 0;
-                string_char = 0;
-            }
-        } else {
-            if (*p == '#') {
-                in_comment = 1;
-            } else if (*p == '"' || *p == '\'') {
-                // Check for triple quotes
-                if (p + 2 < pos && *(p+1) == *p && *(p+2) == *p) {
-                    string_char = *p;
-                    in_string = 2; // Triple quote mode
-                    p += 2;
-                } else {
-                    string_char = *p;
-                    in_string = 1;
-                }
-            }
-        }
-        p++;
-    }
-
-    return in_string || in_comment;
-}
-
-/**
- * Count occurrences of a pattern in source code (excluding strings and comments)
- */
-static inline int psc_count_pattern(const char *source, const char *pattern) {
-    int count = 0;
-    const char *p = source;
-    size_t pattern_len = strlen(pattern);
-
-    while ((p = strstr(p, pattern)) != NULL) {
-        if (!psc_is_in_string_or_comment(source, p)) {
-            count++;
-        }
-        p += pattern_len;
-    }
-
-    return count;
-}
-
-/**
- * Count lines in source code
- */
-static inline int psc_count_lines(const char *source) {
-    int lines = 1;
-    const char *p = source;
-    
-    while (*p) {
-        if (*p == '\n') {
-            lines++;
-        }
-        p++;
-    }
-    
-    return lines;
-}
 
 // ============================================================================
 // FUNCTION VALIDATION
@@ -990,210 +831,6 @@ static inline psc_validate_result_t psc_validate_function_source(
     
     snprintf_zero(error_msg, error_msg_size, "Valid function '%s'", function_name);
     return PSC_VALIDATE_SUCCESS;
-}
-
-// ============================================================================
-// COMPLEXITY ANALYSIS ENGINE
-// ============================================================================
-
-/**
- * Perform comprehensive complexity analysis of source code
- */
-static inline void psc_analyze_complexity(psc_instance_t *instance, const char *source_code, 
-                                         struct psc_cache_entry *entry) {
-    // Reset analysis
-    memset(&entry->analysis, 0, sizeof(entry->analysis));
-    
-    // Basic metrics
-    entry->analysis.line_count = psc_count_lines(source_code);
-    entry->analysis.char_count = (int)strlen(source_code);
-    
-    // Import statements (very expensive compilation cost)
-    entry->analysis.import_statements = psc_count_pattern(source_code, "import ") +
-                                       psc_count_pattern(source_code, "from ");
-    
-    // Decorators (moderate compilation cost)
-    entry->analysis.decorator_count = psc_count_pattern(source_code, "@");
-    
-    // Control flow constructs
-    entry->analysis.loop_constructs = psc_count_pattern(source_code, " for ") +
-                                     psc_count_pattern(source_code, " while ") +
-                                     psc_count_pattern(source_code, "\nfor ") +
-                                     psc_count_pattern(source_code, "\nwhile ");
-    
-    // Comprehensions (moderate cost)
-    int total_for = psc_count_pattern(source_code, " for ");
-    entry->analysis.comprehensions = total_for - entry->analysis.loop_constructs;
-    if (entry->analysis.comprehensions < 0) entry->analysis.comprehensions = 0;
-    
-    // Lambda functions
-    entry->analysis.lambda_functions = psc_count_pattern(source_code, "lambda ");
-    
-    // Complex language features
-    entry->analysis.complex_operations = 
-        (strstr(source_code, "yield") != NULL) +
-        (strstr(source_code, "async") != NULL) +
-        (strstr(source_code, "await") != NULL) +
-        (strstr(source_code, "with ") != NULL) +
-        (strstr(source_code, "class ") != NULL);
-    
-    // Nested functions
-    entry->analysis.nested_functions = psc_count_pattern(source_code, "\n    def ") +
-                                      psc_count_pattern(source_code, "\n        def ");
-    
-    // Exception handling
-    entry->analysis.exception_handling = psc_count_pattern(source_code, "try:") +
-                                        psc_count_pattern(source_code, "except") +
-                                        psc_count_pattern(source_code, "finally") +
-                                        psc_count_pattern(source_code, "raise ");
-    
-    // String operations
-    entry->analysis.string_operations = psc_count_pattern(source_code, ".format(") +
-                                       psc_count_pattern(source_code, "f\"") +
-                                       psc_count_pattern(source_code, "f'") +
-                                       psc_count_pattern(source_code, ".join(") +
-                                       psc_count_pattern(source_code, ".split(");
-    
-    // Mathematical operations
-    entry->analysis.mathematical_operations = 
-        psc_count_pattern(source_code, "math.") +
-        psc_count_pattern(source_code, "numpy.") +
-        psc_count_pattern(source_code, "scipy.") +
-        psc_count_pattern(source_code, "**") +
-        psc_count_pattern(source_code, "sqrt") +
-        psc_count_pattern(source_code, "sin") +
-        psc_count_pattern(source_code, "cos") +
-        psc_count_pattern(source_code, "log");
-    
-    // Builtin function calls
-    entry->analysis.builtin_function_calls = 
-        psc_count_pattern(source_code, "len(") +
-        psc_count_pattern(source_code, "range(") +
-        psc_count_pattern(source_code, "sum(") +
-        psc_count_pattern(source_code, "max(") +
-        psc_count_pattern(source_code, "min(") +
-        psc_count_pattern(source_code, "sorted(") +
-        psc_count_pattern(source_code, "enumerate(");
-    
-    // Calculate complexity score
-    int score = 0;
-    
-    // Line count contribution
-    if (entry->analysis.line_count > 5) {
-        score += (entry->analysis.line_count - 5) * 2;
-    }
-    
-    // Weighted feature contributions
-    score += entry->analysis.import_statements * 50;        // Very expensive
-    score += entry->analysis.decorator_count * 20;          // Expensive
-    score += entry->analysis.complex_operations * 25;       // Very expensive
-    score += entry->analysis.nested_functions * 15;         // Expensive
-    score += entry->analysis.exception_handling * 12;       // Expensive
-    score += entry->analysis.lambda_functions * 10;         // Moderate
-    score += entry->analysis.loop_constructs * 8;           // Moderate
-    score += entry->analysis.comprehensions * 6;            // Moderate
-    score += entry->analysis.string_operations * 4;         // Light
-    score += entry->analysis.mathematical_operations * 3;   // Light
-    score += entry->analysis.builtin_function_calls * 2;    // Very light
-    
-    entry->analysis.complexity_score = score;
-}
-
-/**
- * Generate detailed explanation of caching decision
- */
-static inline void psc_generate_explanation(struct psc_cache_entry *entry) {
-    snprintf_zero(entry->analysis.decision_reason, sizeof(entry->analysis.decision_reason),
-        "Score:%d Lines:%d Imports:%d Decorators:%d Complex:%d Loops:%d",
-        entry->analysis.complexity_score,
-        entry->analysis.line_count,
-        entry->analysis.import_statements,
-        entry->analysis.decorator_count,
-        entry->analysis.complex_operations,
-        entry->analysis.loop_constructs
-    );
-}
-
-/**
- * Smart caching decision engine
- */
-static inline int psc_should_cache_function(psc_instance_t *instance, const char *source_code,
-                                           struct psc_cache_entry *entry) {
-    if (!source_code || strlen(source_code) == 0) {
-        strncpy_zero(entry->analysis.decision_reason, "Empty source code",
-            PSC_MAX_DECISION_REASON_LENGTH);
-        return 0;
-    }
-
-    // Perform complexity analysis
-    psc_analyze_complexity(instance, source_code, entry);
-
-    // Check if override is enabled to cache all functions
-    if (instance->config.override_cache_all) {
-        strncpy_zero(entry->analysis.decision_reason, "Override: cache all functions",
-            PSC_MAX_DECISION_REASON_LENGTH);
-        return 1;
-    }
-    
-    // Quick filters for obviously simple functions
-    size_t length = strlen(source_code);
-
-    // Very short functions without imports or decorators
-    if ((int)length < instance->config.max_simple_length &&
-        entry->analysis.import_statements == 0 &&
-        entry->analysis.decorator_count == 0) {
-        strncpy_zero(entry->analysis.decision_reason, "Too short and simple",
-            PSC_MAX_DECISION_REASON_LENGTH);
-        return 0;
-    }
-
-    // Single-line functions without complexity
-    if (entry->analysis.line_count < instance->config.min_lines_for_cache &&
-        entry->analysis.import_statements == 0 &&
-        entry->analysis.lambda_functions == 0 &&
-        entry->analysis.complex_operations == 0) {
-        strncpy_zero(entry->analysis.decision_reason, "Too few lines, no complexity",
-            PSC_MAX_DECISION_REASON_LENGTH);
-        return 0;
-    }
-
-    // Always cache functions with high-cost features
-    if (entry->analysis.import_statements > 0) {
-        strncpy_zero(entry->analysis.decision_reason, "Has import statements",
-            PSC_MAX_DECISION_REASON_LENGTH);
-        return 1;
-    }
-
-    if (entry->analysis.decorator_count > 0) {
-        strncpy_zero(entry->analysis.decision_reason, "Has decorators",
-            PSC_MAX_DECISION_REASON_LENGTH);
-        return 1;
-    }
-
-    if (entry->analysis.complex_operations > 0) {
-        strncpy_zero(entry->analysis.decision_reason, "Has complex operations",
-            PSC_MAX_DECISION_REASON_LENGTH);
-        return 1;
-    }
-
-    if (entry->analysis.nested_functions > 0) {
-        strncpy_zero(entry->analysis.decision_reason, "Has nested functions",
-            PSC_MAX_DECISION_REASON_LENGTH);
-        return 1;
-    }
-    
-    // Use threshold for borderline cases
-    int threshold = instance->config.adaptive_threshold ? 
-                   instance->config.cache_threshold_score : 
-                   PSC_CACHE_THRESHOLD_SCORE;
-    
-    if (entry->analysis.complexity_score >= threshold) {
-        psc_generate_explanation(entry);
-        return 1;
-    } else {
-        psc_generate_explanation(entry);
-        return 0;
-    }
 }
 
 // ============================================================================
@@ -1554,16 +1191,11 @@ static inline psc_result_t psc_init(psc_instance_t *instance) {
     if (psc_rwlock_init(&instance->state.lock) != 0) {
         return PSC_ERROR_INIT;
     }
-    
+
     // Set default configuration
-    instance->config.cache_threshold_score = PSC_CACHE_THRESHOLD_SCORE;
-    instance->config.min_lines_for_cache = PSC_MIN_LINES_FOR_CACHE;
-    instance->config.max_simple_length = PSC_MAX_SIMPLE_LENGTH;
-    instance->config.adaptive_threshold = 0;
     instance->config.debug_mode = 0;
     instance->config.strict_validation = 1; // Enable strict validation by default
-    instance->config.override_cache_all = 0; // Disabled by default
-    
+
     // Initialize system state
     instance->state.initialized = 1;
     instance->state.system_start_time = time(NULL);
@@ -1600,35 +1232,26 @@ static inline psc_result_t psc_reset(psc_instance_t *instance) {
             }
             instance->hash_table[i] = NULL;
         }
-        
+
+
         // Reset statistics but preserve configuration
-        int old_threshold = instance->config.cache_threshold_score;
-        int old_min_lines = instance->config.min_lines_for_cache;
-        int old_max_simple = instance->config.max_simple_length;
-        int old_adaptive = instance->config.adaptive_threshold;
         int old_debug = instance->config.debug_mode;
         int old_strict = instance->config.strict_validation;
-        int old_override = instance->config.override_cache_all;
-        
+
         memset(&instance->stats, 0, sizeof(instance->stats));
-        
+
         psc_rwlock_unlock_wr(&instance->state.lock);
         psc_rwlock_destroy(&instance->state.lock);
-        
+
         // Step 2: Reinitialize fresh state
         if (psc_rwlock_init(&instance->state.lock) != 0) {
             return PSC_ERROR_INIT;
         }
-        
+
         // Restore configuration
-        instance->config.cache_threshold_score = old_threshold;
-        instance->config.min_lines_for_cache = old_min_lines;
-        instance->config.max_simple_length = old_max_simple;
-        instance->config.adaptive_threshold = old_adaptive;
         instance->config.debug_mode = old_debug;
         instance->config.strict_validation = old_strict;
-        instance->config.override_cache_all = old_override;
-        
+
         // Reset system state
         instance->state.system_start_time = time(NULL);
         instance->state.last_error[0] = '\0';
@@ -1705,45 +1328,11 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     }
 
     if (instance->config.debug_mode) {
-        // Always log successful validation
         post("PSC[%s]: Validation passed for function '%s'\n",
                instance->state.instance_name, function_name);
     }
-    
-    // === STEP 2: SMART CACHING DECISION ===
-    clock_t analysis_start = clock();
-    
-    struct psc_cache_entry temp_entry = {0};
-    instance->stats.functions_analyzed++;
-    int should_cache = psc_should_cache_function(instance, source_code, &temp_entry);
-    
-    clock_t analysis_end = clock();
-    instance->stats.total_analysis_time += 
-        ((double)(analysis_end - analysis_start)) / CLOCKS_PER_SEC;
-    
-    if (!should_cache) {
-        instance->stats.functions_skipped++;
-        // Clean up compiled code from validation
-        Py_XDECREF(compiled_code);
-        if (instance->config.debug_mode) {        
-            // Always log skip decisions
-            post("PSC[%s]: NOT CACHING function '%s' - %s (score=%d)\n",
-                   instance->state.instance_name, function_name,
-                   temp_entry.analysis.decision_reason,
-                   temp_entry.analysis.complexity_score);
-        }
-        return PSC_ERROR_FUNCTION_TOO_SIMPLE;
-    }
 
-    if (instance->config.debug_mode) {
-        // Always log caching decisions
-        post("PSC[%s]: WILL CACHE function '%s' - %s (score=%d)\n",
-               instance->state.instance_name, function_name,
-               temp_entry.analysis.decision_reason,
-               temp_entry.analysis.complexity_score);
-    }
-
-    // === STEP 3: COMPILATION AND CACHING ===
+    // === STEP 2: COMPILATION AND CACHING ===
     PyObject *code_obj, *func_obj, *globals_dict;
 
     // Reuse compiled code from validation if available, otherwise compile now
@@ -1804,7 +1393,7 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     }
     
     // Create cache entry
-    struct psc_cache_entry *entry = psc_create_entry(function_name, source_code, 
+    struct psc_cache_entry *entry = psc_create_entry(function_name, source_code,
                                                     code_obj, func_obj, globals_dict);
     if (!entry) {
         Py_DECREF(code_obj);
@@ -1812,11 +1401,7 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
         Py_DECREF(globals_dict);
         return PSC_ERROR_MEMORY;
     }
-    
-    // Copy analysis results to the entry
-    entry->analysis = temp_entry.analysis;
-    entry->analysis.was_cached = 1;
-    
+
     // Insert into cache with write lock
     psc_rwlock_wrlock(&instance->state.lock);
     
@@ -2078,167 +1663,54 @@ static inline void psc_get_stats_string(psc_instance_t *instance, char *stats_bu
         snprintf_zero(stats_buffer, buffer_size, "Cache instance not initialized");
         return;
     }
-    
+
     psc_rwlock_rdlock(&instance->state.lock);
-    
+
     // Calculate derived statistics
     size_t total_accesses = instance->stats.cache_hits + instance->stats.cache_misses;
-    double hit_ratio = total_accesses > 0 ? 
+    double hit_ratio = total_accesses > 0 ?
                       (double)instance->stats.cache_hits / total_accesses : 0.0;
-    
-    double cache_efficiency = instance->stats.functions_analyzed > 0 ?
-                             (double)instance->stats.functions_skipped / instance->stats.functions_analyzed : 0.0;
-    
+
     time_t uptime = time(NULL) - instance->state.system_start_time;
-    
+
     snprintf_zero(stats_buffer, buffer_size,
-        "=== Smart Cache Statistics [%s] ===\n"
+        "=== Cache Statistics [%s] ===\n"
         "Cache Entries: %zu\n"
         "Cache Hits: %zu\n"
         "Cache Misses: %zu\n"
         "Hit Ratio: %.2f%%\n"
-        "Functions Analyzed: %zu\n"
         "Functions Cached: %zu\n"
-        "Functions Skipped: %zu\n"
         "Validation Failures: %zu\n"
-        "Cache Efficiency: %.2f%% (avoided overhead)\n"
-        "Total Analysis Time: %.6f seconds\n"
         "Total Validation Time: %.6f seconds\n"
         "Total Compilation Time: %.6f seconds\n"
-        "Average Analysis Time: %.6f seconds\n"
         "System Uptime: %ld seconds\n"
-        "Configuration: threshold=%d, min_lines=%d, max_simple=%d, strict_validation=%s",
+        "Configuration: strict_validation=%s",
         instance->state.instance_name,
         instance->stats.total_entries,
         instance->stats.cache_hits,
         instance->stats.cache_misses,
         hit_ratio * 100.0,
-        instance->stats.functions_analyzed,
         instance->stats.functions_cached,
-        instance->stats.functions_skipped,
         instance->stats.validation_failures,
-        cache_efficiency * 100.0,
-        instance->stats.total_analysis_time,
         instance->stats.total_validation_time,
         instance->stats.total_compilation_time,
-        instance->stats.functions_analyzed > 0 ? 
-            instance->stats.total_analysis_time / instance->stats.functions_analyzed : 0.0,
         uptime,
-        instance->config.cache_threshold_score,
-        instance->config.min_lines_for_cache,
-        instance->config.max_simple_length,
         instance->config.strict_validation ? "ON" : "OFF"
     );
-    
-    psc_rwlock_unlock_rd(&instance->state.lock);
-}
 
-/**
- * @brief Explain why a function would or wouldn't be cached
- * @param instance Cache instance  
- * @param source_code Python source code to analyze
- * @param explanation_buffer Buffer to store explanation
- * @param buffer_size Size of explanation buffer
- */
-static inline void psc_explain_decision(psc_instance_t *instance, const char *source_code, 
-                                       char *explanation_buffer, size_t buffer_size) {
-    if (!instance) {
-        snprintf_zero(explanation_buffer, buffer_size, "NULL cache instance");
-        return;
-    }
-    
-    if (!source_code) {
-        snprintf_zero(explanation_buffer, buffer_size, "No source code provided");
-        return;
-    }
-    
-    // First validate the function
-    char function_name[PSC_MAX_FUNCTION_NAME_LENGTH];
-    char validation_error[PSC_MAX_ERROR_LENGTH];
-    psc_validate_result_t validation = psc_validate_function_source(
-        instance, source_code, function_name, sizeof(function_name),
-        validation_error, sizeof(validation_error), NULL
-    );
-    
-    if (validation != PSC_VALIDATE_SUCCESS) {
-        snprintf_zero(explanation_buffer, buffer_size,
-            "Instance: %s\n"
-            "Validation: FAILED\n"
-            "Error: %s\n",
-            instance->state.instance_name,
-            validation_error
-        );
-        return;
-    }
-    
-    // If validation passes, analyze caching decision
-    struct psc_cache_entry temp_entry = {0};
-    int should_cache = psc_should_cache_function(instance, source_code, &temp_entry);
-    
-    snprintf_zero(explanation_buffer, buffer_size,
-        "Instance: %s\n"
-        "Validation: PASSED - Function '%s'\n"
-        "Decision: %s\n"
-        "Complexity Score: %d (threshold: %d)\n"
-        "Reason: %s\n"
-        "Analysis Details:\n"
-        "  Lines: %d, Characters: %d\n"
-        "  Imports: %d, Decorators: %d\n"  
-        "  Loops: %d, Comprehensions: %d\n"
-        "  Lambda: %d, Complex ops: %d\n"
-        "  Nested functions: %d\n"
-        "  Exception handling: %d\n"
-        "  String ops: %d, Math ops: %d\n"
-        "  Builtin calls: %d",
-        instance->state.instance_name,
-        function_name,
-        should_cache ? "CACHE" : "SKIP",
-        temp_entry.analysis.complexity_score,
-        instance->config.cache_threshold_score,
-        temp_entry.analysis.decision_reason,
-        temp_entry.analysis.line_count,
-        temp_entry.analysis.char_count,
-        temp_entry.analysis.import_statements,
-        temp_entry.analysis.decorator_count,
-        temp_entry.analysis.loop_constructs,
-        temp_entry.analysis.comprehensions,
-        temp_entry.analysis.lambda_functions,
-        temp_entry.analysis.complex_operations,
-        temp_entry.analysis.nested_functions,
-        temp_entry.analysis.exception_handling,
-        temp_entry.analysis.string_operations,
-        temp_entry.analysis.mathematical_operations,
-        temp_entry.analysis.builtin_function_calls
-    );
+    psc_rwlock_unlock_rd(&instance->state.lock);
 }
 
 /**
  * @brief Configure system parameters
  * @param instance Cache instance
- * @param threshold Complexity threshold for caching decisions
- * @param debug_mode Enable debug output (1) or disable (0)
- */
-static inline void psc_configure(psc_instance_t *instance, int threshold, int debug_mode) {
-    if (!instance || !instance->state.initialized) return;
-    
-    psc_rwlock_wrlock(&instance->state.lock);
-    instance->config.cache_threshold_score = threshold;
-    instance->config.debug_mode = debug_mode;
-    psc_rwlock_unlock_wr(&instance->state.lock);
-}
-
-/**
- * @brief Configure advanced system parameters
- * @param instance Cache instance
- * @param threshold Complexity threshold for caching decisions
  * @param debug_mode Enable debug output (1) or disable (0)
  * @param strict_validation Enable strict function validation (1) or disable (0)
  */
-static inline void psc_configure_advanced(psc_instance_t *instance, int threshold, int debug_mode, int strict_validation) {
+static inline void psc_configure(psc_instance_t *instance, int debug_mode, int strict_validation) {
     if (!instance || !instance->state.initialized) return;
-    
+
     psc_rwlock_wrlock(&instance->state.lock);
-    instance->config.cache_threshold_score = threshold;
     instance->config.debug_mode = debug_mode;
     instance->config.strict_validation = strict_validation;
     psc_rwlock_unlock_wr(&instance->state.lock);
