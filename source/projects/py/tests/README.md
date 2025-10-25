@@ -4,7 +4,7 @@ This directory contains comprehensive test suites for the `py_prelude.py` module
 
 ## Test Files
 
-### `test_py_prelude_simple.py` ✅ RECOMMENDED
+### `test_py_prelude_simple.py` [x] RECOMMENDED
 - **Status**: All 22 tests passing
 - **Coverage**: Complete public API testing
 - **Focus**: Practical functionality and security validation
@@ -53,17 +53,17 @@ python3 -m pytest test_py_prelude_simple.py::TestSecurity -v
 
 ## Security Test Findings
 
-### ✅ Security Improvements Validated
+### [x] Security Improvements Validated
 1. **Identifier Validation**: Invalid function names handled safely
 2. **Input Sanitization**: Malformed inputs return None rather than crashing
 3. **Shell Safety**: Commands properly parsed with `shlex.split()`
 4. **Builtin Access**: Safe builtins (len, max, abs) accessible
 
-### ⚠️ Security Concerns Documented
+### [!] Security Concerns Documented
 1. **eval() Still Accessible**: The `eval` builtin is still available through the function resolution
 2. **Import Access**: `__import__` may still be accessible in some contexts
 
-### 🔒 Recommendations
+###  Recommendations
 1. Consider restricting builtin access to a whitelist of safe functions
 2. Add explicit blocking of dangerous builtins like `eval`, `exec`, `__import__`
 3. Implement execution timeouts for all function calls
