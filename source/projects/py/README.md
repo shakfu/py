@@ -1,822 +1,618 @@
-# py: a general purpose python3 max external
+# py: Python3 Max/MSP External
+
+A powerful Python integration for Max/MSP that embeds a Python3 interpreter directly into Max, enabling seamless two-way communication between Max and Python.
 
 ## Table of Contents
 
-- [Overview](#overview)
-  - [Key Features](#key-features)
-    - [Core](#core)
-    - [Extra](#extra)
-    - [Interobject Communication](#interobject-communication)
-    - [Editing Support](#editing-support)
-    - [Scripting Max with Python via the builtin `api` module](#scripting-max-with-python-via-the-builtin-api-module)
-  - [Deployment Scenarios](#deployment-scenarios)
-- [Quickstart](#quickstart)
-  - [Windows](#windows)
-  - [macOS](#macos)
-  - [Building Experimental Externals using Cmake](#building-experimental-externals-using-cmake)
-  - [Building self-contained Python3 Externals for Packages and Standalones](#building-self-contained-python3-externals-for-packages-and-standalones)
-  - [Automated Test of Build Variations](#automated-test-of-build-variations)
-  - [Using Self-contained Python Externals in a macOS Standalone](#using-self-contained-python-externals-in-a-macos-standalone)
-    - [py external](#py-external)
-    - [pyjs external](#pyjs-external)
-- [Packaging](#packaging)
-  - [The argparse-based interface of builder](#the-argparse-based-interface-of-builder)
-  - [The Project's Makefile frontend](#the-projects-makefile-frontend)
-  - [Notarization Requirements](#notarization-requirements)
-  - [Github Actions](#github-actions)
-  - [Caveats](#caveats)
-  - [Current Status of Builders](#current-status-of-builders)
-  - [Build Variations](#build-variations)
-    - [Packages vs Self-contained Externals](#packages-vs-self-contained-externals)
-  - [The relocatable-python variation](#the-relocatable-python-variation)
-  - [Sidenote about building on a Mac](#sidenote-about-building-on-a-mac)
-  - [Code Style](#code-style)
-- [Caveats](#caveats-1)
+- [Quick Start](#quick-start)
+- [What is py?](#what-is-py)
+- [Key Features](#key-features)
+- [Installation](#installation)
+  - [Pre-built Externals](#pre-built-externals)
+  - [Building from Source](#building-from-source)
+- [Basic Usage](#basic-usage)
+- [Architecture](#architecture)
+- [Advanced Features](#advanced-features)
+  - [API Module](#api-module)
+  - [Scripting Max with Python](#scripting-max-with-python)
+  - [Editor Integration](#editor-integration)
+- [Build Variants](#build-variants)
+- [Deployment](#deployment)
+- [Packaging and Distribution](#packaging-and-distribution)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
 
-## Overview
+## Quick Start
 
-This overview will cover the `py` external implementation:
+### Using Pre-built Externals
 
-The `py` external provides a more featureful two-way interface between Max and Python in a way that feels natural to both languages.
-
-The external has access to built-in Python modules and the whole universe of 3rd party modules, and further has the option of importing a built-in `api` module which uses [Cython](https://cython.org) to wrap selective portions of the Max C-API. This allows regular Python code to directly access the Max C-API and script Max objects. In addition, a pure Python `py_prelude.py` module is pre-loaded in every `py` instance as an extended set of built-ins.
-
-So in summary, `py` is a general-purpose Max external that embeds a Python 3 interpreter and is made up of three integrated parts which make it quite straightforward to extend:
-
-1. The `py` Max external which is written in C using both the `Max C-API` and the `Python 3 C-API`.
-
-2. A pure Python module, `py_prelude.py`, which is converted to `py_prelude.h` and compiled with `py` and then pre-loaded into the `globals()` namespace of every `py` instance.
-
-3. A powerful built-in `api` module which is derived from a Cython-based wrapper of a subset of the `Max C-API`.
-
-As of March 24, 2025, the relative size of these modules (in number of tokens) is:
-
-id  | name             | language   | comment       | code          | note
-:-- | :--------------- | :--------- | :------------ | :------------ | :-------------
-1   | `py.c`           | c          | 729           | 1,598         | handwritten
-2   | `py_prelude.py`  | python     | 95            | 181           | handwritten
-3   | `api.pyx`        | cython     | 2,014         | 3,714         | handwritten
-4   | `api.c`          | c          | 3,185         | 147,855       | generated from (3)
-
-The following cheat sheet provides a brief view of key attributes and methods of the `py` external:
+1. Download the latest release from [releases](https://github.com/shakfu/py-js/releases)
+2. Copy `py.mxo` to your Max externals folder
+3. Create a new Max patch and add a `py` object
+4. Try this simple example:
 
 ```text
-globals
-    obj_count                    : number of active py objects
-    registry                     : global registry to lookup object names
-
-patchers
-    subpatchers
-        py_repl                  : a basic single line repl for py
-        py_repl_plus             : embeds a py object in a py_repl
-
-py max external
-    attributes
-        name                     : unique object name
-        file                     : file to load into editor
-        autoload                 : load file at start
-        pythonpath               : add path to python sys.path
-        debug                    : switch debug logging on/off
-
-    methods (messages)
-        core
-            import <module>      : Python import to object namespace
-            eval <expression>    : Python 'eval' semantics
-            exec <statement>     : Python 'exec' semantics
-            execfile <path>      : Python 'execfile' semantics
-        
-        extra
-            assign <var> [arg]   : Max-friendly msg assignments to py object namespace
-            call <pyfunc> [arg]  : Max-friendly Python function calling
-            pipe <arg> [pyfunc]  : process py/Max value(s) via a pipe of py funcs
-            fold <f> <n> [arg]   : applies a two-argument function cumulatively to a sequence
-            code <expr|stmt>     : alternative way to eval or exec Python code
-            anything <expr|stmt> : anything version of the code method
-
-        time-based
-            sched <t> <fn> [arg] : defer a Python function call by t milliseconds
-
-        code editor
-            read <path>          : read text file into editor
-            load <path>          : combo of read <path> -> execfile <path>
-            run                  : run the current code in the editor
-     
-        interobject
-            scan                 : scan patcher and store names of child objects
-            send <msg>           : send an arbitrary message to a named object
-
-        meta
-            count                : give an integer count of current live py objects
-
-    inlets
-        single inlet             : primary input (anything)
-
-    outlets
-        left outlet              : primary output (anything)
-        middle outlet            : bang on failure
-        right outlet             : bang on success
+[py]
+|
+[print]
 ```
 
-### Key Features
+Send these messages to the `py` object:
 
-The `py` external has the following C-level methods:
+- `eval 2 + 2` → outputs `4`
+- `exec x = [1, 2, 3, 4]` → creates a list variable
+- `eval len(x)` → outputs `4`
+- `call sum x` → outputs `10`
 
-category | method   | param(s)      | in/out | can change ns
-:------- | :--------| :------------ | :----: | :------------:
-core     | import   | module        | in     | yes
-core     | eval     | expression    | out    | no
-core     | exec     | statement     | in     | yes
-core     | execfile | file          | in     | yes
-extra    | assign   | var, data     | in     | yes
-extra    | call     | var(s), data  | out    | no
-extra    | code     | expr or stmt  | out?   | yes
-extra    | anything | expr or stmt  | out?   | yes
-extra    | pipe     | var, funcs    | out    | no
-extra    | fold     | f, n, args    | out    | no
-time     | sched    | ms, fun, args | out    | no
-editor   | read     | file          | n/a    | no
-editor   | load     | file          | n/a    | no
-interobj | scan     |               | n/a    | no
-interobj | send     | name, msg, .. | n/a    | no
-meta     | count    |               | n/a    | no
+### Building from Source
 
-Note that the `code` method allows for import/exec/eval of Python code, which can be said to make those 'fit-for-purpose' methods redundant. However, it has been retained because it provides additional strictness and a helpful prefix in messages which indicates message intent.
+```bash
+git clone --recursive https://github.com/shakfu/py-js.git
+cd py-js
+make setup  # Initialize and create Max package symlinks
+make        # Build py.mxo and pyjs.mxo linked to system Python
+```
 
-#### Core
+## What is py?
 
-py/js's *core* features have a one-to-one correspondence to Python's [very high layer](https://docs.python.org/3/c-api/veryhigh.html). In the following, when we refer to an *object*, we refer to instances of the `py` external.
+The `py` external embeds a Python3 interpreter into Max/MSP, providing:
 
-- **Per-object namespaces**. Each object has a unique name (which is provided automatically or can be set by the user), and responds to an `import <module>` message which loads the specified Python module in its namespace (essentially a `globals` dictionary). Notably, namespaces can be different for each instance.
+- **Full Python Environment**: Access to Python's standard library and third-party packages
+- **Bidirectional Communication**: Send data between Max and Python seamlessly
+- **Max API Access**: Script Max objects directly from Python using the built-in `api` module
+- **Multiple Deployment Options**: From development builds to standalone applications
 
-- **Eval Messages**. Responds to an `eval <expression>` message in the left inlet which is evaluated in the context of the namespace. `py` objects output results to the left outlet, send a bang from the right outlet upon success or a bang from the middle outlet upon failure.
+## Key Features
 
-- **Exec Messages**. Responds to an `exec <statement>` message and an `execfile <filepath>` message which executes the statement or the file's code in the object's namespace. For `py` objects, this produces no output from the left outlet, sends a bang from the right outlet upon success or a bang from the middle outlet upon failure.
+- **Per-object Python namespaces** - Each `py` object has its own isolated Python environment
+- **Standard Python operations** - `eval`, `exec`, `import` with full Python syntax support
+- **Max-friendly syntax** - `call`, `pipe`, `fold` methods for easier Max integration
+- **Function caching** - Compile and cache Python functions for improved performance
+- **Automatic memoization** - Recursive functions automatically optimized with LRU caching
+- **Built-in editor support** - Code editor, REPL, and external editor integration
+- **Inter-object communication** - Send messages between Max objects from Python
+- **Portable deployment** - Self-contained externals for packages and standalones
 
-#### Extra
+## Installation
 
-The *extra* category of methods makes the `py` object play nice with the Max/MSP ecosystem:
+### Pre-built Externals
 
-- **Assign Messages**. Responds to an `assign <varname> [x1, x2, ..., xN]` which is equivalent to `<varname> = [x1, x2, ..., xN]` in the Python namespace. This is a way of creating variables in the object's Python namespace using Max message syntax. This produces no output from the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
+Download codesigned and notarized externals from [releases](https://github.com/shakfu/py-js/releases). These work immediately without compilation.
 
-- **Call Messages**. Responds to a `call <func> arg1 arg2 ... argN` kind of message where `func` is a Python callable in the py object's namespace. This corresponds to the Python `callable(*args)` syntax. This makes it easier to call Python functions in a Max-friendly way. If the callable does not have variable arguments, it will alternatively try to apply the arguments as a list, i.e., `call func(args)`. Future work will try to make `call` correspond to a Python generic function call: `<callable> [arg1 arg2 ... arg_n] [key1=val1 key2=val2 ... keyN=valN]`. This outputs results to the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
+### Building from Source
 
-- **Pipe message**. Like a `call` in reverse, responds to a `pipe <arg> <f1> <f2> ... <fN>` message. In this sense, a value is *piped* through a chain of Python functions in the object's namespace and returns the output to the left outlet, a bang from the right outlet upon success, or a bang from the middle outlet upon failure.
+**Requirements:**
 
-- **Code or Anything Messages**. Responds to a `code <expression || statement>` or (anything) `<expression || statement>` message. Arbitrary Python code (expression or statement) can be used here; because the whole message body is converted to a string, the complexity of the code is only limited by Max's parsing and escaping rules. (This is classified as EXPERIMENTAL and evolving).
+- macOS: Xcode, Python 3.8-3.13, Cython (`pip install cython`)
+- Windows: Visual Studio, Python 3.8-3.13 from python.org
 
-#### Interobject Communication
+**Quick Build (linked to system Python):**
 
-- **Scan Message**. Responds to a `scan` message with arguments. This scans the parent patcher of the object and stores scripting names in the global registry.
+```bash
+git clone --recursive https://github.com/shakfu/py-js.git
+cd py-js
+make setup  # Initialize submodules and create symlinks
+make        # Build externals
+```
 
-- **Send Message**. Responds to a `send <object-name> <msg> <msg-body>` message. Used to send *typed* messages to any named object. Evokes a `scan` for the patcher's objects if a `registry` of names is empty.
+## Basic Usage
 
-#### Editing Support
+### Core Methods
 
-- **Line REPL**. The `py` object has two bpatcher line REPLs: one (`py_repl_plus.maxpat`) which embeds a `py` object and another (`py_repl.maxpat`) which has an outlet to connect to one. The REPLs include a convenient menu with all of the `py` object's methods and also feature `coll`-based history via arrow-up/arrow-down recall of entries in a session. A `coll` can be made to save all commands if required.
+| Method | Description | Example |
+|--------|-------------|---------|
+| `eval <expr>` | Evaluate Python expression | `eval 2 + 2` |
+| `exec <stmt>` | Execute Python statement | `exec x = [1,2,3]` |
+| `execfile <path>` | Execute Python file | `execfile script.py` |
+| `import <module>` | Import Python module | `import math` |
+| `call <func> <args>` | Call Python function | `call len x` |
+| `pipe <data> <funcs>` | Pipe data through functions | `pipe 5 abs str len` |
+| `cache <code>` | Cache Python function | `cache def fib(n): ...` |
+| `cachefile <path>` | Cache function from file | `cachefile fib.py` |
+| `int <value>` | Call last cached function | `int 10` |
 
-- **Multiedit REPL**. Another bpatcher, `py_multiedit.maxpat`, combines a `textedit` object for writing multiline Python code to be executed in the respective `py` external's namespace, and a simple line REPL strictly for evaluating objects in the namespace.
+### Simple Examples
 
-- **External Editor Filewatcher**. `py_extedit.maxpat` is a bpatcher which wraps the `filewatcher` object and opens a *watched* file in an external editor. If the file is saved by the editor, it will be sent out as text via the outlet and can be received, for example, by the `py` object's inlet, to enable a kind of load-on-save workflow.
-
-- **Code Editor**. Double-clicking on the `py` object opens a code editor. This is populated by a `read` message which reads a file into the editor and saves the file path to the external's attribute. A `load` message also reads the file followed by `execfile`. Saving the text in the editor uses the attribute file path and executes the saved code to the object's namespace.
-
-- **Experimental Remote Console**. A method (due to [Iain Duncan](https://github.com/iainctduncan)) of sending code to the `py` node via `udp` has been implemented and allows for send-from-editor and send-from-interactive-console capabilities. The clients are still in their infancy, but this method looks promising since you get syntax highlighting, syntax checking, and other features. It assumes you want to treat your `py` nodes as remotely accessible `server/interpreters-in-max`.
+**Basic arithmetic:**
 
 ```text
-zedit: [python interpreter / web server] <-> [web-editor / web-console]
+[eval 10 * 3.14159( → [30.14159]
 ```
 
-- **`zedit`: a python3 external with an embedded web server**. `zedit` is a python3-enabled external by virtue of using the `mamba` single-header library and also embeds the [mongoose embedded webserver](https://mongoose.ws). On the frontend, it uses modern javascript, [jquery-terminal](https://terminal.jcubic.pl) and the widely-used [code-mirror](https://codemirror.net) web text editor widget to create a web-editor / web-console which can be accessed from a browser and which communicates via the mongoose webserver with the underlying python interpreter.
+**Working with lists:**
 
-#### Scripting Max with Python via the builtin `api` module
+```text
+[exec numbers = list(range(10))(
+[call sum numbers( → [45]
+```
 
-- **Exposing Max API to Python** A portion of the Max api in `c74support/max-includes` has been converted to a cython `.pxd` file called `api_max.pxd`. This makes it available for a cython implementation file, `api.pyx` which is converted to c-code during builds and embedded in the external. This code enables a custom python builtin module called `api` which can be imported by python scripts in `py` objects or via `import` messages to the object. This allows the subset of the Max-api which has been wrapped in cython code to be called directly by python scripts or via messages in a patcher.
+**Using Python libraries:**
 
-The `api` module provides a number of functions and cython extension classes which make it relatively easy to call `Max c-api` methods from python. This is without doubt the most powerful feature of the `py` external.
+```text
+[import random(
+[eval random.randint(1, 10)( → [7]
+```
 
-As of this writing the following extension classes which wrap their corresponding Max objects are included in the `api` module: `Atom`, `AtomArray`, `Table`, `Buffer`, `Dictionary`, `Database`, `DatabaseView`, `DatabaseResult`, `Linklist`, `Binbuf`, `Hashtab`, `Patcher`, `MaxObject` and `MaxApp`.
+## Function Caching and Memoization
 
-In addition, a cython extension class, `PyExternal`, gives python code access to the c-based `py` external's data and methods.
+The `py` external includes a function caching system that compiles and stores Python functions for efficient repeated execution. Functions cached using the `cache` handler are automatically validated, compiled to bytecode, and optimized.
 
-To give a sense of the level of integration which is possible as a result of this module, the following example demonstrates how `numpy` and `scipy.signal` can be used to read and write to and from a live Max `buffer~` object using the `api` module's `Buffer` extension class:
+### Basic Caching
+
+Cache a function for repeated calls:
+
+```text
+[cache def square(x): return x * x]
+[int 5] → [25]
+[int 10] → [100]
+```
+
+### Calling Cached Functions
+
+Cached functions can be called using three methods:
+
+**Via numeric handlers:**
+```text
+[int 42]        # Calls last cached function with integer argument
+[float 3.14]    # Calls last cached function with float argument
+```
+
+**Via call handler:**
+```text
+[call square 7]         # Calls specific cached function by name
+[call fib 20]           # Works with any cached function
+```
+
+**Multiple arguments:**
+```text
+[cache def add(a, b): return a + b]
+[call add 10 20] → [30]
+```
+
+### Automatic Memoization
+
+All cached functions are automatically optimized with LRU (Least Recently Used) caching. This prevents redundant computation, particularly beneficial for recursive algorithms:
+
+```text
+[cache def fib(n):
+    if n <= 1:
+        return n
+    return fib(n-1) + fib(n-2)]
+
+[int 10] → [55]      # First call computes recursively
+[int 50] → [12586269025]  # Returns instantly via memoization
+```
+
+Without memoization, `fib(50)` would require millions of recursive calls. With memoization, it completes in under 1ms after the first computation.
+
+### Memoization Details
+
+- **Cache size**: 128 entries per function (LRU eviction policy)
+- **Overhead**: Minimal one-time cost during compilation
+- **Scope**: Applies to all cached functions automatically
+- **Multi-parameter support**: Functions with multiple arguments are memoized correctly
+- **Memory**: Approximately 10KB per cached function
+
+### Nested Functions
+
+The caching system supports functions with nested helper functions:
+
+```text
+[cache def fibonacci_optimized(n):
+    from functools import lru_cache
+    @lru_cache(maxsize=None)
+    def helper(n):
+        if n <= 1: return n
+        return helper(n-1) + helper(n-2)
+    return helper(n)]
+```
+
+Only top-level function definitions are counted for validation. Nested functions are permitted.
+
+### Cache File Loading
+
+Load and cache functions from external files:
+
+```text
+[cachefile algorithms.py]
+[int 100]
+```
+
+The file must contain a single top-level function definition.
+
+### Limitations
+
+- Extremely deep recursion may still hit Python's stack limit (typically around 1000 frames)
+- Functions with side effects will be memoized based on arguments only
+- Cache does not persist between Max sessions
+
+## Architecture
+
+The `py` external consists of three integrated components:
+
+### 1. C External (`py.c`)
+
+- Embeds Python3 interpreter using Python C-API
+- Handles Max/MSP object lifecycle and message routing
+- Provides security framework and memory management
+- **Size**: ~1,600 lines of handwritten C code
+
+### 2. Python Prelude (`py_prelude.py`)
+
+- Pure Python utility functions available in every `py` instance
+- Provides Max-friendly function calling syntax
+- Includes functional programming utilities (`pipe`, `fold`, `compose`)
+- **Auto-generated**: Compiled into `py_prelude.h` during build
+
+### 3. API Module (`api.pyx`)
+
+- Cython wrapper for Max C-API functionality
+- Enables Python scripts to control Max objects directly
+- Provides classes for `Buffer`, `Table`, `Patcher`, `Matrix`, etc.
+- **Size**: ~3,700 lines of Cython code → ~148,000 lines of generated C
+
+## Advanced Features
+
+### API Module
+
+The built-in `api` module provides Python access to Max C-API functionality:
 
 ```python
 import api
-
 import numpy as np
 from scipy import signal
 
-def get_buffer_samples(name: str, sample_file: str) -> np.array:
+# Work with Max buffer~ objects
+def process_buffer(name: str, sample_file: str) -> np.array:
     buf = api.create_buffer(name, sample_file)
     xs = np.array(buf.get_samples())
-    assert len(xs) == buf.n_samples
-    api.post(f"get {n_samples} samples from buffer {name}")
-    return xs
 
+    # Apply signal processing
+    t = np.linspace(0, 1, buf.n_samples, endpoint=False)
+    processed = signal.sawtooth(2 * np.pi * 5 * t)
+    buf.set_samples(processed)
 
-def set_buffer_samples(name: str, duration_ms: int):
-    buf = api.create_empty_buffer(name, duration_ms)
-    t = np.linspace(0, 1, buf.n_samples, endpoint=False, dtype=np.float64)
-    xs = signal.sawtooth(2 * np.pi * 5 * t)
-    buf.set_samples(xs)
-    api.post(f"set {buf.n_samples} samples to buffer {name}")
+    api.post(f"Processed {buf.n_samples} samples in buffer {name}")
+    return processed
 ```
 
-See the `examples/tests` folder and the `patchers/tests`  folder for more examples.
+**Available API Classes:**
 
-### Deployment Scenarios
+- `Buffer` - Max buffer~ objects
+- `Table` - Max table objects
+- `Matrix` - Jitter matrix objects with NumPy integration
+- `Patcher` - Max patcher scripting
+- `Dictionary` - Max dictionary objects
+- `Database` - Max database functionality
 
-There are 3 general deployment variations:
+### Scripting Max with Python
 
-1. **Linked to system python**. Linking the externals to your system python (homebrew, built from source, etc.) This has the benefit of re-using your existing python modules and is the default option.
+**Inter-object Communication:**
 
-2. **Embedded in package**. Embedding the python interpreter in a Max package: in this variation, a custom python distribution (zipped or otherwise) is placed in the `support` folder of the `py/js` package (or any other package) and is linked to the `py` external. This makes it size efficient and usable in standalones.
+```python
+# Scan patcher for named objects
+api.send("scan")
 
-3. **Embedded in external**. The external itself as a container for the python interpreter: a custom python distribution (zipped or otherwise) is stored inside the external bundle itself, which can make it portable and usable in standalones.
-
-As of this writing all three deployment scenarios are availabe, however it is worth looking more closely into the tradeoffs in each case, and the [related build variations which exist](#building-self-contained-python3-externals-for-packages-and-standalones).
-
-Deployment Scenario    | Available | Python Versions
-:--------------------- | :-------: | :--------------------
-Linked to sys python   | yes       | version of sys python
-Embeddded in package   | yes       | 3.8 to 3.13 inclusive
-Embeddded in external  | yes       | 3.8 to 3.13 inclusive
-
-## Quickstart
-
-This repo has a git submodule dependency with [max-sdk-base](https://github.com/cycling74/max-sdk-base). This is quite typical for Max externals.
-
-This means you should `git clone` as follows:
-
-```sh
-git clone https://github.com/shakfu/py-js.git
-git submodule init
-git submodule update
+# Send messages to Max objects
+api.send("mydac~", "start")
+api.send("myslider", "set", 127)
 ```
 
-or more concisely:
+**Scheduler Integration:**
 
-```sh
+```text
+[sched 1000 my_function arg1 arg2]  # Call function after 1 second
+```
+
+### Editor Integration
+
+**Built-in Code Editor:**
+
+- Double-click `py` object to open editor
+- `read <file>` - Load file into editor
+- `load <file>` - Load and execute file
+- `run` - Execute current editor content
+
+**REPL Options:**
+
+- `py_repl.maxpat` - Basic single-line REPL
+- `py_repl_plus.maxpat` - REPL with embedded `py` object
+- `py_multiedit.maxpat` - Multi-line editor with REPL
+
+**External Editor Support:**
+
+- `py_extedit.maxpat` - File watcher for external editors
+- Remote console via UDP (experimental)
+
+## Build Variants
+
+Choose the appropriate build variant based on your deployment needs:
+
+### Development Builds (Linked to System Python)
+
+**Advantages:** Access to all installed Python packages, smallest external size
+**Disadvantages:** Not portable, requires Python installation on target machine
+
+```bash
+make              # Basic build linked to system Python
+make projects     # Build all externals using cmake
+```
+
+### Self-contained Builds (Portable)
+
+**For Packages and Standalones:**
+
+| Build Command | Type | Size (MB) | Description |
+|---------------|------|-----------|-------------|
+| `make static-ext` | Static | 14.4 | Python statically linked, most portable |
+| `make shared-ext` | Shared | 19.1 | Python as shared library, full features |
+| `make framework-pkg` | Framework | 21.2 | Python framework in package support folder |
+
+**Tiny Variants (Reduced Features):**
+
+```bash
+make static-tiny-ext    # 10.2 MB - Minimal Python, static linking
+make shared-tiny-ext    # 10.6 MB - Minimal Python, shared library
+```
+
+### Platform-Specific Instructions
+
+#### macOS
+
+```bash
 git clone --recursive https://github.com/shakfu/py-js.git
+cd py-js
+make setup                # Initialize submodules and symlinks
+pip install cython       # Required for API module compilation
+make static-ext           # Build portable external
 ```
 
-### Windows
+#### Windows
 
-Since Windows support for relocatable builds still is relatively new, releases will be made pending further testing.
-
-Currently, the externals which are enabled by default in this project can be built with only a few requirements:
-
-1. Install [Visual Studio Community Edition](https://visualstudio.microsoft.com/vs/community/) or use the commercial versions as you like.
-
-2. Install [Python3 for Windows](https://www.python.org/downloads/windows) from python.org
-
-3. (Optional) since Visual Studio has its captive cmake, [you can use that](https://stackoverflow.com/questions/70178963/where-is-cmake-located-when-downloaded-from-visual-studio-2022), but it is preferable to [install cmake](https://cmake.org/download/#latest) independently.
-
-After installation of the above you can build the `py` external which links to local system python by doing the following inside your `Documents/Max [8 or 9]/Packages` folder:
-
-```sh
+```bash
 git clone --recursive https://github.com/shakfu/py-js
 cd py-js
-mkdir build
-cd build
+# Build basic external
+mkdir build && cd build
 cmake .. -DBUILD_TARGETS=py
 cmake --build . --config Release
-```
 
-If you want to build a relocatable python3 external for Windows which can be used in Max packages and standalones then type the following in the previously cloned `py-js` directory:
-
-```sh
-python source\\scripts\\buildpy.py -t windows-pkg
-mkdir build
-cd build
+# Build portable external
+python source\scripts\buildpy.py -t windows-pkg
 cmake .. -DBUILD_TARGETS=py -DBUILD_VARIANT=windows-pkg
 cmake --build . --config Release
 ```
 
-Open one of the `.maxhelp` files or any of the files in the `patchers` folders to see how things work.
+## Deployment
 
-### macOS
+### Deployment Options
 
-As mentioned earlier, the `py` and `pyjs` objects are the most mature and best documented of the collection. Happily, there is also no need to compile them as they are available for download, fully codesigned and notarized, from the [releases](https://github.com/shakfu/py-js/releases) section.
+| Scenario | Python Location | Portability | Use Case |
+|----------|----------------|-------------|----------|
+| **System Linked** | System installation | No | Development, existing Python setup |
+| **Package Embedded** | Max package `support/` folder | Yes | Distributable Max packages |
+| **External Embedded** | Inside `.mxo` bundle | Yes | Standalone applications |
 
-If you'd rather build them or any of the other externals yourself then the process is straightforward:
+### Using in Max Standalones
 
-1. You should have a modern `python3` cpython implementation installed on your Mac: preferably either from [python.org](https://www.python.org) or from [Homebrew](https://brew.sh). Note that even system python3 provided by Apple will work in a number of cases. Python versions from 3.8 to 3.13 are tested and known to work.
+1. **Build or download** self-contained externals
+2. **Include externals** in your standalone build
+3. **Test functionality** before distribution
 
-2. Make sure you also have [Xcode](https://xcodereleases.com/) installed.
+**For `py.mxo`:**
 
-3. Git clone the `py-js` [repo](https://github.com/shakfu/py-js) as per the above method to a path without a space and without possible icloud syncing (i.e don't clone to `$HOME/Documents/Max 8/Packages`) [?] and run the following in the cloned repo:
+- Max automatically includes the external during standalone build
+- Test with included example patches: `py_test_standalone_info_py.maxpat`
 
-    ```bash
-    make setup
-    ```
+**For `pyjs.mxo`:**
 
-    The above will initialize and update the required git submodules and symlink the repo to `$HOME/Documents/Max 8/Packages/py-js` to install it as a Max Package and enable you to test the externals and run the patches.
+- May require manual copying to standalone bundle
+- Use provided script: `source/projects/py/scripts/fix-pyjs-standalone.sh`
 
-    [?] It is possible to install `py-js` directly into `$HOME/Documents/Max 8/Packages`, but it requires moving the place of compilation to a location in your filesystem that is not exposed to errors due to icloud syncing or spaces in the path. This split is possible, but it is not recommended for the purposes of this quickstart.
+## Packaging and Distribution
 
-4. Install [cython](https://cython.org) via `pip3 install cython`, required for translating the cython-based `api.pyx`, which wraps the the Max c-api, to c.
+### Code Signing and Notarization
 
-5. To build only the `py` and `pyjs` externals, type the following in the root directory of the `py-js` project (other installation options are detailed below):
+For distribution on macOS, externals must be signed and notarized:
 
-    ```sh
-    make
-    ```
+```bash
+# Sign all externals
+make sign
 
-Note that typing `make` here is the same as typing `make default` or `make all`. This will create two externals `py.mxo` and `pyjs.mxo` in your `externals` folder. These are relatively small in size and are linked to your system python3 installation. This has the immediate benefit that you have access to your curated collection of existing python packages. The tradeoff is that these externals are dynamically linked with local dependencies and therefore not usable in standalones and relocatable Max packages.
+# Create distributable DMG
+make dmg
 
-No worries, if you need portable relocatable python3 externals for your package or standalone then make sure to read the [Building self-contained Python3 Externals for Packages and Standalones](https://github.com/shakfu/py-js#building-self-contained-python3-externals-for-packages-and-standalones) section
-
-Open up any of the patch files in the `patchers` directory of the repo or the generated Max package, and also look at the `.maxhelp` patchers to understand how the `py` and the `pyjs` objects work.
-
-### Building Experimental Externals using Cmake
-
-You can also use `cmake` to build **all** externals using similar methods to the `max-sdk`.
-
-First make sure you have completed the [Quickstart](#quickstart) section above. Next you will install `cmake` if necessary and a couple of additional dependencies for some of the subprojects. Of course, skip what is already installed:
-
-```sh
-brew install cmake zmq czmq
-```
-
-Now you can build all externals (including `py` and `pyjs`) in one shot using cmake:
-
-```sh
-make projects
-```
-
-After doing the above, the recommended iterative development workflow is to make changes to the source code in the respective project and then `cd py-js/build` and `cmake --build .`. This will cause cmake to only build modified projects efficiently.
-
-Note that for some of the less developed externals and more experimental features please don't be surprised if Max seg-faults (especially if you start experimenting with the cython wrapped `api` module which operates on the c-level of the Max SDK).
-
-Also note that for `py` and `pyjs` externals the `cmake` build method described does not yet create self-contained python externals which can be used in Max Packages and Standalones.
-
-The following section addresses this requirement.
-
-### Building self-contained Python3 Externals for Packages and Standalones
-
-The `py` and `pyjs` externals have a custom python [build manager](https://github.com/shakfu/py-js/tree/main/source/projects/py/builder) which provides the flexibility to create a number of `build variants` which can vary in size and features, or be selected depending on whether the external is to be packaged in standalones or Max packages.
-
-The `Makefile` in the project root provides a simplified interface to this builder. See the [Current Status of Builders](https://github.com/shakfu/py-js#current-status-of-builders) section for further information.
-
-idx  | command                | type       | format     | py size |  pyjs size
-:--: | :--------------------- | :--------- | :--------- | :------ | :----------
-1    | `make static-ext`      | static     | external   | 9.0     | 8.8
-2    | `make static-tiny-ext` | static     | external   | 6.7     | 6.2
-3    | `make shared-ext`      | shared     | external   | 16.4    | 15.8
-4    | `make shared-tiny-ext` | shared     | external   | 6.7     | 6.2
-5    | `make framework-pkg`   | framework  | package    | 22.8    | 22.8
-
-In this table, size figures are for python 3.10.x but for python 3.11.4 they increase to 8.5 MB and 8.1 respectively. Generally, external size increases with each new python version as features are added, but this is also somewhat mitigated by the removal of deprecated builtin packages and extensions. If you want to achieve the theoretical minimal size for the `py` and `pyjs` externals, use python 3.8.x and/or a tiny variant (with a more recent version). Another option, if you need circa 1 MB size for a self-contained external, look at the `pktpy` subproject in this repo. Note the size of externals in Python 3.12.4 (although some of extra size is attributed improved ssl integration):
-
-Also note that size, in this case, is not the individual external but the uncompressed size of the package which includes patches, help files and **both** externals. This can also vary by python version used to compile the external.
-
-idx  | command                | type       | format     | py size |  pyjs size
-:--: | :--------------------- | :--------- | :--------- | :------ | :----------
-1    | `make static-ext`      | static     | external   | 15.0    | 13.3
-2    | `make static-tiny-ext` | static     | external   | 11.4    | 9.8
-3    | `make shared-ext`      | shared     | external   | 20.4    | 18.7
-4    | `make shared-tiny-ext` | shared     | external   | 11.4    | 9.6
-5    | `make framework-ext`   | shared     | external   | 22.5    | 20.8
-
-for Python 3.13.0, which implemented a number of deprecations, external sizes have come down a little:
-
-idx  | command                | type       | format     | py size |  pyjs size
-:--: | :--------------------- | :--------- | :--------- | :------ | :----------
-1    | `make static-ext`      | static     | external   | 14.4    | 12.6
-2    | `make static-tiny-ext` | static     | external   | 10.2    | 8.5
-3    | `make shared-ext`      | shared     | external   | 19.1    | 17.3
-4    | `make shared-tiny-ext` | shared     | external   | 10.6    | 8.8
-5    | `make framework-ext`   | shared     | external   | 21.2    | 20.2
-
-This section assumes that you have completed the [Quickstart](#quickstart) above and have a recent python3 installation (python.org, homebrew or otherwise).
-
-Again, if you'd rather not compile anything there are self-contained python3 externals which can be included in standalones in the [releases](https://github.com/shakfu/py-js/releases) section.
-
-If you don't mind compiling (and have Xcode installed) then pick one of the following options:
-
-1. To build statically-compiled self-contained python3 externals:
-
-    ```sh
-    make static-ext
-    ```
-
-    You may also prefer the tiny variant:
-
-    ```sh
-    make static-tiny-ext
-    ```
-
-2. To build self-contained python3 exernals which include a dynamically linked libpythonX.Y.dylib:
-
-    ```sh
-    make shared-ext
-    ```
-
-    or for the corresponding tiny variant:
-
-    ```sh
-    make shared-tiny-ext
-    ```
-
-3. To build python3 externals in a package, linked to a python installation in its `support` folder
-
-    ```sh
-    make framework-pkg
-    ```
-
-With all of the above options, a python3 source distribution (matching your own python3 version) is automatically downloaded from [python.org](https://www.python.org) with dependencies, and then compiled into a static or shared version of python3 which is then used to compile the externals.
-
-If you would rather specify the python version, then you can specify the `PYTHON_VERSION` environment variable, as in:
-
-```sh
-make shared-ext PYTHON_VERSION=3.10.17
-```
-
-Note that as of this writing, the `py` external and the `pyjs` externals are tested successfully to build and run with Python versions `3.8.20`, `3.9.22`, `3.10.17`, `3.11.12`, `3.12.10` and `3.13.3`. Feel free to use the version specification method above with any build variant.
-
-At the end of this process you should find two externals in the `py-js/externals` folder: `py.mxo` and `pyjs.mxo`.
-
-Although the above options deliver somewhat different products (see below for details), with options (1) and (2) the external 'bundle' contains an embedded python3 interpreter with a zipped standard library in the `Resources` folder and also has a `site-packages` directory for your own code; with option (3), the externals are linked to, and have been compiled against, a relocatable python3 installation in the `support` folder.
-
-Depending on your choice above, the python interpreter in each external is either statically compiled or dynamically linked, and in all three cases we have a self-contained and relocatable structure (external or package) without any non-system dependencies. This makes it appropriate for use in Max Packages and Standalones.
-
-There are other [build variations](#build-variations) which are discussed in more detail below. You can always see which ones are available via typing `make help` in the `py-js` project folder:
-
-```sh
-$ make help
-
->>> general
-make projects             : build all subprojects using standard cmake process
-
->>> pyjs targets
-make                      : non-portable pyjs externals linked to your system
-make homebrew-pkg         : portable package w/ pyjs (requires homebrew python)
-make homebrew-ext         : portable pyjs externals (requires homebrew python)
-make shared-pkg           : portable package with pyjs externals (shared)
-make shared-ext           : portable pyjs externals (shared)
-make shared-tiny-ext      : tiny portable pyjs externals (shared)
-make static-ext           : portable pyjs externals (static)
-make static-tiny-ext      : tiny portable pyjs externals (static)
-make framework-pkg        : portable package with pyjs externals (framework)
-make framework-ext        : portable pyjs externals (framework)
-make relocatable-pkg      : portable package w/ more custom options (framework)
-
->>> python targets
-make python-shared        : minimal shared python build
-make python-shared-ext    : minimal shared python build for externals
-make python-shared-pkg    : minimal shared python build for packages
-make python-static        : minimal statically-linked python build
-make python-framework     : minimal framework python build
-make python-framework-ext : minimal framework python build for externals
-make python-framework-pkg : minimal framework python build for packages
-make python-relocatable   : custom relocatable python framework build
-```
-
-### Automated Test of Build Variations
-
-If you would like to see which build variations are compatible with your current setup, there's an automated test which attempts to compile all build variations in sequence and will log all results to a `logs` directory:
-
-```sh
-make test
-````
-
-This can take a long time, but it is worth doing to understand which variants work on your particular setup.
-
-If you want to test or retest one individual variant, just prefix `test-` to the name of variant as follows:
-
-```sh
-make test-shared-pkg
-```
-
-### Using Self-contained Python Externals in a macOS Standalone
-
-If you have downloaded any pre-built externals from [releases](https://github.com/shakfu/py-js/releases) or if you have built self-contained python externals as per the methods above, then you should be ready to use these in a standalone.
-
-To release externals in a standalone they must be codesigned and notarized. To this end, there are scripts in `py-js/source/projects/py/scripts` to make this a little easier.
-
-#### py external
-
-If you included `py.mxo` as an external in your standalone, then you should have no issue as Max will install it automatically during its build-as-standalone process.
-
-You can test if it works without issues by building either of these two example patcher documents, included in `py-js/patchers`, as a max standalone:
-
-1. `py_test_standalone_info_py.maxpat`
-
-2. `py_test_standalone_only_py.maxpat`
-
-Open the resulting standalone and test that the `py` object works as expected.
-
-To demonstrate the above, a pre-built standalone that was built using exactly the same steps as above is in the releases section: `py_test_standalone_demo.zip`.
-
-#### pyjs external
-
-If you opted to include `pyjs.mxo` as an external in your standalone, then it may be a litte more involved:
-
-You can first test if it works without issues by building 'a max standalone' from the `test_standalone_pyjs.maxpat` patcher which is included in `py-js/patchers/tests/test_standalone`.
-
-Open the resulting standalone and test that the `pyjs` object works as expected. If it doesn't then try the following workaround:
-
-To fix a sometimes recurrent issue where the standalone build algorithm doesn't pick up `pyjs.mxo`: if you look inside the built standalone bundle, `py_test_standalone_only_pyjs.app/Contents/Resources/C74/externals` you may not find `pyjs.mxo`. This is likely a bug in Max 8 but easily resolved. Fix it by manually copying the `pyjs.mxo` external into this folder and then copy the `javascript` and `jsextensions` folders from the root of the `py-js` project and place them into the `pyjs_test_standalone.app/Contents/Resources/C74` folder. Now re-run the standalone app again and now the `pyjs` external should work. A script is provided in `py-js/source/projects/py/scripts/fix-pyjs-standalone.sh` to do the above in an automated way.
-
-Please read on for further details about what the py-js externals can do.
-
-Have fun!
-
-## Packaging
-
-As mentioned previously, the py-js `builder` subproject can be used to build fit-for-purpose python variants for python3 externals. In addition, it can also package, sign, notarize and deploy the same externals for distribution.
-
-These features are implemented in `py-js/source/project/py/builder/packaging.py` and are exposed via two interfaces:
-
-### The argparse-based interface of builder
-
-```sh
-$ python3 -m builder package --help
-usage: builder package [-h] [-v VARIANT] [-d] [-k KEYCHAIN_PROFILE]
-                           [-i DEV_ID]
-                           ...
-
-options:
-  -h, --help            show this help message and exit
-  -v VARIANT, --variant VARIANT
-                        build variant name
-  -d, --dry-run         run without actual changes.
-  -k KEYCHAIN_PROFILE, --keychain-profile KEYCHAIN_PROFILE
-                        Keychain Profile
-  -i DEV_ID, --dev-id DEV_ID
-                        Developer ID
-
-package subcommands:
-  package, sign and release external
-
-                        additional help
-    collect_dmg         collect dmg
-    dist                create project distribution folder
-    dmg                 package distribution folder as .dmg
-    notarize_dmg        notarize dmg
-    sign                sign all required folders recursively
-    sign_dmg            sign dmg
-    staple_dmg          staple dmg
-```
-
-### The Project's Makefile frontend
-
-Since the `Makefile` frontend basically just calls the `builder` interface in a simplified way, we will use it to explain the basic sequential packaging steps.
-
-1. Recursively sign all externals in the `external folder` and/or binaries in the `support` folder
-
-    ```sh
-    make sign
-    ```
-
-2. Gather all project resources into a distribution folder and then convert it into a `.dmg`
-
-    ```sh
-    make dmg
-    ```
-
-3. Sign the DMG
-
-    ```sh
-    make sign-dmg
-    ```
-
-4. Notarize the DMG (send it to Apple for validation and notarization)
-
-    ```sh
-    make notarize-dmg
-    ```
-
-5. Staple a valid notarization ticket to the DMG
-
-    ```sh
-    make staple-dmg
-    ```
-
-6. Zip the DMG and collect into in the `$HOME/Downloads/PY-JS` folder
-
-    ```sh
-    make collect-dmg
-    ```
-
-To do all of the above in one step:
-
-```sh
+# Complete release process (sign, notarize, package)
 make release
 ```
 
-Note that it is important to sign externals (this is done by Xcode automatically) if you want to to distribute to others (or in the case of Apple Silicon, even use yourself). If the externals are signed, then you can proceed to the notarization step if you have an Apple Developer License (100 USD/year) or, alternatively, you can ask users to remove the product's quarantine state or let Max do this automatically on opening the external.
+**Requirements for Notarization:**
 
-### Notarization Requirements
+- Apple Developer Account ($100/year)
+- App-specific password
+- Developer ID certificate
 
-To complete the notarization process, an Apple Developer Account and an [app-specific password](https://support.apple.com/en-sa/102654) are required.
+**Setup credentials:**
 
-1. Create local credentials based on your apple developer id and app-specific password
+```bash
+xcrun notarytool store-credentials "keychain-profile" \
+  --apple-id "your-apple-id" \
+  --team-id "team-id" \
+  --password "app-specific-password"
 
-    ```sh
-    xcrun notarytool store-credentials "<keychain-profile-name>" --apple-id "<apple-id>" --team-id <developer-team-id> --password "<app-specific-password>"
-    ```
-
-2. Export `DEV_ID` and `KEYCHAIN_PROFILE` environment variables:
-
-    ```sh
-    export DEV_ID="<first> <lastname>"
-    export KEYCHAIN_PROFILE="<name-of-credentials>"
-    ```
-
-3. Run the whole process (i.e. steps 1-6) with one command:
-
-    ```sh
-    make release
-    ```
-
-### Github Actions
-
-There are a number of Github actions in the project which basically automate the testing, packaging, and possibly the notariztion steps described above.
-
-### Caveats
-
-- The externals in this project have been mostly developed on MacOS and have not yet been extensively tested on Windows.
-
-- Despite their relative maturity, the `py` and `pyjs` objects are still only v0.2.x and still need further unit/functional/integration/field testing!
-
-- As of this writing, the `api` module, does not (like apparently all 3rd party python c-extensions) unload properly between patches and requires a restart of Max to work after you close the first patch which uses it. Unfortunately, this is a known [bug](https://bugs.python.org/issue34309) in python which is being worked on and may be [fixed](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!msg/cython-users/SnVpCE7Sq8M/hdT8S2iFBgAJ) in future versions (python 3.13 perhaps?).
-
-- `Numpy`, the popular python numerical analysis package, falls in the above category. As of python 3.9.x, it thankfully doesn't crash but gives the following error:
-
-```sh
-[py __main__] import numpy: SystemError('Objects/structseq.c:401: bad argument to internal function')
+export DEV_ID="Your Name"
+export KEYCHAIN_PROFILE="keychain-profile"
 ```
 
-This just means that the user opened a patch with a `py-js` external that imports `numpy`, then closed the patch and (in the same Max session) re-opened it, or created a new patch importing `numpy` again.
+### Build Testing
 
-To fix it, just restart Max and use it normally in your patch. Treat each patch as a session and restart Max after each session. It's a pain, but unfortunately a limitation of current python c-extensions.
+Test all build variants on your system:
 
-- `core` features relying on pure python code are supposed to be the most stable, and *should* not crash under most circumstances, `extra` features are less stable since they are more experimental, etc..
-
-- The `api` module is the most experimental and evolving part of this project, and is completely optional. If you don't want to use it, don't import it or don't use an external which provides it.
-
-### Current Status of Builders
-
-As mentioned earlier, as of this writing this project uses a combination of a `Makefile` in the project root, a basic `cmake` build option and a custom python build system, `builder`, which resides in the `py-js/source/py/builder` package. The `Makefile` is a kind of 'frontend' to the more complex python build system. The latter can be used directly of course. A view into its many options can be obtained by typing the following:
-
-```sh
-cd py-js/source/py
-python3 -m builder --help
+```bash
+make test                 # Test all variants
+make test-shared-pkg      # Test specific variant
 ```
 
-`builder` was developed to handle the more complex case of downloading the source code of python (from python.org) and also its dependencies from their respective sites and then building custom python binaries with which to reliably compile python3 externals which are portable, relocatable, self-contained, small-in-size, and usable in Max Packages and Standalones.
+## Troubleshooting
 
-### Build Variations
+### Common Issues
 
-One of the objectives of this project is to cater to a number of build variations. As of this writing, the following table gives an overview of the different builds and their differences:
+**Python Module Reload Problems:**
 
-There is generally tradeoff of size vs. portability:
+- **Symptom:** `SystemError` when reimporting NumPy or other C extensions
+- **Cause:** Known Python bug with C extension unloading
+- **Solution:** Restart Max between patches that use the same C extensions
 
-build command       | format       | size_mb  | deploy_as | pip      | portable | numpy
-:-------------------| :----------- | :------: | :-------: | :-------:| :-------:| :-------:
-make                | framework    | 0.3      | external  | yes [^1] | no       | yes
-make homebrew-ext   | hybrid  [^3] | 13.6     | external  | no       | yes      | yes
-make homebrew-pkg   | hybrid       | 13.9     | package   | yes      | yes      | yes
-make static-ext     | static       | 9.0      | external  | no       | yes      | no [^2]
-make shared-ext     | shared       | 15.7     | external  | no       | yes      | yes
-make shared-pkg     | shared       | 18.7     | package   | yes      | no [^4]  | yes
-make framework-ext  | framework    | 16.8     | external  | no       | yes      | yes
-make framework-pkg  | framework    | 16.8     | package   | yes      | yes      | yes
+**Standalone Build Issues:**
 
-[^1]: In this case, `pip` has automatic access to your system python's site-packages
+- **Symptom:** `pyjs.mxo` missing from standalone bundle
+- **Solution:** Use provided script `scripts/fix-pyjs-standalone.sh`
 
-[^2]: The static external implementation does not work well with embedding `numpy` due to symbol access issues, but is still usable via the buffer protocol and memoryview interfaces.
+**iCloud Sync Problems:**
 
-[^3]: *hybrid* means that the source system was a `framework` and the destination system is `shared`.
+- **Symptom:** Codesigning failures during development
+- **Cause:** iCloud creates hidden files that interfere with signing
+- **Solution:** Move project outside iCloud-synced directories, run `xattr -cr .`
 
-[^4]: the `shared-pkg` variant does not build a compliant `.framework` bundle and hence cannot be notarized.
+**Build Failures:**
 
-- *pip*: the build allows or provides for pip installation
+- **Symptom:** CMake or compilation errors
+- **Solution:** Ensure all dependencies installed, check Python version compatibility (3.8-3.13)
 
-- *portable*: the externals can be deployed as portable packages or standalones
+### Compatibility Notes
 
-- *numpy*: numpy compatibility
+**Python Versions:** 3.8.20, 3.9.22, 3.10.17, 3.11.12, 3.12.10, 3.13.3 tested
+**Max Versions:** Max 8 and Max 9 supported
+**Platforms:** macOS (mature), Windows (experimental)
 
-#### Packages vs Self-contained Externals
+### Feature Stability
 
-The Max package format is a great way to move a bunch of related patches and externals around. This format also makes a lot of sense for `py-js`, giving a number of advantages over other alternatives:
+- **Core features** (`eval`, `exec`, `import`) - Stable
+- **Extra features** (`call`, `pipe`, `fold`) - Mostly stable
+- **API module** - Experimental, requires Max restart between patches
 
-1. Portable: Relocatable, you can move it around and it still works.
+### Getting Help
 
-2. Extendable: Can include a full fit-for-purpse python3 installation in the `support` directory with its own site-packages. Packages can be `pip` installed and all of the `site-packages` is automatically made available to the thin 'client' python3 externals in the package's `externals` folder.
+- **Examples:** Check `examples/tests/` and `patchers/` directories
+- **Issues:** Report bugs at [GitHub Issues](https://github.com/shakfu/py-js/issues)
+- **Documentation:** Additional help files in `.maxhelp` patches
 
-3. Size-efficient, since you don't need to duplicate functionality in each external
+## Development
 
-4. Standalone installable: Recent changes in Max have allowed for this to work in standalones. Just create your standalone application from a patcher which which includes the `py` and `pyjs` objects. Once it is built into a `<STANDALONE>` then copy the whole aforementioned `py` package to `<STANDALONE>/Contents/Resources/C74/packages` and delete the redundant `py.mxo` in `<STANDALONE>/Contents/Resources/C74/externals` since it already exists in the just-copied package.
+### Build System Architecture
 
-5. Better for codesigning / notarizing scenarios since Packages are not sealed bundles like externals.
+The project uses a multi-layered build system:
 
-On the other hand, sometimes you just want an external which embeds a python distribution and custom extensions and code:
+1. **Makefile** - High-level interface for common tasks
+2. **CMake** - Standard Max SDK build process for development
+3. **Builder** - Custom Python build system for complex packaging
 
-1. Portable: Relocatable, you can move it around and it still works.
+### Advanced Build Options
 
-2. Extendable: Can include new pure python code and be provided with new additionas to `sys.path`
+**Custom Python Builder:**
 
-3. Size-efficient and fit-for-purpose
-
-4. Standalone installable. Easiest to install in standalones
-
-5. Can be codesigned and notarized relatively easily. [1]
-
-[1] If you want to codesign and notarize it for use in your standalone or package, the [codesigning / notarization script](source/py/scripts/notarize.sh) and related [entitlements file](source/py/scripts/entitlements.plist) can be found in the [source/py/scripts](source/py/scripts) folder.
-
-### The relocatable-python variation
-
-[relocatable-python](https://github.com/gregneagle/relocatable-python) is Greg Neagle's excellent tool for building standalone relocatable Python.framework bundles.
-
-It works so well, that its been included in the `builder` application as an external (embedded dependency).
-
-It can be seen in the `relocatable-pkg` make option which will download a nice default `Python.framework` to the `support` directory used for compiled both `py` and `pyjs` externals:
-
-```sh
-make relocatable-pkg
+```bash
+cd source/projects/py
+python3 -m builder --help  # See all options
 ```
 
-More options are available if you use the `builder` package directly:
+**Specify Python Version:**
 
-```sh
-$ python3 -m builder pyjs relocatable_pkg --help
-usage: __main__.py pyjs relocatable_pkg [-h] [--destination DESTINATION]
-                                        [--baseurl BASEURL]
-                                        [--os-version OS_VERSION]
-                                        [--python-version PYTHON_VERSION]
-                                        [--pip-requirements PIP_REQUIREMENTS]
-                                        [--pip-modules PIP_MODULES]
-                                        [--no-unsign] [--upgrade-pip]
-                                        [--without-pip] [--release] [-b] [-i]
-                                        [--dump]
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --destination DESTINATION
-                        Directory destination for the Python.framework
-  --baseurl BASEURL     Override the base URL used to download the framework.
-  --os-version OS_VERSION
-                        Override the macOS version of the downloaded pkg.
-                        Current supported versions are "10.6", "10.9", and
-                        "11". Not all Python version and macOS version
-                        combinations are valid.
-  --python-version PYTHON_VERSION
-                        Override the version of the Python framework to be
-                        downloaded. See available versions at
-                        https://www.python.org/downloads/mac-osx/
-  --pip-requirements PIP_REQUIREMENTS
-                        Path to a pip freeze requirements.txt file that
-                        describes extra Python modules to be installed. If not
-                        provided, no modules will be installed.
-  --pip-modules PIP_MODULES
-                        list of extra Python modules to be installed.
-  --no-unsign           Do not unsign binaries and libraries after they are
-                        relocatablized.
-  --upgrade-pip         Upgrade pip prior to installing extra python modules.
-  --without-pip         Do not install pip.
-  --release             set configuration to release
-  -b, --build           build python
-  -i, --install         install python to build/lib
-  --dump                dump project and product vars
+```bash
+make shared-ext PYTHON_VERSION=3.11.12
 ```
 
-### Sidenote about building on a Mac
+**Test All Build Variants:**
 
-If you are developing the package in `$HOME/Documents/Max 8/Packages/py` and you have your iCloud drive on for Documents, you will find that `make` or `xcodebuild` will reliably fail with 1 error during development, a codesigning error that is due to icloud sync creating detritus in the dev folder. This can be mostly ignored (unless your only focus is codesigning the external).
+```bash
+make test                    # Test all variants
+make test-static-ext         # Test specific variant
+```
 
-The solution is to move the external project folder to folder that's not synced-with-icloud  (such as `$HOME/Downloads` for example) and then run `xattr -cr .` in the project directory to remove the detritus (which ironically Apple's system is itself creating) and then it should succeed (provided you have your `Info.plist` and `bundle id` correctly specified). Then just symlink the folder to `$HOME/Documents/Max 8/Packages/` to prevent this from recurring.
+### Development Workflow
 
-I've tried this several times and and it works (for "sign to run locally" case and for the "Development" case).
+1. **Setup development environment:**
+
+   ```bash
+   git clone --recursive https://github.com/shakfu/py-js.git
+   cd py-js
+   make setup
+   pip install cython
+   ```
+
+2. **Iterative development:**
+
+   ```bash
+   make                     # Initial build
+   # Make code changes
+   cd build && cmake --build .  # Incremental build
+   ```
+
+3. **Test changes:**
+
+   ```bash
+   # Open Max patches in patchers/ directory
+   # Test with example patches in examples/tests/
+   ```
 
 ### Code Style
 
-The coding style for this project can be applied automatically during the build process with `clang-format`. On OS X, you can easily install this using brew:
+Automatic formatting with clang-format:
 
-```sh
+```bash
 brew install clang-format
+# Format applied automatically during build
 ```
 
-The style used in this project is specified in the `.clang-format` file.
+### Project Structure
 
-## Caveats
-
-- Packaging and deployment of python3 externals has improved considerably but is still a work-in-progress: basically needing further documentation, consolidation and cleanup. For example, there are currently two build systems which overlap: a python3 based build system to handle complex packaging cases and cmake for handling the quick and efficient development builds and general cases.
-
-- As of this writing, the `api` module, does not (like apparently all 3rd party python c-extensions) unload properly between patches and requires a restart of Max to work after you close the first patch which uses it. Unfortunately, this is a known [bug](https://bugs.python.org/issue34309) in python which is being worked on and may be [fixed](https://groups.google.com/forum/?utm_medium=email&utm_source=footer#!msg/cython-users/SnVpCE7Sq8M/hdT8S2iFBgAJ) in future versions (python 3.12 perhaps?).
-
-- `Numpy`, the popular python numerical analysis package, falls in the above category. In newer versions of Python the situation is improving as above, but in python 3.9.x, it thankfully doesn't crash but gives the following error:
-
-```sh
-[py __main__] import numpy: SystemError('Objects/structseq.c:401: bad argument to internal function')
+```text
+py-js/
+├── source/projects/py/       # Main external source
+│   ├── py.c                  # Core C implementation
+│   ├── py_prelude.py         # Python utilities
+│   ├── api.pyx               # Cython Max API wrapper
+│   └── builder/              # Custom build system
+├── examples/                 # Example patches and scripts
+├── patchers/                # Max patches and helpers
+└── externals/               # Built external outputs
 ```
 
-This just means that the user opened a patch with a `py-js` external that imports `numpy`, then closed the patch and (in the same Max session) re-opened it, or created a new patch importing `numpy` again.
+### Contributing
 
-To fix it, just restart Max and use it normally in your patch. Treat each patch as a session and restart Max after each session.
+1. **Focus Areas:**
+   - Windows platform support
+   - API module stability improvements
+   - Documentation and examples
+   - Performance optimizations
 
-- `core` features relying on pure python code are supposed to be the most stable, and *should* not crash under most circumstances, `extra` features are less stable since they are more experimental, etc..
+2. **Testing:**
+   - Test with multiple Python versions (3.8-3.13)
+   - Verify both development and portable builds
+   - Test standalone deployment scenarios
 
-- The `api` module is the most experimental, powerful and evolving part of this project, and is completely optional. If you don't want to use it, don't import it.
+3. **Known Limitations:**
+   - API module requires Max restart between sessions
+   - NumPy reload issues in same Max session
+   - Windows builds still experimental
+
+### Architecture Details
+
+**Message Flow:**
+
+```text
+Max Message → py.c → Python C-API → Python Code → Results → Max
+```
+
+**Python Integration:**
+
+- Each `py` object has isolated namespace
+- Shared global registry for inter-object communication
+- Security framework prevents dangerous operations
+- Memory management handles Python/Max boundary
+
+**API Module Integration:**
+
+- Cython wrapper exposes Max C-API to Python
+- Buffer protocol enables NumPy integration
+- Direct Max object manipulation from Python scripts
