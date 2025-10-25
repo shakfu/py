@@ -859,24 +859,11 @@ static inline void psc_extract_signature(struct psc_cache_entry *entry) {
     // Get total local variables count to infer argument count
     // Since we can't access co_argcount directly, we use the inspect module approach
     PyObject *inspect_module = PyImport_ImportModule("inspect");
-    if (!inspect_module) {
-        post("PSC: WARNING - Failed to import inspect module\n");
-        PyErr_Clear();
-    } else {
+    if (inspect_module) {
         PyObject *signature_func = PyObject_GetAttrString(inspect_module, "signature");
-        if (!signature_func) {
-            post("PSC: WARNING - Failed to get inspect.signature\n");
-            PyErr_Clear();
-        } else {
+        if (signature_func) {
             PyObject *sig = PyObject_CallFunctionObjArgs(signature_func, func, NULL);
-            if (!sig) {
-                post("PSC: WARNING - Failed to get signature for function\n");
-                if (PyErr_Occurred()) {
-                    post("PSC: Error details:\n");
-                    PyErr_Print();
-                }
-                PyErr_Clear();
-            } else {
+            if (sig) {
                 PyObject *params = PyObject_GetAttrString(sig, "parameters");
                 if (params) {
                     PyObject *items = PyMapping_Items(params);
@@ -953,11 +940,14 @@ static inline void psc_extract_signature(struct psc_cache_entry *entry) {
                     Py_DECREF(params);
                 }
                 Py_DECREF(sig);
-            } // else already handled above
+            } else {
+                // Clear any error from signature inspection
+                PyErr_Clear();
+            }
             Py_DECREF(signature_func);
-        } // else already handled above
+        }
         Py_DECREF(inspect_module);
-    } // else already handled above
+    }
 
     // Clear any errors from import
     if (PyErr_Occurred()) PyErr_Clear();
@@ -1330,9 +1320,9 @@ static inline psc_result_t psc_init(psc_instance_t *instance) {
     }
 
     // Set default configuration
-    instance->config.debug_mode = 1; // TESTING: Enable debug output
-    instance->config.strict_validation = 1; // Enable strict validation by default
-    instance->config.enable_memoization = 1; // TESTING: Enabled to debug memoization issues
+    instance->config.debug_mode = 0;
+    instance->config.strict_validation = 1;
+    instance->config.enable_memoization = 1; // Enabled by default (now working!)
 
     // Initialize system state
     instance->state.initialized = 1;
@@ -1417,10 +1407,6 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     if (!instance) return PSC_ERROR_NULL_INSTANCE;
     if (!instance->state.initialized) return PSC_ERROR_NOT_INITIALIZED;
     if (!source_code || strlen(source_code) == 0) return PSC_ERROR_INVALID_ARGS;
-
-    // DEBUG: Log configuration at entry
-    post("PSC[%s]: psc_add_function ENTRY: debug_mode=%d, enable_memoization=%d\n",
-         instance->state.instance_name, instance->config.debug_mode, instance->config.enable_memoization);
 
     // === STEP 1: COMPREHENSIVE FUNCTION VALIDATION ===
     char function_name[PSC_MAX_FUNCTION_NAME_LENGTH];

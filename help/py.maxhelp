@@ -10,7 +10,7 @@
 		}
 ,
 		"classnamespace" : "box",
-		"rect" : [ 265.0, 92.0, 885.0, 769.0 ],
+		"rect" : [ 265.0, 272.0, 760.0, 769.0 ],
 		"gridsize" : [ 15.0, 15.0 ],
 		"showrootpatcherontab" : 0,
 		"showontab" : 0,
@@ -31,10 +31,48 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 265.0, 118.0, 885.0, 743.0 ],
+						"rect" : [ 265.0, 298.0, 760.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 2,
 						"boxes" : [ 							{
+								"box" : 								{
+									"id" : "obj-18",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 424.0, 198.0, 116.0, 22.0 ],
+									"text" : "call ackermann 3 8"
+								}
+
+							}
+, 							{
+								"box" : 								{
+									"id" : "obj-11",
+									"linecount" : 4,
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 19.0, 351.0, 146.0, 62.0 ],
+									"text" : "cache \"def factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n-1)\""
+								}
+
+							}
+, 							{
+								"box" : 								{
+									"id" : "obj-8",
+									"linecount" : 8,
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 417.0, 390.0, 279.0, 116.0 ],
+									"text" : "cache \"def ackermann(m, n):\n    if m == 0:\n        return n + 1\n    elif n == 0:\n        return ackermann(m - 1, 1)\n    else:\n        return ackermann(m - 1, ackermann(m, n - 1))\n\""
+								}
+
+							}
+, 							{
 								"box" : 								{
 									"id" : "obj-3",
 									"linecount" : 7,
@@ -42,7 +80,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 458.0, 380.0, 189.0, 102.0 ],
+									"patching_rect" : [ 417.0, 256.0, 189.0, 102.0 ],
 									"text" : "cache \"def fib(n):\n    from functools import lru_cache\n    @lru_cache(maxsize=None)\n    def _fib(n):\n        if n <= 1: return n\n        return _fib(n-1) + _fib(n-2)\n    return _fib(n)\""
 								}
 
@@ -55,7 +93,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 53.0, 424.0, 164.0, 76.0 ],
+									"patching_rect" : [ 19.0, 256.0, 164.0, 76.0 ],
 									"text" : "cache \"def fib(n):\n    if n <= 1:\n        return n\n    else:\n        return fib(n-1) + fib(n-2)\""
 								}
 
@@ -67,7 +105,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 458.0, 317.0, 120.0, 22.0 ],
+									"patching_rect" : [ 424.0, 149.0, 120.0, 22.0 ],
 									"text" : "call process_signal 5"
 								}
 
@@ -79,7 +117,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 52.0, 385.0, 181.0, 22.0 ],
+									"patching_rect" : [ 18.0, 217.0, 181.0, 22.0 ],
 									"text" : "cache \"def square(x): return x*x\""
 								}
 
@@ -91,7 +129,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 458.0, 276.0, 110.0, 22.0 ],
+									"patching_rect" : [ 424.0, 108.0, 110.0, 22.0 ],
 									"text" : "process_signal(10)"
 								}
 
@@ -103,7 +141,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 389.0, 276.0, 60.0, 22.0 ],
+									"patching_rect" : [ 355.0, 108.0, 60.0, 22.0 ],
 									"text" : "square(2)"
 								}
 
@@ -117,7 +155,7 @@
 									"numoutlets" : 2,
 									"outlettype" : [ "", "bang" ],
 									"parameter_enable" : 0,
-									"patching_rect" : [ 330.0, 276.0, 50.0, 22.0 ]
+									"patching_rect" : [ 296.0, 108.0, 50.0, 22.0 ]
 								}
 
 							}
@@ -129,7 +167,7 @@
 									"numoutlets" : 2,
 									"outlettype" : [ "", "bang" ],
 									"parameter_enable" : 0,
-									"patching_rect" : [ 272.0, 276.0, 50.0, 22.0 ]
+									"patching_rect" : [ 238.0, 108.0, 50.0, 22.0 ]
 								}
 
 							}
@@ -171,7 +209,7 @@
 									"maxclass" : "newobj",
 									"numinlets" : 1,
 									"numoutlets" : 0,
-									"patching_rect" : [ 272.0, 441.0, 47.0, 22.0 ],
+									"patching_rect" : [ 238.0, 273.0, 47.0, 22.0 ],
 									"text" : "s to_py"
 								}
 
@@ -209,7 +247,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 52.0, 276.0, 166.0, 76.0 ],
+									"patching_rect" : [ 18.0, 108.0, 166.0, 76.0 ],
 									"text" : "cache \"def process_signal(x):\n    result = 0\n    for i in range(10):\n        result += x * i\n    return result\""
 								}
 
@@ -282,7 +320,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ]
+									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ],
+									"text" : "2045"
 								}
 
 							}
@@ -297,6 +336,13 @@
 , 							{
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-11", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-12", 0 ]
 								}
 
@@ -305,6 +351,13 @@
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-17", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-18", 0 ]
 								}
 
 							}
@@ -382,6 +435,13 @@
 , 							{
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-8", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-9", 0 ]
 								}
 
@@ -411,7 +471,7 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
+						"rect" : [ 0.0, 26.0, 760.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 2,
 						"boxes" : [ 							{
@@ -797,7 +857,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ]
+									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ],
+									"text" : "2045"
 								}
 
 							}
@@ -940,7 +1001,7 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
+						"rect" : [ 0.0, 26.0, 760.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 2,
 						"boxes" : [ 							{
@@ -1189,7 +1250,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ]
+									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ],
+									"text" : "2045"
 								}
 
 							}
@@ -1309,7 +1371,7 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
+						"rect" : [ 0.0, 26.0, 760.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 1,
 						"boxes" : [ 							{
@@ -1661,7 +1723,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ]
+									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ],
+									"text" : "2045"
 								}
 
 							}
@@ -2049,7 +2112,7 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
+						"rect" : [ 0.0, 26.0, 760.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 1,
 						"boxes" : [ 							{
@@ -3288,16 +3351,14 @@
 , 							{
 								"box" : 								{
 									"id" : "obj-21",
-									"linecount" : 3,
 									"maxclass" : "message",
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 35.0, 353.0, 160.0, 49.0 ],
+									"patching_rect" : [ 35.0, 353.0, 160.0, 22.0 ],
 									"presentation" : 1,
-									"presentation_linecount" : 11,
-									"presentation_rect" : [ 76.0, 353.0, 52.0, 156.0 ],
-									"text" : "\"3.14.0 (main, Oct  7 2025, 09:34:52) [Clang 17.0.0 (clang-1700.0.13.3)]\""
+									"presentation_rect" : [ 76.0, 353.0, 52.0, 22.0 ],
+									"text" : "2045"
 								}
 
 							}
