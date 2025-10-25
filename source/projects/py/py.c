@@ -128,6 +128,7 @@ void ext_main(void* module_ref)
     // caching python code handlers
     class_addmethod(c, (method)py_cache,      "cache",      A_GIMME,   0);
     class_addmethod(c, (method)py_cachefile,  "cachefile",  A_DEFSYM,  0);
+    class_addmethod(c, (method)py_clear_cache, "clear_cache", A_NOTHING, 0);
 
     // extra python code handlers
     class_addmethod(c, (method)py_apply,      "apply",      A_GIMME,   0);
@@ -2229,12 +2230,17 @@ t_max_err py_cachefile(t_py* x, t_symbol* s)
                 size_t read_size = fread(file_content, 1, file_size, scan_fhandle);
                 file_content[read_size] = '\0';
 
-                // Check if the file contains a function definition
-                if (psc_check_is_python_function(x->python.cache, file_content) == PSC_VALIDATE_SUCCESS) {
-                    if (psc_add_function(x->python.cache, file_content,
-                                       x->editor.code_filepath->s_name) == PSC_SUCCESS) {
-                        py_debug(x, "cached function from file: %s", x->editor.code_filepath->s_name);
-                    }
+                // Cache all top-level functions from the file
+                int cached_count = psc_add_functions_from_executed_code(
+                    x->python.cache, file_content, x->python.globals,
+                    x->editor.code_filepath->s_name);
+
+                if (cached_count > 0) {
+                    py_debug(x, "cached %d function(s) from file: %s",
+                            cached_count, x->editor.code_filepath->s_name);
+                } else {
+                    py_debug(x, "no functions found to cache in file: %s",
+                            x->editor.code_filepath->s_name);
                 }
 
                 free(file_content);
@@ -2255,6 +2261,33 @@ error:
     PyGILState_Release(gstate);
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
+}
+
+/**
+ * @brief Clear all cached functions and reset cache statistics
+ *
+ * @param x pointer to object structure
+ * @return t_max_err error code
+ */
+t_max_err py_clear_cache(t_py* x)
+{
+    if (!x || !x->python.cache) {
+        py_error(x, "invalid cache instance");
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+
+    psc_result_t result = psc_reset(x->python.cache);
+
+    if (result == PSC_SUCCESS) {
+        post("cache cleared successfully");
+        py_bang_success(x);
+        return MAX_ERR_NONE;
+    } else {
+        py_error(x, "failed to clear cache, error code: %d", result);
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
 }
 
 /*--------------------------------------------------------------------------*/

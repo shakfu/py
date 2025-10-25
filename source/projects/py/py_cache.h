@@ -543,6 +543,89 @@ static inline size_t psc_hash_string(const char *str) {
 // ============================================================================
 
 /**
+ * @brief Count top-level function definitions in source code
+ * @param source_code Python source code to scan
+ * @return Number of top-level functions found
+ */
+static inline int psc_count_top_level_functions(const char *source_code) {
+    if (!source_code) return 0;
+
+    int count = 0;
+    const char *p = source_code;
+
+    while ((p = strstr(p, "def ")) != NULL) {
+        const char *line_start = p;
+        while (line_start > source_code && *(line_start - 1) != '\n') {
+            line_start--;
+        }
+
+        if (line_start == p) {
+            count++;
+        }
+
+        p += 4;
+    }
+
+    return count;
+}
+
+/**
+ * @brief Extract all top-level function names from source code
+ * @param source_code Python source code to scan
+ * @param function_names Output array of function name pointers (caller must free)
+ * @return Number of functions found (0 on error)
+ */
+static inline int psc_extract_function_names(const char *source_code, char ***function_names) {
+    if (!source_code || !function_names) return 0;
+
+    // First count how many functions we have
+    int count = psc_count_top_level_functions(source_code);
+    if (count == 0) return 0;
+
+    // Allocate array of string pointers
+    *function_names = (char **)calloc(count, sizeof(char *));
+    if (!*function_names) return 0;
+
+    // Extract function names
+    int index = 0;
+    const char *p = source_code;
+
+    while ((p = strstr(p, "def ")) != NULL && index < count) {
+        const char *line_start = p;
+        while (line_start > source_code && *(line_start - 1) != '\n') {
+            line_start--;
+        }
+
+        if (line_start == p) {
+            // Extract function name
+            const char *name_start = p + 4; // Skip "def "
+            while (*name_start && (*name_start == ' ' || *name_start == '\t')) {
+                name_start++;
+            }
+
+            const char *name_end = name_start;
+            while (*name_end && (isalnum(*name_end) || *name_end == '_')) {
+                name_end++;
+            }
+
+            size_t name_len = name_end - name_start;
+            if (name_len > 0 && name_len < PSC_MAX_FUNCTION_NAME_LENGTH) {
+                (*function_names)[index] = (char *)malloc(name_len + 1);
+                if ((*function_names)[index]) {
+                    memcpy((*function_names)[index], name_start, name_len);
+                    (*function_names)[index][name_len] = '\0';
+                    index++;
+                }
+            }
+        }
+
+        p += 4;
+    }
+
+    return index;
+}
+
+/**
  * @brief Quick check if source looks like a Python function
  * @param instance Cache instance (for debug output)
  * @param source_code Python source code to validate
@@ -1804,6 +1887,122 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
     }
 
     return PSC_SUCCESS;
+}
+
+/**
+ * @brief Cache all functions from source code that has already been executed
+ * @param instance Cache instance
+ * @param source_code Python source code containing function definitions
+ * @param globals_dict Python globals dictionary where functions were defined
+ * @param filename Filename for debugging purposes
+ * @return Number of functions successfully cached
+ */
+static inline int psc_add_functions_from_executed_code(psc_instance_t *instance,
+                                                        const char *source_code,
+                                                        PyObject *globals_dict,
+                                                        const char *filename) {
+    if (!instance || !source_code || !globals_dict) return 0;
+    if (!instance->state.initialized) return 0;
+
+    // Extract all top-level function names
+    char **function_names = NULL;
+    int func_count = psc_extract_function_names(source_code, &function_names);
+
+    if (func_count == 0) {
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: No top-level functions found in file\n",
+                 instance->state.instance_name);
+        }
+        return 0;
+    }
+
+    int cached_count = 0;
+
+    // For each function, extract it from globals and cache it
+    for (int i = 0; i < func_count; i++) {
+        const char *func_name = function_names[i];
+
+        // Get function object from globals
+        PyObject *func_obj = PyDict_GetItemString(globals_dict, func_name);
+        if (!func_obj || !PyFunction_Check(func_obj)) {
+            if (instance->config.debug_mode) {
+                post("PSC[%s]: Function '%s' not found in globals or not a function\n",
+                     instance->state.instance_name, func_name);
+            }
+            continue;
+        }
+
+        Py_INCREF(func_obj);
+
+        // Get code object
+        PyObject *code_obj = PyFunction_GetCode(func_obj);
+        if (!code_obj) {
+            Py_DECREF(func_obj);
+            continue;
+        }
+        Py_INCREF(code_obj);
+
+        // Get function's globals (will be same as globals_dict)
+        PyObject *func_globals = PyFunction_GetGlobals(func_obj);
+        if (!func_globals) {
+            Py_DECREF(code_obj);
+            Py_DECREF(func_obj);
+            continue;
+        }
+        Py_INCREF(func_globals);
+
+        // Create cache entry
+        struct psc_cache_entry *entry = psc_create_entry(func_name, source_code,
+                                                        code_obj, func_obj, func_globals);
+        if (!entry) {
+            Py_DECREF(code_obj);
+            Py_DECREF(func_obj);
+            Py_DECREF(func_globals);
+            continue;
+        }
+
+        // Insert into cache
+        psc_rwlock_wrlock(&instance->state.lock);
+
+        size_t hash_idx = psc_hash_string(func_name);
+        entry->next = instance->hash_table[hash_idx];
+        instance->hash_table[hash_idx] = entry;
+        instance->stats.total_entries++;
+        instance->stats.functions_cached++;
+        strncpy_zero(instance->state.last_cached_function_name, func_name,
+                    PSC_MAX_FUNCTION_NAME_LENGTH - 1);
+
+        psc_rwlock_unlock_wr(&instance->state.lock);
+
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Cached function '%s' from file\n",
+                 instance->state.instance_name, func_name);
+        }
+
+        // Clean up temporary references
+        Py_DECREF(code_obj);
+        Py_DECREF(func_obj);
+        Py_DECREF(func_globals);
+
+        cached_count++;
+    }
+
+    if (instance->config.debug_mode && cached_count > 0) {
+        post("PSC[%s]: Successfully cached %d functions from file - now have %zu functions in cache\n",
+             instance->state.instance_name, cached_count, instance->stats.total_entries);
+    }
+
+    // Free allocated function names
+    if (function_names) {
+        for (int i = 0; i < func_count; i++) {
+            if (function_names[i]) {
+                free(function_names[i]);
+            }
+        }
+        free(function_names);
+    }
+
+    return cached_count;
 }
 
 /**

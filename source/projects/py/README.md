@@ -11,6 +11,7 @@ A powerful Python integration for Max/MSP that embeds a Python3 interpreter dire
   - [Pre-built Externals](#pre-built-externals)
   - [Building from Source](#building-from-source)
 - [Basic Usage](#basic-usage)
+- [Function Caching and Memoization](#function-caching-and-memoization)
 - [Architecture](#architecture)
 - [Advanced Features](#advanced-features)
   - [API Module](#api-module)
@@ -109,6 +110,7 @@ make        # Build externals
 | `pipe <data> <funcs>` | Pipe data through functions | `pipe 5 abs str len` |
 | `cache <code>` | Cache Python function | `cache def fib(n): ...` |
 | `cachefile <path>` | Cache function from file | `cachefile fib.py` |
+| `clear_cache` | Clear all cached functions | `clear_cache` |
 | `int <value>` | Call last cached function | `int 10` |
 
 ### Simple Examples
@@ -211,14 +213,43 @@ Only top-level function definitions are counted for validation. Nested functions
 
 ### Cache File Loading
 
-Load and cache functions from external files:
+Load and cache all functions from external Python files:
 
 ```text
 [cachefile algorithms.py]
-[int 100]
+[call fibonacci 100]
+[call factorial 20]
 ```
 
-The file must contain a single top-level function definition.
+The file can contain multiple top-level function definitions. All functions will be cached and available for calling by name.
+
+### Clearing the Cache
+
+Remove all cached functions and reset statistics:
+
+```text
+[clear_cache]
+```
+
+This clears all cached functions while preserving configuration settings. The cache is automatically reinitialized after clearing. Useful for:
+- Reloading modified function definitions
+- Freeing memory from unused cached functions
+- Resetting statistics during development
+
+**Workflow example:**
+
+```text
+# Cache functions from file
+[cachefile my_functions.py]
+[call process_data 100] → [result]
+
+# Edit my_functions.py externally...
+
+# Reload the modified file
+[clear_cache]
+[cachefile my_functions.py]
+[call process_data 100] → [new result]
+```
 
 ### Limitations
 

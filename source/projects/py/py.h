@@ -148,6 +148,7 @@ t_max_err py_execfile(t_py* x, t_symbol* s);
 
 t_max_err py_cache(t_py* x, t_symbol* s, long argc, t_atom* argv);
 t_max_err py_cachefile(t_py* x, t_symbol* s);
+t_max_err py_clear_cache(t_py* x);
 
 /*--------------------------------------------------------------------------*/
 /* Extra Python Methods */

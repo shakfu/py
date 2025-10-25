@@ -10,7 +10,7 @@
 		}
 ,
 		"classnamespace" : "box",
-		"rect" : [ 382.0, 190.0, 885.0, 769.0 ],
+		"rect" : [ 382.0, 189.0, 885.0, 769.0 ],
 		"gridsize" : [ 15.0, 15.0 ],
 		"showrootpatcherontab" : 0,
 		"showontab" : 0,
@@ -31,10 +31,46 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
+						"rect" : [ 382.0, 215.0, 885.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 2,
 						"boxes" : [ 							{
+								"box" : 								{
+									"id" : "obj-14",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 194.0, 118.0, 52.0, 22.0 ],
+									"text" : "debug 1"
+								}
+
+							}
+, 							{
+								"box" : 								{
+									"id" : "obj-16",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 569.0, 197.0, 124.0, 22.0 ],
+									"text" : "cachefile cacheme.py"
+								}
+
+							}
+, 							{
+								"box" : 								{
+									"id" : "obj-10",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 560.0, 146.0, 73.0, 22.0 ],
+									"text" : "clear_cache"
+								}
+
+							}
+, 							{
 								"box" : 								{
 									"id" : "obj-30",
 									"maxclass" : "message",
@@ -373,6 +409,13 @@
 , 							{
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-10", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-11", 0 ]
 								}
 
@@ -381,6 +424,20 @@
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-12", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-14", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-16", 0 ]
 								}
 
 							}
@@ -2171,7 +2228,7 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 382.0, 216.0, 885.0, 743.0 ],
+						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 1,
 						"boxes" : [ 							{
@@ -3425,7 +3482,7 @@
 , 							{
 								"box" : 								{
 									"autoload" : 0,
-									"file" : "",
+									"file" : "/Volumes/Minx/Users/sa/projects/py/examples/demos/cacheme.py",
 									"id" : "obj-7",
 									"maxclass" : "newobj",
 									"numinlets" : 1,
@@ -3437,7 +3494,8 @@
 									"presentation_rect" : [ 195.0, 268.0, 54.0, 49.0 ],
 									"saved_object_attributes" : 									{
 										"autoload" : 0,
-										"file" : "",
+										"debug" : 1,
+										"file" : "/Volumes/Minx/Users/sa/projects/py/examples/demos/cacheme.py",
 										"pythonpath" : "",
 										"restrict_file_access" : 1407374883553280000,
 										"restrict_imports" : -8646911284551352320
