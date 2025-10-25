@@ -10,7 +10,7 @@
 		}
 ,
 		"classnamespace" : "box",
-		"rect" : [ 382.0, 189.0, 885.0, 769.0 ],
+		"rect" : [ 382.0, 87.0, 885.0, 769.0 ],
 		"gridsize" : [ 15.0, 15.0 ],
 		"showrootpatcherontab" : 0,
 		"showontab" : 0,
@@ -31,30 +31,55 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 382.0, 215.0, 885.0, 743.0 ],
+						"rect" : [ 382.0, 113.0, 885.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 2,
 						"boxes" : [ 							{
+								"box" : 								{
+									"bgcolor" : [ 0.011765, 0.396078, 0.752941, 1.0 ],
+									"bgcolor2" : [ 0.2, 0.2, 0.2, 1.0 ],
+									"bgfillcolor_angle" : 270.0,
+									"bgfillcolor_autogradient" : 0.0,
+									"bgfillcolor_color" : [ 0.011765, 0.396078, 0.752941, 1.0 ],
+									"bgfillcolor_color1" : [ 0.011765, 0.396078, 0.752941, 1.0 ],
+									"bgfillcolor_color2" : [ 0.2, 0.2, 0.2, 1.0 ],
+									"bgfillcolor_proportion" : 0.5,
+									"bgfillcolor_type" : "gradient",
+									"gradient" : 1,
+									"id" : "obj-29",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 566.5, 231.0, 124.0, 22.0 ],
+									"presentation" : 1,
+									"presentation_linecount" : 2,
+									"presentation_rect" : [ 640.0, 380.0, 76.0, 35.0 ],
+									"text" : "cachefile cacheme.py"
+								}
+
+							}
+, 							{
+								"box" : 								{
+									"id" : "obj-20",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 695.0, 275.0, 59.0, 22.0 ],
+									"text" : "call fib 10"
+								}
+
+							}
+, 							{
 								"box" : 								{
 									"id" : "obj-14",
 									"maxclass" : "message",
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 194.0, 118.0, 52.0, 22.0 ],
+									"patching_rect" : [ 25.0, 175.0, 52.0, 22.0 ],
 									"text" : "debug 1"
-								}
-
-							}
-, 							{
-								"box" : 								{
-									"id" : "obj-16",
-									"maxclass" : "message",
-									"numinlets" : 2,
-									"numoutlets" : 1,
-									"outlettype" : [ "" ],
-									"patching_rect" : [ 569.0, 197.0, 124.0, 22.0 ],
-									"text" : "cachefile cacheme.py"
 								}
 
 							}
@@ -65,7 +90,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 560.0, 146.0, 73.0, 22.0 ],
+									"patching_rect" : [ 555.0, 175.0, 73.0, 22.0 ],
 									"text" : "clear_cache"
 								}
 
@@ -77,7 +102,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 433.0, 277.0, 129.0, 22.0 ],
+									"patching_rect" : [ 428.0, 306.0, 129.0, 22.0 ],
 									"text" : "count_paths(13\\, 16)"
 								}
 
@@ -89,7 +114,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 569.0, 277.0, 129.0, 22.0 ],
+									"patching_rect" : [ 564.0, 306.0, 129.0, 22.0 ],
 									"text" : "call count_paths 13 16"
 								}
 
@@ -102,7 +127,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 32.0, 478.0, 296.0, 62.0 ],
+									"patching_rect" : [ 27.0, 507.0, 296.0, 62.0 ],
 									"text" : "cache \"def count_paths(m, n):\n      if m == 1 or n == 1:\n          return 1\n      return count_paths(m-1, n) + count_paths(m, n-1)\""
 								}
 
@@ -114,7 +139,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 569.0, 246.0, 109.0, 22.0 ],
+									"patching_rect" : [ 564.0, 275.0, 109.0, 22.0 ],
 									"text" : "call ackermann 3 9"
 								}
 
@@ -126,7 +151,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 437.0, 246.0, 116.0, 22.0 ],
+									"patching_rect" : [ 432.0, 275.0, 116.0, 22.0 ],
 									"text" : "call ackermann 3 8"
 								}
 
@@ -139,7 +164,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 32.0, 399.0, 146.0, 62.0 ],
+									"patching_rect" : [ 27.0, 428.0, 146.0, 62.0 ],
 									"text" : "cache \"def factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n-1)\""
 								}
 
@@ -152,7 +177,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 424.0, 321.0, 279.0, 116.0 ],
+									"patching_rect" : [ 419.0, 350.0, 279.0, 116.0 ],
 									"text" : "cache \"def ackermann(m, n):\n    if m == 0:\n        return n + 1\n    elif n == 0:\n        return ackermann(m - 1, 1)\n    else:\n        return ackermann(m - 1, ackermann(m, n - 1))\n\""
 								}
 
@@ -165,7 +190,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 32.0, 304.0, 164.0, 76.0 ],
+									"patching_rect" : [ 27.0, 333.0, 164.0, 76.0 ],
 									"text" : "cache \"def fib(n):\n    if n <= 1:\n        return n\n    else:\n        return fib(n-1) + fib(n-2)\""
 								}
 
@@ -177,7 +202,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 437.0, 197.0, 120.0, 22.0 ],
+									"patching_rect" : [ 432.0, 226.0, 120.0, 22.0 ],
 									"text" : "call process_signal 5"
 								}
 
@@ -189,7 +214,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 265.0, 181.0, 22.0 ],
+									"patching_rect" : [ 26.0, 294.0, 181.0, 22.0 ],
 									"text" : "cache \"def square(x): return x*x\""
 								}
 
@@ -201,7 +226,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 437.0, 146.0, 110.0, 22.0 ],
+									"patching_rect" : [ 432.0, 175.0, 110.0, 22.0 ],
 									"text" : "process_signal(10)"
 								}
 
@@ -213,7 +238,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 368.0, 146.0, 60.0, 22.0 ],
+									"patching_rect" : [ 363.0, 175.0, 60.0, 22.0 ],
 									"text" : "square(2)"
 								}
 
@@ -227,7 +252,7 @@
 									"numoutlets" : 2,
 									"outlettype" : [ "", "bang" ],
 									"parameter_enable" : 0,
-									"patching_rect" : [ 309.0, 146.0, 50.0, 22.0 ]
+									"patching_rect" : [ 304.0, 175.0, 50.0, 22.0 ]
 								}
 
 							}
@@ -239,7 +264,7 @@
 									"numoutlets" : 2,
 									"outlettype" : [ "", "bang" ],
 									"parameter_enable" : 0,
-									"patching_rect" : [ 251.0, 146.0, 50.0, 22.0 ]
+									"patching_rect" : [ 246.0, 175.0, 50.0, 22.0 ]
 								}
 
 							}
@@ -281,7 +306,7 @@
 									"maxclass" : "newobj",
 									"numinlets" : 1,
 									"numoutlets" : 0,
-									"patching_rect" : [ 251.0, 321.0, 47.0, 22.0 ],
+									"patching_rect" : [ 246.0, 350.0, 47.0, 22.0 ],
 									"text" : "s to_py"
 								}
 
@@ -290,11 +315,12 @@
 								"box" : 								{
 									"fontsize" : 14.0,
 									"id" : "obj-15",
+									"linecount" : 7,
 									"maxclass" : "comment",
 									"numinlets" : 1,
 									"numoutlets" : 0,
-									"patching_rect" : [ 17.0, 39.0, 596.0, 22.0 ],
-									"text" : "How caching works in the py external"
+									"patching_rect" : [ 4.0, 40.0, 684.0, 116.0 ],
+									"text" : "The `py` external includes an optional function caching/memoization system that compiles and stores Python functions for efficient repeated execution:\n\n- `cache <func>`: does the same thing as `exec` but also caches the function.\n\n- `cachefile <path>`: does the same thing as `execfile`, caches any number of top-level function definitions in a python file."
 								}
 
 							}
@@ -307,7 +333,7 @@
 									"numinlets" : 1,
 									"numoutlets" : 0,
 									"patching_rect" : [ 4.0, 8.0, 456.0, 24.0 ],
-									"text" : "How the py external caches function calls"
+									"text" : "Optional Function Caching"
 								}
 
 							}
@@ -319,7 +345,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 156.0, 166.0, 76.0 ],
+									"patching_rect" : [ 25.0, 204.0, 166.0, 76.0 ],
 									"text" : "cache \"def process_signal(x):\n    result = 0\n    for i in range(10):\n        result += x * i\n    return result\""
 								}
 
@@ -388,13 +414,11 @@
 , 							{
 								"box" : 								{
 									"id" : "obj-24",
-									"linecount" : 2,
 									"maxclass" : "message",
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 689.0, 48.0, 35.0 ],
-									"text" : "17383860"
+									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ]
 								}
 
 							}
@@ -437,13 +461,6 @@
 , 							{
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
-									"source" : [ "obj-16", 0 ]
-								}
-
-							}
-, 							{
-								"patchline" : 								{
-									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-17", 0 ]
 								}
 
@@ -459,6 +476,13 @@
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-19", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-20", 0 ]
 								}
 
 							}
@@ -502,6 +526,13 @@
 								"patchline" : 								{
 									"destination" : [ "obj-7", 0 ],
 									"source" : [ "obj-28", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-29", 0 ]
 								}
 
 							}
@@ -968,13 +999,11 @@
 , 							{
 								"box" : 								{
 									"id" : "obj-24",
-									"linecount" : 2,
 									"maxclass" : "message",
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 689.0, 48.0, 35.0 ],
-									"text" : "17383860"
+									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ]
 								}
 
 							}
@@ -1366,8 +1395,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ],
-									"text" : "17383860"
+									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ]
 								}
 
 							}
@@ -1839,8 +1867,7 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ],
-									"text" : "17383860"
+									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ]
 								}
 
 							}
@@ -3467,15 +3494,16 @@
 , 							{
 								"box" : 								{
 									"id" : "obj-21",
+									"linecount" : 3,
 									"maxclass" : "message",
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 35.0, 353.0, 160.0, 22.0 ],
+									"patching_rect" : [ 35.0, 353.0, 160.0, 49.0 ],
 									"presentation" : 1,
-									"presentation_linecount" : 2,
-									"presentation_rect" : [ 76.0, 353.0, 52.0, 35.0 ],
-									"text" : "17383860"
+									"presentation_linecount" : 11,
+									"presentation_rect" : [ 76.0, 353.0, 52.0, 156.0 ],
+									"text" : "\"3.14.0 (main, Oct  7 2025, 09:34:52) [Clang 17.0.0 (clang-1700.0.13.3)]\""
 								}
 
 							}

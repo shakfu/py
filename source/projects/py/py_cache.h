@@ -1924,6 +1924,7 @@ static inline int psc_add_functions_from_executed_code(psc_instance_t *instance,
 
         // Get function object from globals
         PyObject *func_obj = PyDict_GetItemString(globals_dict, func_name);
+
         if (!func_obj || !PyFunction_Check(func_obj)) {
             if (instance->config.debug_mode) {
                 post("PSC[%s]: Function '%s' not found in globals or not a function\n",
@@ -1934,7 +1935,7 @@ static inline int psc_add_functions_from_executed_code(psc_instance_t *instance,
 
         Py_INCREF(func_obj);
 
-        // Get code object
+        // Get code object from ORIGINAL function BEFORE memoization
         PyObject *code_obj = PyFunction_GetCode(func_obj);
         if (!code_obj) {
             Py_DECREF(func_obj);
@@ -1942,14 +1943,79 @@ static inline int psc_add_functions_from_executed_code(psc_instance_t *instance,
         }
         Py_INCREF(code_obj);
 
-        // Get function's globals (will be same as globals_dict)
-        PyObject *func_globals = PyFunction_GetGlobals(func_obj);
-        if (!func_globals) {
-            Py_DECREF(code_obj);
-            Py_DECREF(func_obj);
-            continue;
-        }
+        // Use the passed-in globals_dict for consistency
+        // (The function's original globals should be the same, but we want to ensure
+        // that any memoized version we store in globals is used)
+        PyObject *func_globals = globals_dict;
         Py_INCREF(func_globals);
+
+        // Apply automatic memoization if enabled
+        // We update the function in globals but keep the original in the cache
+        if (instance->config.enable_memoization) {
+            if (instance->config.debug_mode) {
+                post("PSC[%s]: Applying memoization to '%s'\n",
+                     instance->state.instance_name, func_name);
+            }
+
+            // Clear any pre-existing errors
+            if (PyErr_Occurred()) PyErr_Clear();
+
+            PyObject *functools = PyImport_ImportModule("functools");
+            if (functools) {
+                PyObject *lru_cache = PyObject_GetAttrString(functools, "lru_cache");
+                if (lru_cache && PyCallable_Check(lru_cache)) {
+                    PyObject *kwargs = PyDict_New();
+                    if (kwargs) {
+                        PyObject *maxsize = PyLong_FromLong(128);
+                        PyDict_SetItemString(kwargs, "maxsize", maxsize);
+                        Py_DECREF(maxsize);
+
+                        PyObject *empty_tuple = PyTuple_New(0);
+                        PyObject *decorator = PyObject_Call(lru_cache, empty_tuple, kwargs);
+                        Py_DECREF(empty_tuple);
+                        Py_DECREF(kwargs);
+
+                        if (decorator && PyCallable_Check(decorator)) {
+                            PyObject *args = PyTuple_Pack(1, func_obj);
+                            PyObject *memoized_func = PyObject_CallObject(decorator, args);
+                            Py_DECREF(args);
+
+                            if (memoized_func) {
+                                // CRITICAL: Update function in globals for recursive calls
+                                // but keep the ORIGINAL func_obj for the cache entry
+                                PyDict_SetItemString(globals_dict, func_name, memoized_func);
+                                Py_DECREF(memoized_func); // PyDict_SetItemString doesn't steal reference
+
+                                if (instance->config.debug_mode) {
+                                    post("PSC[%s]: Successfully memoized '%s' (updated in globals)\n",
+                                         instance->state.instance_name, func_name);
+                                }
+                            } else {
+                                if (instance->config.debug_mode) {
+                                    post("PSC[%s]: Failed to apply memoization to '%s'\n",
+                                         instance->state.instance_name, func_name);
+                                }
+                                PyErr_Clear();
+                            }
+                            Py_DECREF(decorator);
+                        } else {
+                            if (decorator) Py_DECREF(decorator);
+                            PyErr_Clear();
+                        }
+                    }
+                    Py_DECREF(lru_cache);
+                } else {
+                    if (lru_cache) Py_DECREF(lru_cache);
+                    PyErr_Clear();
+                }
+                Py_DECREF(functools);
+            } else {
+                PyErr_Clear();
+            }
+        }
+
+        // Note: func_obj, code_obj, and func_globals are all from the original function
+        // The memoized wrapper (if created) was stored in globals_dict for recursive calls
 
         // Create cache entry
         struct psc_cache_entry *entry = psc_create_entry(func_name, source_code,
