@@ -1135,10 +1135,15 @@ static inline psc_result_t psc_compile_function(psc_instance_t *instance, const 
         Py_DECREF(locals_dict);
         return PSC_ERROR_COMPILE;
     }
-    
+
     Py_INCREF(*func_obj);
+
+    // CRITICAL: Add function to its own globals for recursive calls
+    // Without this, recursive functions like fibonacci will fail with NameError
+    PyDict_SetItemString(*globals_dict, function_name, *func_obj);
+
     Py_DECREF(locals_dict);
-    
+
     // Update compilation time statistics
     clock_t compile_end = clock();
     instance->stats.total_compilation_time += 
@@ -1382,6 +1387,10 @@ static inline psc_result_t psc_add_function(psc_instance_t *instance, const char
             return PSC_ERROR_COMPILE;
         }
         Py_INCREF(func_obj);
+
+        // CRITICAL: Add function to its own globals for recursive calls
+        PyDict_SetItemString(globals_dict, function_name, func_obj);
+
         Py_DECREF(locals_dict);
     } else {
         // Compile from scratch
