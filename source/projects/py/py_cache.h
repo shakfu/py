@@ -342,6 +342,14 @@ static inline int psc_has_function(psc_instance_t *instance,
 static inline const char* psc_get_last_cached_function_name(psc_instance_t *instance);
 
 /**
+ * @brief Set the active cached function by name (for int/float handlers)
+ * @param instance Cache instance
+ * @param function_name Name of the function to set as active
+ * @return PSC_SUCCESS if function exists and was set, error code otherwise
+ */
+static inline psc_result_t psc_set_active_function(psc_instance_t *instance, const char *function_name);
+
+/**
  * @brief Get function signature information
  * @param instance Cache instance
  * @param function_name Name of the cached function
@@ -2180,6 +2188,46 @@ static inline const char* psc_get_last_cached_function_name(psc_instance_t *inst
     }
 
     return name;
+}
+
+/**
+ * @brief Set the active cached function by name (for int/float handlers)
+ * @param instance Cache instance
+ * @param function_name Name of the function to set as active
+ * @return PSC_SUCCESS if function exists and was set, error code otherwise
+ */
+static inline psc_result_t psc_set_active_function(psc_instance_t *instance, const char *function_name) {
+    if (!instance || !instance->state.initialized) {
+        error("PSC: ERROR - Cannot set active function: instance invalid or not initialized\n");
+        return PSC_ERROR_NOT_INITIALIZED;
+    }
+
+    if (!function_name || strlen(function_name) == 0) {
+        error("PSC: ERROR - Cannot set active function: function name is empty\n");
+        return PSC_ERROR_INVALID_ARGS;
+    }
+
+    // Check if function exists in cache
+    if (!psc_has_function(instance, function_name)) {
+        if (instance->config.debug_mode) {
+            post("PSC[%s]: Function '%s' not found in cache\n",
+                 instance->state.instance_name, function_name);
+        }
+        return PSC_ERROR_NOT_FOUND;
+    }
+
+    // Set as the active function
+    psc_rwlock_wrlock(&instance->state.lock);
+    strncpy_zero(instance->state.last_cached_function_name, function_name,
+                 PSC_MAX_FUNCTION_NAME_LENGTH - 1);
+    psc_rwlock_unlock_wr(&instance->state.lock);
+
+    if (instance->config.debug_mode) {
+        post("PSC[%s]: Active function set to '%s'\n",
+             instance->state.instance_name, function_name);
+    }
+
+    return PSC_SUCCESS;
 }
 
 /**

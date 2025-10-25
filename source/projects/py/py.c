@@ -126,9 +126,10 @@ void ext_main(void* module_ref)
     class_addmethod(c, (method)py_execfile,   "execfile",   A_DEFSYM,  0);
 
     // caching python code handlers
-    class_addmethod(c, (method)py_cache,      "cache",      A_GIMME,   0);
-    class_addmethod(c, (method)py_cachefile,  "cachefile",  A_DEFSYM,  0);
-    class_addmethod(c, (method)py_clear_cache, "clear_cache", A_NOTHING, 0);
+    class_addmethod(c, (method)py_cache,       "cache",        A_GIMME,   0);
+    class_addmethod(c, (method)py_cachefile,   "cachefile",    A_DEFSYM,  0);
+    class_addmethod(c, (method)py_clear_cache, "clear_cache",  A_NOTHING, 0);
+    class_addmethod(c, (method)py_set_function, "set_function", A_SYM,     0);
 
     // extra python code handlers
     class_addmethod(c, (method)py_apply,      "apply",      A_GIMME,   0);
@@ -2285,6 +2286,41 @@ t_max_err py_clear_cache(t_py* x)
         return MAX_ERR_NONE;
     } else {
         py_error(x, "failed to clear cache, error code: %d", result);
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+}
+
+/**
+ * @brief Set the active cached function by name (for int/float handlers)
+ *
+ * @param x pointer to object structure
+ * @param s symbol containing the function name
+ * @return t_max_err error code
+ */
+t_max_err py_set_function(t_py* x, t_symbol* s)
+{
+    if (!x || !x->python.cache) {
+        py_error(x, "invalid cache instance");
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+
+    if (!s || s == gensym("")) {
+        py_error(x, "function name required");
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+
+    const char *function_name = s->s_name;
+    psc_result_t result = psc_set_active_function(x->python.cache, function_name);
+
+    if (result == PSC_SUCCESS) {
+        py_debug(x, "active function set to '%s'", function_name);
+        py_bang_success(x);
+        return MAX_ERR_NONE;
+    } else {
+        py_error(x, "failed to set active function to '%s', error code: %d", function_name, result);
         py_bang_failure(x);
         return MAX_ERR_GENERIC;
     }

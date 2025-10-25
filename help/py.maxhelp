@@ -10,7 +10,7 @@
 		}
 ,
 		"classnamespace" : "box",
-		"rect" : [ 382.0, 87.0, 885.0, 769.0 ],
+		"rect" : [ 185.0, 97.0, 885.0, 769.0 ],
 		"gridsize" : [ 15.0, 15.0 ],
 		"showrootpatcherontab" : 0,
 		"showontab" : 0,
@@ -31,10 +31,47 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 382.0, 113.0, 885.0, 743.0 ],
+						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 2,
 						"boxes" : [ 							{
+								"box" : 								{
+									"id" : "obj-33",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 82.0, 175.0, 52.0, 22.0 ],
+									"text" : "debug 0"
+								}
+
+							}
+, 							{
+								"box" : 								{
+									"id" : "obj-23",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 419.0, 519.0, 142.0, 22.0 ],
+									"presentation_linecount" : 2,
+									"text" : "set_function count_paths"
+								}
+
+							}
+, 							{
+								"box" : 								{
+									"id" : "obj-16",
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 419.0, 486.0, 113.0, 22.0 ],
+									"text" : "set_function square"
+								}
+
+							}
+, 							{
 								"box" : 								{
 									"bgcolor" : [ 0.011765, 0.396078, 0.752941, 1.0 ],
 									"bgcolor2" : [ 0.2, 0.2, 0.2, 1.0 ],
@@ -319,8 +356,8 @@
 									"maxclass" : "comment",
 									"numinlets" : 1,
 									"numoutlets" : 0,
-									"patching_rect" : [ 4.0, 40.0, 684.0, 116.0 ],
-									"text" : "The `py` external includes an optional function caching/memoization system that compiles and stores Python functions for efficient repeated execution:\n\n- `cache <func>`: does the same thing as `exec` but also caches the function.\n\n- `cachefile <path>`: does the same thing as `execfile`, caches any number of top-level function definitions in a python file."
+									"patching_rect" : [ 4.0, 40.0, 686.0, 116.0 ],
+									"text" : "The `py` external includes an optional function caching/memoization system that compiles and stores Python functions for efficient repeated execution:\n\n- `cache <func>`: does the same thing as `exec` but also caches the function.\n\n- `cachefile <path>`: does the same thing as `execfile`, caches any number of top-level function definitions in a python file. Use `set_function <func_name>` to set the function to be use by int or float handlers."
 								}
 
 							}
@@ -418,7 +455,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ]
+									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ],
+									"text" : "9"
 								}
 
 							}
@@ -461,6 +499,13 @@
 , 							{
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-16", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-17", 0 ]
 								}
 
@@ -497,6 +542,13 @@
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-22", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-23", 0 ]
 								}
 
 							}
@@ -554,6 +606,13 @@
 								"patchline" : 								{
 									"destination" : [ "obj-24", 1 ],
 									"source" : [ "obj-32", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-33", 0 ]
 								}
 
 							}
@@ -1003,7 +1062,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ]
+									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ],
+									"text" : "9"
 								}
 
 							}
@@ -1395,7 +1455,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ]
+									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ],
+									"text" : "9"
 								}
 
 							}
@@ -1867,7 +1928,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ]
+									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ],
+									"text" : "9"
 								}
 
 							}
@@ -2255,7 +2317,7 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
+						"rect" : [ 185.0, 123.0, 885.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 1,
 						"boxes" : [ 							{
@@ -3494,16 +3556,14 @@
 , 							{
 								"box" : 								{
 									"id" : "obj-21",
-									"linecount" : 3,
 									"maxclass" : "message",
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 35.0, 353.0, 160.0, 49.0 ],
+									"patching_rect" : [ 35.0, 353.0, 160.0, 22.0 ],
 									"presentation" : 1,
-									"presentation_linecount" : 11,
-									"presentation_rect" : [ 76.0, 353.0, 52.0, 156.0 ],
-									"text" : "\"3.14.0 (main, Oct  7 2025, 09:34:52) [Clang 17.0.0 (clang-1700.0.13.3)]\""
+									"presentation_rect" : [ 76.0, 353.0, 52.0, 22.0 ],
+									"text" : "9"
 								}
 
 							}
@@ -3522,7 +3582,6 @@
 									"presentation_rect" : [ 195.0, 268.0, 54.0, 49.0 ],
 									"saved_object_attributes" : 									{
 										"autoload" : 0,
-										"debug" : 1,
 										"file" : "/Volumes/Minx/Users/sa/projects/py/examples/demos/cacheme.py",
 										"pythonpath" : "",
 										"restrict_file_access" : 1407374883553280000,

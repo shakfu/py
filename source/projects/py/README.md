@@ -111,7 +111,8 @@ make        # Build externals
 | `cache <code>` | Cache Python function | `cache def fib(n): ...` |
 | `cachefile <path>` | Cache function from file | `cachefile fib.py` |
 | `clear_cache` | Clear all cached functions | `clear_cache` |
-| `int <value>` | Call last cached function | `int 10` |
+| `set_function <name>` | Set active function for int/float | `set_function square` |
+| `int <value>` | Call active cached function | `int 10` |
 
 ### Simple Examples
 
@@ -155,9 +156,13 @@ Cached functions can be called using three methods:
 
 **Via numeric handlers:**
 ```text
-[int 42]        # Calls last cached function with integer argument
-[float 3.14]    # Calls last cached function with float argument
+[int 42]        # Calls active cached function with integer argument
+[float 3.14]    # Calls active cached function with float argument
 ```
+
+The numeric handlers call the "active" function, which is:
+- The most recently cached function (via `cache` or `cachefile`)
+- Or a function explicitly set via `set_function`
 
 **Via call handler:**
 ```text
@@ -169,6 +174,15 @@ Cached functions can be called using three methods:
 ```text
 [cache def add(a, b): return a + b]
 [call add 10 20] → [30]
+```
+
+**Switching between cached functions:**
+```text
+[cachefile algorithms.py]    # Caches multiple functions
+[set_function square]        # Set square as active function
+[int 5] → [25]              # Calls square(5)
+[set_function cube]          # Switch to cube
+[int 5] → [125]             # Calls cube(5)
 ```
 
 ### Automatic Memoization
