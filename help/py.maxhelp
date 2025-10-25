@@ -31,10 +31,23 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
+						"rect" : [ 265.0, 118.0, 885.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 2,
 						"boxes" : [ 							{
+								"box" : 								{
+									"id" : "obj-5",
+									"linecount" : 5,
+									"maxclass" : "message",
+									"numinlets" : 2,
+									"numoutlets" : 1,
+									"outlettype" : [ "" ],
+									"patching_rect" : [ 53.0, 424.0, 164.0, 76.0 ],
+									"text" : "cache \"def fib(n):\n    if n <= 1:\n        return n\n    else:\n        return fib(n-1) + fib(n-2)\""
+								}
+
+							}
+, 							{
 								"box" : 								{
 									"id" : "obj-4",
 									"maxclass" : "message",
@@ -53,8 +66,8 @@
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 52.0, 385.0, 174.0, 22.0 ],
-									"text" : "exec \"def square(x): return x*x\""
+									"patching_rect" : [ 52.0, 385.0, 181.0, 22.0 ],
+									"text" : "cache \"def square(x): return x*x\""
 								}
 
 							}
@@ -154,12 +167,11 @@
 								"box" : 								{
 									"fontsize" : 14.0,
 									"id" : "obj-15",
-									"linecount" : 7,
 									"maxclass" : "comment",
 									"numinlets" : 1,
 									"numoutlets" : 0,
-									"patching_rect" : [ 17.0, 39.0, 596.0, 132.0 ],
-									"text" : "Due to how Max special cases commas and spaces in messages, one such characters along the following lines:\n\n1. Escape a space with \\\\ unless it's after an escaped comma\n\n2. Escape a comma with \\\n\n"
+									"patching_rect" : [ 17.0, 39.0, 596.0, 22.0 ],
+									"text" : "How caching works in the py external"
 								}
 
 							}
@@ -178,25 +190,14 @@
 							}
 , 							{
 								"box" : 								{
-									"id" : "obj-11",
-									"maxclass" : "comment",
-									"numinlets" : 1,
-									"numoutlets" : 0,
-									"patching_rect" : [ 17.0, 207.0, 150.0, 20.0 ],
-									"text" : "escaping m"
-								}
-
-							}
-, 							{
-								"box" : 								{
 									"id" : "obj-1",
 									"linecount" : 5,
 									"maxclass" : "message",
 									"numinlets" : 2,
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
-									"patching_rect" : [ 52.0, 276.0, 159.0, 76.0 ],
-									"text" : "exec \"def process_signal(x):\n    result = 0\n    for i in range(10):\n        result += x * i\n    return result\""
+									"patching_rect" : [ 52.0, 276.0, 166.0, 76.0 ],
+									"text" : "cache \"def process_signal(x):\n    result = 0\n    for i in range(10):\n        result += x * i\n    return result\""
 								}
 
 							}
@@ -269,7 +270,7 @@
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
 									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ],
-									"text" : "225"
+									"text" : "1"
 								}
 
 							}
@@ -349,6 +350,13 @@
 								"patchline" : 								{
 									"destination" : [ "obj-50", 0 ],
 									"source" : [ "obj-4", 0 ]
+								}
+
+							}
+, 							{
+								"patchline" : 								{
+									"destination" : [ "obj-50", 0 ],
+									"source" : [ "obj-5", 0 ]
 								}
 
 							}
@@ -771,7 +779,7 @@
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
 									"patching_rect" : [ 31.0, 689.0, 48.0, 22.0 ],
-									"text" : "225"
+									"text" : "1"
 								}
 
 							}
@@ -1164,7 +1172,7 @@
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
 									"patching_rect" : [ 23.0, 678.0, 158.0, 22.0 ],
-									"text" : "225"
+									"text" : "1"
 								}
 
 							}
@@ -1637,7 +1645,7 @@
 									"numoutlets" : 1,
 									"outlettype" : [ "" ],
 									"patching_rect" : [ 376.0, 418.0, 302.0, 22.0 ],
-									"text" : "225"
+									"text" : "1"
 								}
 
 							}
@@ -2025,7 +2033,7 @@
 						}
 ,
 						"classnamespace" : "box",
-						"rect" : [ 265.0, 118.0, 885.0, 743.0 ],
+						"rect" : [ 0.0, 26.0, 885.0, 743.0 ],
 						"gridsize" : [ 15.0, 15.0 ],
 						"showontab" : 1,
 						"boxes" : [ 							{
@@ -3271,7 +3279,7 @@
 									"patching_rect" : [ 35.0, 353.0, 160.0, 22.0 ],
 									"presentation" : 1,
 									"presentation_rect" : [ 76.0, 353.0, 52.0, 22.0 ],
-									"text" : "225"
+									"text" : "1"
 								}
 
 							}

@@ -126,6 +126,10 @@ void ext_main(void* module_ref)
     class_addmethod(c, (method)py_exec,       "exec",       A_GIMME,   0);
     class_addmethod(c, (method)py_execfile,   "execfile",   A_DEFSYM,  0);
 
+    // caching python code handlers
+    class_addmethod(c, (method)py_cache,      "cache",      A_GIMME,   0);
+    class_addmethod(c, (method)py_cachefile,  "cachefile",  A_DEFSYM,  0);
+
     // extra python code handlers
     class_addmethod(c, (method)py_apply,      "apply",      A_GIMME,   0);
     class_addmethod(c, (method)py_assign,     "assign",     A_GIMME,   0);
@@ -2009,6 +2013,118 @@ t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
         goto error;
     }
 
+    // Input validation
+    if (py_validate_code(x, py_argv, 0) != MAX_ERR_NONE) {
+        py_error(x, "exec input failed security validation");
+        goto error;
+    }
+
+    pval = py_safe_run_string(x, py_argv, Py_file_input);
+    if (pval == NULL) {
+        goto error;
+    }
+    Py_DECREF(pval);
+    PyGILState_Release(gstate);
+
+    py_bang_success(x);
+    py_debug(x, "exec %s", py_argv);
+    return MAX_ERR_NONE;
+
+error:
+    py_handle_error(x, "failed to execute: %s", py_argv);
+    Py_XDECREF(pval);
+    PyGILState_Release(gstate);
+    py_bang_failure(x);
+    return MAX_ERR_GENERIC;
+}
+
+/**
+ * @brief Execute contents of a file (filename obtained from symbol) as python
+ * code
+ *
+ * @param x pointer to object structure
+ * @param s symbol
+ * @return t_max_err error code
+ */
+t_max_err py_execfile(t_py* x, t_symbol* s)
+{
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
+    PyObject* pval = NULL;
+    FILE* fhandle = NULL;
+
+    if (s != gensym("")) {
+        // set x->editor.code_filepath
+        t_max_err err = py_locate_path_from_symbol(x, s);
+        if (err != MAX_ERR_NONE) {
+            py_error(x, "failed to locate path from symbol");
+            goto error;
+        }
+    }
+
+    if (s == gensym("") || x->editor.code_filepath == gensym("")) {
+        py_error(x, "failed to set file path");
+        goto error;
+    }
+
+    // assume x->editor.code_filepath has be been set without errors
+
+    py_debug(x, "pathname: %s", x->editor.code_filepath->s_name);
+    fhandle = fopen(x->editor.code_filepath->s_name, "r+");
+
+    if (fhandle == NULL) {
+        py_error(x, "failed to open file");
+        goto error;
+    }
+
+    pval = PyRun_File(fhandle, x->editor.code_filepath->s_name, Py_file_input,
+                      x->python.globals, x->python.globals);
+    if (pval == NULL) {
+        fclose(fhandle);
+        goto error;
+    }
+
+    // success cleanup
+    fclose(fhandle);
+    Py_DECREF(pval);
+    PyGILState_Release(gstate);
+    py_bang_success(x);
+    return MAX_ERR_NONE;
+
+error:
+    py_handle_error(x, "failed to execute file");
+    Py_XDECREF(pval);
+    PyGILState_Release(gstate);
+    py_bang_failure(x);
+    return MAX_ERR_GENERIC;
+}
+
+/*--------------------------------------------------------------------------*/
+/* Cache Methods */
+
+/**
+ * @brief Execute and cache a max symbol as one to many lines of python code
+ *
+ * @param x pointer to object structure
+ * @param s symbol
+ * @param argc atom argument count
+ * @param argv atom argument vector
+ * @return t_max_err error code
+ */
+t_max_err py_cache(t_py* x, t_symbol* s, long argc, t_atom* argv)
+{
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+
+    const char* py_argv = NULL;
+    PyObject* pval = NULL;
+
+    py_argv = atom_getsym(argv)->s_name;
+    if (py_argv == NULL) {
+        goto error;
+    }
+
     // try to add function to cache if it looks like a python function
     if (psc_check_is_python_function(
         x->python.cache, atom_getsym(argv)->s_name) == PSC_VALIDATE_SUCCESS) {
@@ -2044,14 +2160,14 @@ error:
 }
 
 /**
- * @brief Execute contents of a file (filename obtained from symbol) as python
+ * @brief Execute and cache contents of a file (filename obtained from symbol) as python
  * code
  *
  * @param x pointer to object structure
  * @param s symbol
  * @return t_max_err error code
  */
-t_max_err py_execfile(t_py* x, t_symbol* s)
+t_max_err py_cachefile(t_py* x, t_symbol* s)
 {
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();

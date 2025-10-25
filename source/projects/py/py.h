@@ -142,6 +142,13 @@ t_max_err py_eval(t_py* x, t_symbol* s, long argc, t_atom* argv);
 t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv);
 t_max_err py_execfile(t_py* x, t_symbol* s);
 
+
+/*--------------------------------------------------------------------------*/
+/* Caching Python Methods */
+
+t_max_err py_cache(t_py* x, t_symbol* s, long argc, t_atom* argv);
+t_max_err py_cachefile(t_py* x, t_symbol* s);
+
 /*--------------------------------------------------------------------------*/
 /* Extra Python Methods */
 
