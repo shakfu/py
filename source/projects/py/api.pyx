@@ -19,8 +19,15 @@ Extension Classes:
 - Patcher: wrapper for Max patchers
 - Box: wrapper for Max boxes/objects
 - Path: wrapper for Max path handling
+- Clock: wrapper for Max t_clock objects (tempo-independent scheduling)
+- ITM: wrapper for Max ITM objects (tempo-based scheduling and transport)
+- TimeObject: wrapper for Max time objects (high-level tempo-based scheduling)
 - PyExternal: wrapper for the `py` external
 - PyMxObject: Alternative `py` external extension type (obj pointer retrieved via uintptr_t)
+- Clock: wrapper for a clock object
+- TimeObject: wrapper for a timeobject
+- ITM: wrapper for an itm object.
+
 
 WIP Extension Classes:
 - Matrix: wrapper for Max jit matrices -- needs work to convert from and to via buffer protocol
@@ -61,6 +68,7 @@ from cython.view cimport array as cvarray
 from cpython.ref cimport PyObject
 from cpython cimport Py_buffer
 from libc.string cimport strcpy, strlen
+from libc.stdint cimport uintptr_t
 
 cimport api_max as mx  # api is a cython keyword!
 cimport api_msp as mp
@@ -7295,6 +7303,450 @@ cdef public mx.t_max_err py_hello(px.t_py* x, mx.t_symbol* s, long argc, mx.t_at
             mx.post("hello %s: a method defined in api.pyx", name.s_name)
             return mx.MAX_ERR_NONE
     return mx.MAX_ERR_GENERIC
+
+
+# ----------------------------------------------------------------------------
+# Clock, ITM, and TimeObject Extension Classes
+
+# api.Clock
+
+cdef class Clock:
+    """A wrapper class for Max t_clock objects.
+
+    Clocks are used for tempo-independent scheduling in Max.
+    """
+
+    cdef mx.t_clock* ptr
+    cdef object owner
+    cdef object callback
+    cdef bint ptr_owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.owner = None
+        self.callback = None
+        self.ptr_owner = False
+
+    def __dealloc__(self):
+        if self.ptr is not NULL and self.ptr_owner:
+            mx.freeobject(<mx.t_object*>self.ptr)
+            self.ptr = NULL
+
+    def __init__(self, owner=None, callback=None):
+        """Create a new Clock object.
+
+        Args:
+            owner: Owner object (MaxObject or None)
+            callback: Callback function (not yet implemented)
+        """
+        cdef mx.t_object* c_owner = NULL
+
+        self.owner = owner
+        self.callback = callback
+
+        if isinstance(owner, MaxObject):
+            c_owner = (<MaxObject?>owner).ptr
+
+        # Note: callback handling requires additional infrastructure
+        self.ptr = <mx.t_clock*>mx.clock_new(<void*>c_owner, NULL)
+        self.ptr_owner = True
+
+    @staticmethod
+    cdef Clock from_ptr(mx.t_clock* ptr):
+        """Create a Clock wrapper from an existing pointer."""
+        cdef Clock clock = Clock.__new__(Clock)
+        clock.ptr = ptr
+        clock.ptr_owner = False
+        return clock
+
+    def delay(self, delay_ms):
+        """Schedule the clock to execute after a delay.
+
+        Args:
+            delay_ms: Delay in milliseconds (int or float)
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("Clock is not initialized")
+
+        if isinstance(delay_ms, float):
+            mx.clock_fdelay(<void*>self.ptr, <double>delay_ms)
+        else:
+            mx.clock_delay(<void*>self.ptr, <long>delay_ms)
+
+    def unset(self):
+        """Cancel the scheduled execution of this clock."""
+        if self.ptr is NULL:
+            raise RuntimeError("Clock is not initialized")
+        mx.clock_unset(<void*>self.ptr)
+
+    @staticmethod
+    def gettime():
+        """Get the current logical time of the scheduler.
+
+        Returns:
+            Current time in milliseconds as a float
+        """
+        cdef double time = 0.0
+        mx.clock_getftime(&time)
+        return time
+
+    def __repr__(self):
+        return f"<Clock at 0x{<uintptr_t>self.ptr:x}>"
+
+
+# api.ITM
+
+cdef class ITM:
+    """A wrapper class for Max ITM (Internal Time Manager) objects.
+
+    ITM objects handle tempo-based scheduling and transport control.
+    """
+
+    cdef mx.t_itm* ptr
+    cdef bint ptr_owner
+    cdef str _name
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.ptr_owner = False
+        self._name = ""
+
+    def __dealloc__(self):
+        if self.ptr is not NULL and self.ptr_owner:
+            mx.itm_dereference(self.ptr)
+            self.ptr = NULL
+
+    def __init__(self, name=None):
+        """Create or retrieve an ITM object.
+
+        Args:
+            name: Name of the ITM object (None for global ITM)
+        """
+        cdef bytes name_bytes
+
+        if name is None:
+            self.ptr = <mx.t_itm*>mx.itm_getglobal()
+            self._name = "global"
+            self.ptr_owner = False
+        else:
+            if isinstance(name, str):
+                name_bytes = name.encode()
+                self._name = name
+            else:
+                name_bytes = name
+                self._name = name.decode()
+
+            self.ptr = <mx.t_itm*>mx.itm_getnamed(
+                mx.gensym(name_bytes), NULL, NULL, 1)
+            self.ptr_owner = True
+            if self.ptr is not NULL:
+                mx.itm_reference(self.ptr)
+
+    @staticmethod
+    cdef ITM from_ptr(mx.t_itm* ptr, str name=""):
+        """Create an ITM wrapper from an existing pointer."""
+        cdef ITM itm = ITM.__new__(ITM)
+        itm.ptr = ptr
+        itm.ptr_owner = False
+        itm._name = name
+        return itm
+
+    @staticmethod
+    def get_global():
+        """Get the global ITM object.
+
+        Returns:
+            The global ITM instance
+        """
+        cdef mx.t_itm* ptr = <mx.t_itm*>mx.itm_getglobal()
+        return ITM.from_ptr(ptr, "global")
+
+    @property
+    def name(self):
+        """Get the name of this ITM object."""
+        return self._name
+
+    @property
+    def time(self):
+        """Get the current internal time in milliseconds."""
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        return mx.itm_gettime(self.ptr)
+
+    @property
+    def ticks(self):
+        """Get the current time in ticks."""
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        return mx.itm_getticks(self.ptr)
+
+    @property
+    def tempo(self):
+        """Get the current tempo in BPM."""
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        return mx.itm_gettempo(self.ptr)
+
+    @property
+    def state(self):
+        """Get the transport state (0 = stopped, non-zero = running)."""
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        return mx.itm_getstate(self.ptr)
+
+    @property
+    def is_running(self):
+        """Check if the transport is running."""
+        return self.state != 0
+
+    @property
+    def timesignature(self):
+        """Get the current time signature as a tuple (numerator, denominator)."""
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        cdef long num = 0
+        cdef long denom = 0
+        mx.itm_gettimesignature(self.ptr, &num, &denom)
+        return (num, denom)
+
+    @timesignature.setter
+    def timesignature(self, value):
+        """Set the time signature.
+
+        Args:
+            value: Tuple of (numerator, denominator)
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        cdef long num = value[0]
+        cdef long denom = value[1]
+        mx.itm_settimesignature(self.ptr, num, denom, 0)
+
+    def pause(self):
+        """Pause the transport."""
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        mx.itm_pause(self.ptr)
+
+    def resume(self):
+        """Resume the transport from current position."""
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        mx.itm_resume(self.ptr)
+
+    def ticks_to_ms(self, ticks):
+        """Convert ticks to milliseconds.
+
+        Args:
+            ticks: Time in ticks
+
+        Returns:
+            Time in milliseconds
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        return mx.itm_tickstoms(self.ptr, <double>ticks)
+
+    def ms_to_ticks(self, ms):
+        """Convert milliseconds to ticks.
+
+        Args:
+            ms: Time in milliseconds
+
+        Returns:
+            Time in ticks
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        return mx.itm_mstoticks(self.ptr, <double>ms)
+
+    def ms_to_samples(self, ms):
+        """Convert milliseconds to samples.
+
+        Args:
+            ms: Time in milliseconds
+
+        Returns:
+            Time in samples
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        return mx.itm_mstosamps(self.ptr, <double>ms)
+
+    def samples_to_ms(self, samps):
+        """Convert samples to milliseconds.
+
+        Args:
+            samps: Time in samples
+
+        Returns:
+            Time in milliseconds
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        return mx.itm_sampstoms(self.ptr, <double>samps)
+
+    def bbu_to_ticks(self, bars, beats, units, position=False):
+        """Convert bar/beat/units to ticks.
+
+        Args:
+            bars: Measure number
+            beats: Beat number
+            units: Ticks past the beat
+            position: True for location mode, False for interval mode
+
+        Returns:
+            Time in ticks
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        cdef double ticks = 0.0
+        mx.itm_barbeatunitstoticks(self.ptr, <long>bars, <long>beats,
+                                    <double>units, &ticks, 1 if position else 0)
+        return ticks
+
+    def ticks_to_bbu(self, ticks, position=False):
+        """Convert ticks to bar/beat/units.
+
+        Args:
+            ticks: Time in ticks
+            position: True for location mode, False for interval mode
+
+        Returns:
+            Tuple of (bars, beats, units)
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("ITM is not initialized")
+        cdef long bars = 0
+        cdef long beats = 0
+        cdef double units = 0.0
+        mx.itm_tickstobarbeatunits(self.ptr, <double>ticks, &bars, &beats,
+                                    &units, 1 if position else 0)
+        return (bars, beats, units)
+
+    @staticmethod
+    def get_resolution():
+        """Get the global ticks-per-quarter-note resolution.
+
+        Returns:
+            Ticks per quarter note
+        """
+        return mx.itm_getresolution()
+
+    @staticmethod
+    def set_resolution(res):
+        """Set the global ticks-per-quarter-note resolution.
+
+        Args:
+            res: Ticks per quarter note (default is 480)
+        """
+        mx.itm_setresolution(<double>res)
+
+    def __repr__(self):
+        state = "running" if self.is_running else "stopped"
+        return f"<ITM '{self._name}' tempo={self.tempo:.1f} {state}>"
+
+
+# api.TimeObject
+
+cdef class TimeObject:
+    """A wrapper class for Max time objects.
+
+    TimeObject provides high-level tempo-based scheduling functionality.
+    """
+
+    cdef mx.t_timeobject* ptr
+    cdef bint ptr_owner
+    cdef object owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.ptr_owner = False
+        self.owner = None
+
+    def __dealloc__(self):
+        if self.ptr is not NULL and self.ptr_owner:
+            mx.freeobject(<mx.t_object*>self.ptr)
+            self.ptr = NULL
+
+    def __repr__(self):
+        if self.ptr is NULL:
+            return "<TimeObject (uninitialized)>"
+        unit = "ms" if self.is_fixed else "ticks"
+        value = self.ms if self.is_fixed else self.ticks
+        return f"<TimeObject {value:.2f} {unit}>"
+
+    @staticmethod
+    cdef TimeObject from_ptr(mx.t_timeobject* ptr):
+        """Create a TimeObject wrapper from an existing pointer."""
+        cdef TimeObject timeobj = TimeObject.__new__(TimeObject)
+        timeobj.ptr = ptr
+        timeobj.ptr_owner = False
+        return timeobj
+
+    def stop(self):
+        """Stop the currently scheduled time object."""
+        if self.ptr is NULL:
+            raise RuntimeError("TimeObject is not initialized")
+        mx.time_stop(self.ptr)
+
+    def tick(self):
+        """Execute the time object's task and reschedule if needed."""
+        if self.ptr is NULL:
+            raise RuntimeError("TimeObject is not initialized")
+        mx.time_tick(self.ptr)
+
+    @property
+    def ms(self):
+        """Get the time object's value in milliseconds."""
+        if self.ptr is NULL:
+            raise RuntimeError("TimeObject is not initialized")
+        return mx.time_getms(self.ptr)
+
+    @property
+    def ticks(self):
+        """Get the time object's value in ticks."""
+        if self.ptr is NULL:
+            raise RuntimeError("TimeObject is not initialized")
+        return mx.time_getticks(self.ptr)
+
+    @property
+    def is_fixed(self):
+        """Check if this time object uses fixed (ms-based) values.
+
+        Returns:
+            True if fixed, False if tempo-relative
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("TimeObject is not initialized")
+        return bool(mx.time_isfixedunit(self.ptr))
+
+    @property
+    def phase(self):
+        """Get the phase information from the associated ITM.
+
+        Returns:
+            Tuple of (phase, slope, ticks)
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("TimeObject is not initialized")
+        cdef double phase = 0.0
+        cdef double slope = 0.0
+        cdef double ticks = 0.0
+        mx.time_getphase(self.ptr, &phase, &slope, &ticks)
+        return (phase, slope, ticks)
+
+    @property
+    def itm(self):
+        """Get the ITM object associated with this time object.
+
+        Returns:
+            ITM instance
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("TimeObject is not initialized")
+        cdef mx.t_itm* itm_ptr = <mx.t_itm*>mx.time_getitm(self.ptr)
+        return ITM.from_ptr(itm_ptr)
 
 
 # ----------------------------------------------------------------------------
