@@ -359,9 +359,9 @@ cdef extern from "ext_proto.h":
     cdef void *outlet_anything(void *o, const t_symbol *s, short ac, const t_atom *av)
     cdef void *clock_new(void *obj, method fn)
     cdef void clock_delay(void *x, long n)
-    cdef void clock_unset(void *x)
+    cdef void clock_unset(void *x) nogil
     cdef void clock_fdelay(void *c, double time)
-    cdef void clock_getftime(double *time)
+    cdef void clock_getftime(double *time) nogil
     cdef void setclock_delay(t_object *x, void *c, long time)
     cdef void setclock_unset(t_object *x, void *c)
     cdef long setclock_gettime(t_object *x)
@@ -722,12 +722,12 @@ cdef extern from "ext_obex.h":
     # cdef t_hashtab *object_obex_get(void *x)
     # cdef t_hashtab *object_obex_enforce(void *x)
     cdef void object_obex_dumpout(void *x, const t_symbol *s, long argc, const t_atom *argv)
-    cdef t_max_err atom_setlong(t_atom *a, t_atom_long b)
-    cdef t_max_err atom_setfloat(t_atom *a, double b)
-    cdef t_max_err atom_setsym(t_atom *a, const t_symbol *b)
-    cdef t_max_err atom_setobj(t_atom *a, void *b)
-    cdef t_atom_long atom_getlong(const t_atom *a)
-    cdef t_atom_float atom_getfloat(const t_atom *a)
+    cdef t_max_err atom_setlong(t_atom *a, t_atom_long b) nogil
+    cdef t_max_err atom_setfloat(t_atom *a, double b) nogil
+    cdef t_max_err atom_setsym(t_atom *a, const t_symbol *b) nogil
+    cdef t_max_err atom_setobj(t_atom *a, void *b) nogil
+    cdef t_atom_long atom_getlong(const t_atom *a) nogil
+    cdef t_atom_float atom_getfloat(const t_atom *a) nogil
     cdef t_symbol *atom_getsym(const t_atom *a)
     cdef void *atom_getobj(const t_atom *a)
     cdef long atom_getcharfix(const t_atom *a)
@@ -1437,36 +1437,36 @@ cdef extern from "ext_itm.h":
     cdef void itm_eventlistseek(t_itm *x)
     cdef void itm_geteventlistnames(t_itm *x, long *count, t_symbol ***names)
     cdef void itm_switcheventlist(t_itm *x, t_symbol *eventlist, double offset)
-    cdef double itm_gettime(t_itm *x)
-    cdef double itm_getticks(t_itm *x)
+    cdef double itm_gettime(t_itm *x) nogil
+    cdef double itm_getticks(t_itm *x) nogil
     cdef void itm_dump(t_itm *x)
     cdef void itm_sync(t_itm *x)
-    cdef void itm_settimesignature(t_itm *x, long num, long denom, long flags)
-    cdef void itm_gettimesignature(t_itm *x, long *num, long *denom)
+    cdef void itm_settimesignature(t_itm *x, long num, long denom, long flags) nogil
+    cdef void itm_gettimesignature(t_itm *x, long *num, long *denom) nogil
     cdef void itm_seek(t_itm *x, double oldticks, double newticks, long chase)
-    cdef void itm_pause(t_itm *x)
-    cdef void itm_resume(t_itm *x)
-    cdef long itm_getstate(t_itm *x)
-    cdef void itm_setresolution(double res)
-    cdef double itm_getresolution()
+    cdef void itm_pause(t_itm *x) nogil
+    cdef void itm_resume(t_itm *x) nogil
+    cdef long itm_getstate(t_itm *x) nogil
+    cdef void itm_setresolution(double res) nogil
+    cdef double itm_getresolution() nogil
     cdef t_symbol *itm_getname(t_itm *x)
     cdef t_max_err itm_parse(t_itm *x, long argc, t_atom *argv, long flags, double *ticks, double *fixed, t_symbol **unit, long *bbu, char *bbusource)
-    cdef double itm_tickstoms(t_itm *x, double ticks)
-    cdef double itm_mstoticks(t_itm *x, double ms)
-    cdef double itm_mstosamps(t_itm *x, double ms)
-    cdef double itm_sampstoms(t_itm *x, double samps)
-    cdef void itm_barbeatunitstoticks(t_itm *x, long bars, long beats, double units, double *ticks, char position)
-    cdef void itm_tickstobarbeatunits(t_itm *x, double ticks, long *bars, long *beats, double *units, char position)
+    cdef double itm_tickstoms(t_itm *x, double ticks) nogil
+    cdef double itm_mstoticks(t_itm *x, double ms) nogil
+    cdef double itm_mstosamps(t_itm *x, double ms) nogil
+    cdef double itm_sampstoms(t_itm *x, double samps) nogil
+    cdef void itm_barbeatunitstoticks(t_itm *x, long bars, long beats, double units, double *ticks, char position) nogil
+    cdef void itm_tickstobarbeatunits(t_itm *x, double ticks, long *bars, long *beats, double *units, char position) nogil
     cdef void itm_format(t_itm *x, double ms, double ticks, long flags, t_symbol *unit, long *argc, t_atom **argv)
-    cdef long itm_isunitfixed(t_symbol *u)
+    cdef long itm_isunitfixed(t_symbol *u) nogil
     cdef void itmclock_delay(t_object *x, t_itm *m, t_symbol *eventlist, double delay, long quantization)
     cdef void *itmclock_new(t_object *owner, t_object *timeobj, method task, method killer, long permanent)
     cdef void itmclock_set(t_object *x, t_itm *m, t_symbol *eventlist, double time)
     cdef void itmclock_unset(t_object *x)
     cdef void *itm_clocksource_getnamed(t_symbol *name, long create)
     cdef void itm_getclocksources(long *count, t_symbol ***sources)
-    cdef double itm_getsr(t_itm *x)
-    cdef double itm_gettempo(t_itm *x)
+    cdef double itm_getsr(t_itm *x) nogil
+    cdef double itm_gettempo(t_itm *x) nogil
 
 
 cdef extern from "ext_time.h":

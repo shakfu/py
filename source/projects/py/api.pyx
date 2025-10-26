@@ -1305,7 +1305,10 @@ cdef class Buffer:
 
     def framecount(self) -> int:
         """Get how many frames long the buffer content is in samples."""
-        return mp.buffer_getframecount(self.obj)
+        cdef mp.t_atom_long result
+        with nogil:
+            result = mp.buffer_getframecount(self.obj)
+        return result
 
     def set_framecount(self, int frames):
         """resize buffer by number of samples (frames)"""
@@ -1327,7 +1330,10 @@ cdef class Buffer:
 
     def samplerate(self) -> int:
         """Get the buffer's native sample rate in samples per second."""
-        return mp.buffer_getsamplerate(self.obj)
+        cdef mp.t_atom_float result
+        with nogil:
+            result = mp.buffer_getsamplerate(self.obj)
+        return result
 
     def set_samplerate(self, int samplerate):
         """change buffer samplerate (Hz)"""
@@ -1388,12 +1394,18 @@ cdef class Buffer:
     @property
     def channelcount(self) -> int:
         """Get how many channels are present in the buffer content."""
-        return mp.buffer_getchannelcount(self.obj)
+        cdef mp.t_atom_long result
+        with nogil:
+            result = mp.buffer_getchannelcount(self.obj)
+        return result
 
     @property
     def millisamplerate(self) -> int:
         """Get the buffer's native sample rate in samples per millisecond."""
-        return mp.buffer_getmillisamplerate(self.obj)
+        cdef mp.t_atom_float result
+        with nogil:
+            result = mp.buffer_getmillisamplerate(self.obj)
+        return result
 
     @property
     def n_samples(self) -> int:
@@ -1413,20 +1425,27 @@ cdef class Buffer:
 
     def setdirty(self):
         """Set the buffer's dirty flag, indicating that changes have been made."""
-        mp.buffer_setdirty(self.obj)
+        with nogil:
+            mp.buffer_setdirty(self.obj)
 
     def setpadding(self, long samplecount):
         """Set the number of samples with which to zero-pad the buffer~'s contents."""
-        mp.buffer_setpadding(self.obj, samplecount)
+        cdef long count = samplecount
+        with nogil:
+            mp.buffer_setpadding(self.obj, count)
 
     def locksamples(self):
         """Claim the buffer∼ and get a pointer to the first sample in memory."""
-        self.samples = mp.buffer_locksamples(self.obj)
+        cdef float* ptr
+        with nogil:
+            ptr = mp.buffer_locksamples(self.obj)
+        self.samples = ptr
         self.is_locked = True
 
     def unlocksamples(self):
         """Release claim on buffer's contents so other objects can read/write to it."""
-        mp.buffer_unlocksamples(self.obj)
+        with nogil:
+            mp.buffer_unlocksamples(self.obj)
         if self.samples:
             self.samples = NULL
             self.is_locked = False
@@ -1437,11 +1456,14 @@ cdef class Buffer:
         Use `buffer_edit` functions to collapse all operations of locking heavy `b_mutex`,
         setting b_valid flag, waiting on lightweight atomic b_inuse, etc.
         """
-        mp.buffer_edit_begin(self.obj)
+        with nogil:
+            mp.buffer_edit_begin(self.obj)
 
     def buffer_edit_end(self, int valid=1):
         """End a buffer_edit block"""
-        mp.buffer_edit_end(self.obj, valid)
+        cdef long v = valid
+        with nogil:
+            mp.buffer_edit_end(self.obj, v)
 
     # TODO: add start:end slice
     def get_samples(self):

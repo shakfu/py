@@ -62,24 +62,24 @@ cdef extern from "ext_buffer.h":
     cdef t_buffer_obj *buffer_ref_getobject(t_buffer_ref *x)
     cdef t_max_err buffer_ref_notify(t_buffer_ref *x, t_symbol *s, t_symbol *msg, void *sender, void *data)
     cdef void buffer_view(t_buffer_obj *buffer_object)
-    cdef float *buffer_locksamples(t_buffer_obj *buffer_object)
-    cdef void buffer_unlocksamples(t_buffer_obj *buffer_object)
-    cdef t_atom_long buffer_getchannelcount(t_buffer_obj *buffer_object)
-    cdef t_atom_long buffer_getframecount(t_buffer_obj *buffer_object)
-    cdef t_atom_float buffer_getsamplerate(t_buffer_obj *buffer_object)
-    cdef t_atom_float buffer_getmillisamplerate(t_buffer_obj *buffer_object)
-    cdef t_max_err buffer_setpadding(t_buffer_obj *buffer_object, t_atom_long samplecount)
-    cdef t_max_err buffer_setdirty(t_buffer_obj *buffer_object)
+    cdef float *buffer_locksamples(t_buffer_obj *buffer_object) nogil
+    cdef void buffer_unlocksamples(t_buffer_obj *buffer_object) nogil
+    cdef t_atom_long buffer_getchannelcount(t_buffer_obj *buffer_object) nogil
+    cdef t_atom_long buffer_getframecount(t_buffer_obj *buffer_object) nogil
+    cdef t_atom_float buffer_getsamplerate(t_buffer_obj *buffer_object) nogil
+    cdef t_atom_float buffer_getmillisamplerate(t_buffer_obj *buffer_object) nogil
+    cdef t_max_err buffer_setpadding(t_buffer_obj *buffer_object, t_atom_long samplecount) nogil
+    cdef t_max_err buffer_setdirty(t_buffer_obj *buffer_object) nogil
     cdef t_symbol *buffer_getfilename(t_buffer_obj *buffer_object)
     # start internal low-level
-    cdef t_max_err buffer_perform_begin(t_buffer_obj *buffer_object)
-    cdef t_max_err buffer_perform_end(t_buffer_obj *buffer_object)
-    cdef t_max_err buffer_getinfo(t_buffer_obj *buffer_object, t_buffer_info *info)
-    cdef t_max_err buffer_edit_begin(t_buffer_obj *buffer_object)
-    cdef t_max_err buffer_edit_end(t_buffer_obj *buffer_object, long valid)
-    cdef t_max_err buffer_lock(t_buffer_obj *buffer_object)
-    cdef t_max_err buffer_trylock(t_buffer_obj *buffer_object)
-    cdef t_max_err buffer_unlock(t_buffer_obj *buffer_object)
+    cdef t_max_err buffer_perform_begin(t_buffer_obj *buffer_object) nogil
+    cdef t_max_err buffer_perform_end(t_buffer_obj *buffer_object) nogil
+    cdef t_max_err buffer_getinfo(t_buffer_obj *buffer_object, t_buffer_info *info) nogil
+    cdef t_max_err buffer_edit_begin(t_buffer_obj *buffer_object) nogil
+    cdef t_max_err buffer_edit_end(t_buffer_obj *buffer_object, long valid) nogil
+    cdef t_max_err buffer_lock(t_buffer_obj *buffer_object) nogil
+    cdef t_max_err buffer_trylock(t_buffer_obj *buffer_object) nogil
+    cdef t_max_err buffer_unlock(t_buffer_obj *buffer_object) nogil
     cdef t_buffer_obj *buffer_findowner(t_buffer_obj *buffer_object)
     cdef long buffer_spinwait(t_buffer_obj *buffer_object)
     cdef long buffer_valid(t_buffer_obj *buffer_object, long way)
