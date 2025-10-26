@@ -1834,43 +1834,45 @@ cdef extern from "ext_systhread.h":
 
 
     cdef long systhread_create(method entryproc, void *arg, long stacksize, long priority, long flags, t_systhread *thread)
-    cdef long systhread_terminate(t_systhread thread)
-    cdef void systhread_sleep(long milliseconds)
-    cdef void systhread_exit(long status)
-    cdef long systhread_join(t_systhread thread, unsigned int* retval)
-    cdef long systhread_detach(t_systhread thread)
-    cdef t_systhread systhread_self()
-    cdef void systhread_setpriority(t_systhread thread, int priority)
-    cdef int systhread_getpriority(t_systhread thread)
+    cdef long systhread_terminate(t_systhread thread) nogil
+    cdef void systhread_sleep(long milliseconds) nogil
+    cdef void systhread_exit(long status) nogil
+    cdef long systhread_join(t_systhread thread, unsigned int* retval) nogil
+    cdef long systhread_detach(t_systhread thread) nogil
+    cdef t_systhread systhread_self() nogil
+    cdef long systhread_equal(t_systhread thread1, t_systhread thread2) nogil
+    cdef void systhread_setpriority(t_systhread thread, int priority) nogil
+    cdef int systhread_getpriority(t_systhread thread) nogil
     cdef char *systhread_getstackbase()
     cdef void systhread_init()
     cdef void systhread_mainstacksetup()
     cdef void systhread_timerstacksetup()
     cdef short systhread_stackcheck()
-    cdef short systhread_ismainthread()
-    cdef short systhread_istimerthread()
-    cdef short systhread_isaudiothread()
+    cdef short systhread_ismainthread() nogil
+    cdef short systhread_istimerthread() nogil
+    cdef short systhread_isaudiothread() nogil
+    cdef void systhread_set_name(const char* name)
     cdef long systhread_mutex_new(t_systhread_mutex *pmutex,long flags)
     cdef long systhread_mutex_free(t_systhread_mutex pmutex)
-    cdef long systhread_mutex_lock(t_systhread_mutex pmutex)
-    cdef long systhread_mutex_unlock(t_systhread_mutex pmutex)
-    cdef long systhread_mutex_trylock(t_systhread_mutex pmutex)
+    cdef long systhread_mutex_lock(t_systhread_mutex pmutex) nogil
+    cdef long systhread_mutex_unlock(t_systhread_mutex pmutex) nogil
+    cdef long systhread_mutex_trylock(t_systhread_mutex pmutex) nogil
     cdef long systhread_mutex_newlock(t_systhread_mutex *pmutex,long flags)
     cdef t_max_err systhread_rwlock_new(t_systhread_rwlock *rwlock, long flags)
     cdef t_max_err systhread_rwlock_free(t_systhread_rwlock rwlock)
-    cdef t_max_err systhread_rwlock_rdlock(t_systhread_rwlock rwlock)
-    cdef t_max_err systhread_rwlock_tryrdlock(t_systhread_rwlock rwlock)
-    cdef t_max_err systhread_rwlock_rdunlock(t_systhread_rwlock rwlock)
-    cdef t_max_err systhread_rwlock_wrlock(t_systhread_rwlock rwlock)
-    cdef t_max_err systhread_rwlock_trywrlock(t_systhread_rwlock rwlock)
-    cdef t_max_err systhread_rwlock_wrunlock(t_systhread_rwlock rwlock)
-    cdef t_max_err systhread_rwlock_setspintime(t_systhread_rwlock rwlock, double spintime_ms)
-    cdef t_max_err systhread_rwlock_getspintime(t_systhread_rwlock rwlock, double *spintime_ms)
+    cdef t_max_err systhread_rwlock_rdlock(t_systhread_rwlock rwlock) nogil
+    cdef t_max_err systhread_rwlock_tryrdlock(t_systhread_rwlock rwlock) nogil
+    cdef t_max_err systhread_rwlock_rdunlock(t_systhread_rwlock rwlock) nogil
+    cdef t_max_err systhread_rwlock_wrlock(t_systhread_rwlock rwlock) nogil
+    cdef t_max_err systhread_rwlock_trywrlock(t_systhread_rwlock rwlock) nogil
+    cdef t_max_err systhread_rwlock_wrunlock(t_systhread_rwlock rwlock) nogil
+    cdef t_max_err systhread_rwlock_setspintime(t_systhread_rwlock rwlock, double spintime_ms) nogil
+    cdef t_max_err systhread_rwlock_getspintime(t_systhread_rwlock rwlock, double *spintime_ms) nogil
     cdef long systhread_cond_new(t_systhread_cond *pcond, long flags)
     cdef long systhread_cond_free(t_systhread_cond pcond)
-    cdef long systhread_cond_wait(t_systhread_cond pcond, t_systhread_mutex pmutex)
-    cdef long systhread_cond_signal(t_systhread_cond pcond)
-    cdef long systhread_cond_broadcast(t_systhread_cond pcond)
+    cdef long systhread_cond_wait(t_systhread_cond pcond, t_systhread_mutex pmutex) nogil
+    cdef long systhread_cond_signal(t_systhread_cond pcond) nogil
+    cdef long systhread_cond_broadcast(t_systhread_cond pcond) nogil
     cdef long systhread_key_create(t_systhread_key *key, void (*destructor)(void*))
     cdef long systhread_key_delete(t_systhread_key key)
     cdef void* systhread_getspecific(t_systhread_key key)
@@ -1911,14 +1913,22 @@ cdef extern from "ext_sysparallel.h":
 
 cdef extern from "ext_sysprocess.h":
 
-    cdef long sysprocess_isrunning(long id)
+    ctypedef enum:
+        SYSPROCESS_LAUNCHFLAGS_NONE = 0
+        SYSPROCESS_LAUNCHFLAGS_NOWINDOW = 0x01
+        SYSPROCESS_LAUNCHFLAGS_NOWINDOW_ALLOWDIALOGS = 0x02
+
     cdef long sysprocess_launch(const char *utf8path, const char *utf8commandline)
-    cdef long sysprocess_activate(long id)
+    cdef long sysprocess_launch_withflags(const char *utf8path, const char *utf8commandline, long flags)
+    cdef long sysprocess_isrunning(long id) nogil
+    cdef long sysprocess_isrunning_with_returnvalue(long id, long *retval) nogil
+    cdef long sysprocess_kill(long id) nogil
+    cdef long sysprocess_activate(long id) nogil
     cdef long sysprocess_getid(const char *utf8path)
-    cdef long sysprocess_getcurrentid()
+    cdef long sysprocess_getcurrentid() nogil
     cdef long sysprocess_getpath(long id, char **utf8path)
     cdef t_object* sysprocesswatcher_new(long id, method m, void *arg)
-    cdef long sysprocess_fitsarch(long id)
+    cdef long sysprocess_fitsarch(long id) nogil
 
 
 cdef extern from "ext_sysmem.h":

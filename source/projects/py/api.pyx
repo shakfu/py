@@ -26,7 +26,12 @@ Extension Classes:
 - PyMxObject: Alternative `py` external extension type (obj pointer retrieved via uintptr_t)
 - Clock: wrapper for a clock object
 - TimeObject: wrapper for a timeobject
-- ITM: wrapper for an itm object.
+- ITM: wrapper for an itm object
+- SysThread: wrapper for Max t_systhread objects (threading)
+- SysThreadMutex: wrapper for Max t_systhread_mutex objects (mutex locks)
+- SysThreadCond: wrapper for Max t_systhread_cond objects (condition variables)
+- SysThreadRWLock: wrapper for Max t_systhread_rwlock objects (read-write locks)
+- SysProcess: wrapper for Max sysprocess functions (process management)
 
 
 WIP Extension Classes:
@@ -7747,6 +7752,659 @@ cdef class TimeObject:
             raise RuntimeError("TimeObject is not initialized")
         cdef mx.t_itm* itm_ptr = <mx.t_itm*>mx.time_getitm(self.ptr)
         return ITM.from_ptr(itm_ptr)
+
+
+# api.SysThread
+
+cdef class SysThread:
+    """A wrapper class for Max t_systhread objects.
+
+    Provides threading functionality for creating and managing threads.
+    """
+
+    cdef mx.t_systhread ptr
+    cdef bint ptr_owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.ptr_owner = False
+
+    def __dealloc__(self):
+        pass
+
+    @staticmethod
+    cdef SysThread from_ptr(mx.t_systhread ptr):
+        """Create a SysThread wrapper from an existing pointer."""
+        cdef SysThread thread = SysThread.__new__(SysThread)
+        thread.ptr = ptr
+        thread.ptr_owner = False
+        return thread
+
+    @staticmethod
+    def sleep(milliseconds):
+        """Suspend execution of the calling thread.
+
+        Args:
+            milliseconds: Number of milliseconds to sleep
+        """
+        cdef long ms = <long>milliseconds
+        with nogil:
+            mx.systhread_sleep(ms)
+
+    @staticmethod
+    def self():
+        """Get the current thread.
+
+        Returns:
+            SysThread instance for the current thread
+        """
+        cdef mx.t_systhread ptr
+        with nogil:
+            ptr = mx.systhread_self()
+        return SysThread.from_ptr(ptr)
+
+    @staticmethod
+    def ismainthread():
+        """Check if the current thread is the main thread.
+
+        Returns:
+            True if current thread is main thread, False otherwise
+        """
+        cdef short result
+        with nogil:
+            result = mx.systhread_ismainthread()
+        return bool(result)
+
+    @staticmethod
+    def istimerthread():
+        """Check if the current thread is a timer/scheduler thread.
+
+        Returns:
+            True if current thread is timer thread, False otherwise
+        """
+        cdef short result
+        with nogil:
+            result = mx.systhread_istimerthread()
+        return bool(result)
+
+    @staticmethod
+    def isaudiothread():
+        """Check if the current thread is an audio thread.
+
+        Returns:
+            True if current thread is audio thread, False otherwise
+        """
+        cdef short result
+        with nogil:
+            result = mx.systhread_isaudiothread()
+        return bool(result)
+
+    @staticmethod
+    def set_name(name):
+        """Set the name of the current thread for debugging.
+
+        Args:
+            name: Thread name (string)
+        """
+        cdef bytes name_bytes = name.encode() if isinstance(name, str) else name
+        mx.systhread_set_name(name_bytes)
+
+    def terminate(self):
+        """Forcefully kill this thread (not recommended)."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThread is not initialized")
+        with nogil:
+            mx.systhread_terminate(self.ptr)
+
+    def join(self):
+        """Wait for thread to quit and get return value.
+
+        Returns:
+            The return value from the thread
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThread is not initialized")
+        cdef unsigned int retval = 0
+        with nogil:
+            mx.systhread_join(self.ptr, &retval)
+        return retval
+
+    def detach(self):
+        """Detach the thread so resources are automatically freed."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThread is not initialized")
+        with nogil:
+            mx.systhread_detach(self.ptr)
+
+    def equal(self, SysThread other):
+        """Compare two threads for equality.
+
+        Args:
+            other: Another SysThread to compare with
+
+        Returns:
+            True if threads are the same, False otherwise
+        """
+        if self.ptr is NULL or other.ptr is NULL:
+            raise RuntimeError("SysThread is not initialized")
+        cdef long result
+        with nogil:
+            result = mx.systhread_equal(self.ptr, other.ptr)
+        return bool(result)
+
+    def setpriority(self, priority):
+        """Set the thread priority.
+
+        Args:
+            priority: Priority value from -32 (lowest) to 32 (highest), 0 is default
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThread is not initialized")
+        cdef int prio = <int>priority
+        with nogil:
+            mx.systhread_setpriority(self.ptr, prio)
+
+    def getpriority(self):
+        """Get the thread priority.
+
+        Returns:
+            Current priority value
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThread is not initialized")
+        cdef int result
+        with nogil:
+            result = mx.systhread_getpriority(self.ptr)
+        return result
+
+    def __repr__(self):
+        return f"<SysThread at 0x{<uintptr_t>self.ptr:x}>"
+
+
+# api.SysThreadMutex
+
+cdef class SysThreadMutex:
+    """A wrapper class for Max t_systhread_mutex objects.
+
+    Provides mutex (mutual exclusion) locks for thread synchronization.
+    """
+
+    cdef mx.t_systhread_mutex ptr
+    cdef bint ptr_owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.ptr_owner = False
+
+    def __dealloc__(self):
+        if self.ptr is not NULL and self.ptr_owner:
+            mx.systhread_mutex_free(self.ptr)
+            self.ptr = NULL
+
+    def __init__(self, flags=0):
+        """Create a new mutex.
+
+        Args:
+            flags: Mutex flags (SYSTHREAD_MUTEX_NORMAL, SYSTHREAD_MUTEX_ERRORCHECK,
+                   SYSTHREAD_MUTEX_RECURSIVE)
+        """
+        cdef long err = mx.systhread_mutex_new(&self.ptr, <long>flags)
+        if err != 0:
+            raise RuntimeError(f"Failed to create mutex: error {err}")
+        self.ptr_owner = True
+
+    @staticmethod
+    cdef SysThreadMutex from_ptr(mx.t_systhread_mutex ptr):
+        """Create a SysThreadMutex wrapper from an existing pointer."""
+        cdef SysThreadMutex mutex = SysThreadMutex.__new__(SysThreadMutex)
+        mutex.ptr = ptr
+        mutex.ptr_owner = False
+        return mutex
+
+    def lock(self):
+        """Lock the mutex."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadMutex is not initialized")
+        cdef long err
+        with nogil:
+            err = mx.systhread_mutex_lock(self.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to lock mutex: error {err}")
+
+    def unlock(self):
+        """Unlock the mutex."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadMutex is not initialized")
+        cdef long err
+        with nogil:
+            err = mx.systhread_mutex_unlock(self.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to unlock mutex: error {err}")
+
+    def trylock(self):
+        """Try to lock the mutex without blocking.
+
+        Returns:
+            True if lock was acquired, False otherwise
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadMutex is not initialized")
+        cdef long err
+        with nogil:
+            err = mx.systhread_mutex_trylock(self.ptr)
+        return err == 0
+
+    def __enter__(self):
+        """Context manager entry - lock the mutex."""
+        self.lock()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - unlock the mutex."""
+        self.unlock()
+        return False
+
+    def __repr__(self):
+        return f"<SysThreadMutex at 0x{<uintptr_t>self.ptr:x}>"
+
+
+# api.SysThreadCond
+
+cdef class SysThreadCond:
+    """A wrapper class for Max t_systhread_cond objects.
+
+    Provides condition variables for thread synchronization.
+    """
+
+    cdef mx.t_systhread_cond ptr
+    cdef bint ptr_owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.ptr_owner = False
+
+    def __dealloc__(self):
+        if self.ptr is not NULL and self.ptr_owner:
+            mx.systhread_cond_free(self.ptr)
+            self.ptr = NULL
+
+    def __init__(self, flags=0):
+        """Create a new condition variable.
+
+        Args:
+            flags: Condition variable flags (currently unused, pass 0)
+        """
+        cdef long err = mx.systhread_cond_new(&self.ptr, <long>flags)
+        if err != 0:
+            raise RuntimeError(f"Failed to create condition variable: error {err}")
+        self.ptr_owner = True
+
+    @staticmethod
+    cdef SysThreadCond from_ptr(mx.t_systhread_cond ptr):
+        """Create a SysThreadCond wrapper from an existing pointer."""
+        cdef SysThreadCond cond = SysThreadCond.__new__(SysThreadCond)
+        cond.ptr = ptr
+        cond.ptr_owner = False
+        return cond
+
+    def wait(self, SysThreadMutex mutex):
+        """Wait on the condition variable.
+
+        Args:
+            mutex: A locked SysThreadMutex to use for waiting
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadCond is not initialized")
+        if mutex.ptr is NULL:
+            raise RuntimeError("SysThreadMutex is not initialized")
+        cdef long err
+        with nogil:
+            err = mx.systhread_cond_wait(self.ptr, mutex.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to wait on condition: error {err}")
+
+    def signal(self):
+        """Signal one waiting thread."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadCond is not initialized")
+        cdef long err
+        with nogil:
+            err = mx.systhread_cond_signal(self.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to signal condition: error {err}")
+
+    def broadcast(self):
+        """Signal all waiting threads."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadCond is not initialized")
+        cdef long err
+        with nogil:
+            err = mx.systhread_cond_broadcast(self.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to broadcast condition: error {err}")
+
+    def __repr__(self):
+        return f"<SysThreadCond at 0x{<uintptr_t>self.ptr:x}>"
+
+
+# api.SysThreadRWLock
+
+cdef class SysThreadRWLock:
+    """A wrapper class for Max t_systhread_rwlock objects.
+
+    Provides read-write locks for thread synchronization.
+    """
+
+    cdef mx.t_systhread_rwlock ptr
+    cdef bint ptr_owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.ptr_owner = False
+
+    def __dealloc__(self):
+        if self.ptr is not NULL and self.ptr_owner:
+            mx.systhread_rwlock_free(self.ptr)
+            self.ptr = NULL
+
+    def __init__(self, flags=0):
+        """Create a new read-write lock.
+
+        Args:
+            flags: RW lock flags (SYSTHREAD_RWLOCK_NORMAL, SYSTHREAD_RWLOCK_LITE)
+        """
+        cdef mx.t_max_err err = mx.systhread_rwlock_new(&self.ptr, <long>flags)
+        if err != 0:
+            raise RuntimeError(f"Failed to create rwlock: error {err}")
+        self.ptr_owner = True
+
+    @staticmethod
+    cdef SysThreadRWLock from_ptr(mx.t_systhread_rwlock ptr):
+        """Create a SysThreadRWLock wrapper from an existing pointer."""
+        cdef SysThreadRWLock rwlock = SysThreadRWLock.__new__(SysThreadRWLock)
+        rwlock.ptr = ptr
+        rwlock.ptr_owner = False
+        return rwlock
+
+    def rdlock(self):
+        """Acquire a read lock."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadRWLock is not initialized")
+        cdef mx.t_max_err err
+        with nogil:
+            err = mx.systhread_rwlock_rdlock(self.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to acquire read lock: error {err}")
+
+    def tryrdlock(self):
+        """Try to acquire a read lock without blocking.
+
+        Returns:
+            True if lock was acquired, False otherwise
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadRWLock is not initialized")
+        cdef mx.t_max_err err
+        with nogil:
+            err = mx.systhread_rwlock_tryrdlock(self.ptr)
+        return err == 0
+
+    def rdunlock(self):
+        """Release a read lock."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadRWLock is not initialized")
+        cdef mx.t_max_err err
+        with nogil:
+            err = mx.systhread_rwlock_rdunlock(self.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to release read lock: error {err}")
+
+    def wrlock(self):
+        """Acquire a write lock."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadRWLock is not initialized")
+        cdef mx.t_max_err err
+        with nogil:
+            err = mx.systhread_rwlock_wrlock(self.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to acquire write lock: error {err}")
+
+    def trywrlock(self):
+        """Try to acquire a write lock without blocking.
+
+        Returns:
+            True if lock was acquired, False otherwise
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadRWLock is not initialized")
+        cdef mx.t_max_err err
+        with nogil:
+            err = mx.systhread_rwlock_trywrlock(self.ptr)
+        return err == 0
+
+    def wrunlock(self):
+        """Release a write lock."""
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadRWLock is not initialized")
+        cdef mx.t_max_err err
+        with nogil:
+            err = mx.systhread_rwlock_wrunlock(self.ptr)
+        if err != 0:
+            raise RuntimeError(f"Failed to release write lock: error {err}")
+
+    def setspintime(self, spintime_ms):
+        """Set the spin time for the lock.
+
+        Args:
+            spintime_ms: Spin time in milliseconds
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadRWLock is not initialized")
+        cdef double spin_ms = <double>spintime_ms
+        cdef mx.t_max_err err
+        with nogil:
+            err = mx.systhread_rwlock_setspintime(self.ptr, spin_ms)
+        if err != 0:
+            raise RuntimeError(f"Failed to set spin time: error {err}")
+
+    def getspintime(self):
+        """Get the spin time for the lock.
+
+        Returns:
+            Spin time in milliseconds
+        """
+        if self.ptr is NULL:
+            raise RuntimeError("SysThreadRWLock is not initialized")
+        cdef double spintime_ms = 0.0
+        cdef mx.t_max_err err
+        with nogil:
+            err = mx.systhread_rwlock_getspintime(self.ptr, &spintime_ms)
+        if err != 0:
+            raise RuntimeError(f"Failed to get spin time: error {err}")
+        return spintime_ms
+
+    def __repr__(self):
+        return f"<SysThreadRWLock at 0x{<uintptr_t>self.ptr:x}>"
+
+
+# api.SysProcess
+
+cdef class SysProcess:
+    """A wrapper class for Max sysprocess functions.
+
+    Provides process management functionality.
+    """
+
+    cdef long process_id
+
+    def __cinit__(self):
+        self.process_id = 0
+
+    def __init__(self, process_id=None):
+        """Create a SysProcess wrapper.
+
+        Args:
+            process_id: Optional process ID to wrap
+        """
+        if process_id is not None:
+            self.process_id = <long>process_id
+
+    @staticmethod
+    def launch(path, commandline="", flags=0):
+        """Launch a process.
+
+        Args:
+            path: Path to the executable (string)
+            commandline: Command line arguments (string)
+            flags: Launch flags (SYSPROCESS_LAUNCHFLAGS_NONE, SYSPROCESS_LAUNCHFLAGS_NOWINDOW, etc.)
+
+        Returns:
+            SysProcess instance for the launched process, or None if failed
+        """
+        cdef bytes path_bytes = path.encode() if isinstance(path, str) else path
+        cdef bytes cmd_bytes = commandline.encode() if isinstance(commandline, str) else commandline
+
+        cdef long pid
+        if flags == 0:
+            pid = mx.sysprocess_launch(path_bytes, cmd_bytes)
+        else:
+            pid = mx.sysprocess_launch_withflags(path_bytes, cmd_bytes, <long>flags)
+
+        if pid == 0:
+            return None
+
+        cdef SysProcess proc = SysProcess.__new__(SysProcess)
+        proc.process_id = pid
+        return proc
+
+    @staticmethod
+    def get_current():
+        """Get the current process.
+
+        Returns:
+            SysProcess instance for the current process
+        """
+        cdef long pid = mx.sysprocess_getcurrentid()
+        cdef SysProcess proc = SysProcess.__new__(SysProcess)
+        proc.process_id = pid
+        return proc
+
+    @staticmethod
+    def get_by_path(path):
+        """Get a process by its path.
+
+        Args:
+            path: Path to the executable (string)
+
+        Returns:
+            SysProcess instance if found, None otherwise
+        """
+        cdef bytes path_bytes = path.encode() if isinstance(path, str) else path
+        cdef long pid = mx.sysprocess_getid(path_bytes)
+
+        if pid == 0:
+            return None
+
+        cdef SysProcess proc = SysProcess.__new__(SysProcess)
+        proc.process_id = pid
+        return proc
+
+    def isrunning(self):
+        """Check if the process is still running.
+
+        Returns:
+            True if running, False otherwise
+        """
+        if self.process_id == 0:
+            return False
+        cdef long result
+        with nogil:
+            result = mx.sysprocess_isrunning(self.process_id)
+        return bool(result)
+
+    def isrunning_with_returnvalue(self):
+        """Check if process is running and get return value if not.
+
+        Returns:
+            Tuple of (is_running, return_value)
+        """
+        if self.process_id == 0:
+            return (False, 0)
+
+        cdef long retval = 0
+        cdef long running
+        with nogil:
+            running = mx.sysprocess_isrunning_with_returnvalue(self.process_id, &retval)
+        return (bool(running), retval)
+
+    def kill(self):
+        """Kill the process (SIGKILL).
+
+        Returns:
+            0 if successful, non-zero otherwise
+        """
+        if self.process_id == 0:
+            raise RuntimeError("Invalid process ID")
+        cdef long result
+        with nogil:
+            result = mx.sysprocess_kill(self.process_id)
+        return result
+
+    def activate(self):
+        """Bring the process to the foreground.
+
+        Returns:
+            0 if successful, non-zero otherwise
+        """
+        if self.process_id == 0:
+            raise RuntimeError("Invalid process ID")
+        cdef long result
+        with nogil:
+            result = mx.sysprocess_activate(self.process_id)
+        return result
+
+    def getpath(self):
+        """Get the path to the process executable.
+
+        Returns:
+            Path as a string, or None if failed
+        """
+        if self.process_id == 0:
+            raise RuntimeError("Invalid process ID")
+
+        cdef char* path_ptr = NULL
+        cdef long err = mx.sysprocess_getpath(self.process_id, &path_ptr)
+
+        if err != 0 or path_ptr is NULL:
+            return None
+
+        try:
+            path_str = path_ptr.decode()
+            return path_str
+        finally:
+            if path_ptr is not NULL:
+                mx.sysmem_freeptr(path_ptr)
+
+    def fitsarch(self):
+        """Check if process architecture matches current process.
+
+        Returns:
+            True if architecture matches, False otherwise
+        """
+        if self.process_id == 0:
+            raise RuntimeError("Invalid process ID")
+        cdef long result
+        with nogil:
+            result = mx.sysprocess_fitsarch(self.process_id)
+        return bool(result)
+
+    @property
+    def pid(self):
+        """Get the process ID."""
+        return self.process_id
+
+    def __repr__(self):
+        return f"<SysProcess pid={self.process_id}>"
 
 
 # ----------------------------------------------------------------------------
