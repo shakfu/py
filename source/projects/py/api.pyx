@@ -3283,10 +3283,9 @@ cdef class AtomArray:
             raise MemoryError
         return AtomArray.from_atom(ptr, size)
 
-    @property
     def size(self) -> int:
         """get number of atoms in atom array"""
-        return self.getsize()
+        return <int>mx.atomarray_getsize(self.ptr)
 
     def set_flags(self, long flags):
         """Set the atomarray flags."""

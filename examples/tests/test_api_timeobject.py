@@ -3,6 +3,8 @@ import api
 mem = {}
 
 
+# TODO: .ms attribute is not writeable!
+
 def test_timeobject_init():
     def callback():
         api.post("TimeObject callback triggered")
