@@ -9,7 +9,7 @@
             "modernui": 1
         },
         "classnamespace": "box",
-        "rect": [ 185.0, 97.0, 885.0, 769.0 ],
+        "rect": [ 185.0, 97.0, 855.0, 761.0 ],
         "showrootpatcherontab": 0,
         "showontab": 0,
         "boxes": [
@@ -29,7 +29,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 885.0, 743.0 ],
+                        "rect": [ 0.0, 26.0, 855.0, 735.0 ],
                         "showontab": 2,
                         "boxes": [
                             {
@@ -50,7 +50,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 419.0, 519.0, 142.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 242.0, 142.0, 22.0 ],
                                     "text": "set_function count_paths"
                                 }
                             },
@@ -61,7 +61,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 419.0, 486.0, 113.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 207.0, 113.0, 22.0 ],
                                     "text": "set_function square"
                                 }
                             },
@@ -82,7 +82,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 566.5, 231.0, 124.0, 22.0 ],
+                                    "patching_rect": [ 376.0, 175.0, 124.0, 22.0 ],
                                     "presentation": 1,
                                     "presentation_linecount": 2,
                                     "presentation_rect": [ 640.0, 380.0, 76.0, 35.0 ],
@@ -96,7 +96,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 695.0, 275.0, 59.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 469.0, 59.0, 22.0 ],
                                     "text": "call fib 10"
                                 }
                             },
@@ -118,7 +118,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 555.0, 175.0, 73.0, 22.0 ],
+                                    "patching_rect": [ 148.0, 175.0, 73.0, 22.0 ],
                                     "text": "clear_cache"
                                 }
                             },
@@ -129,7 +129,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 428.0, 306.0, 129.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 357.0, 129.0, 22.0 ],
                                     "text": "count_paths(13\\, 16)"
                                 }
                             },
@@ -140,7 +140,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 564.0, 306.0, 129.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 536.0, 129.0, 22.0 ],
                                     "text": "call count_paths 13 16"
                                 }
                             },
@@ -152,7 +152,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 27.0, 507.0, 296.0, 62.0 ],
+                                    "patching_rect": [ 533.0, 461.0, 296.0, 62.0 ],
                                     "text": "cache \"def count_paths(m, n):\n      if m == 1 or n == 1:\n          return 1\n      return count_paths(m-1, n) + count_paths(m, n-1)\""
                                 }
                             },
@@ -163,7 +163,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 564.0, 275.0, 109.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 505.0, 109.0, 22.0 ],
                                     "text": "call ackermann 3 9"
                                 }
                             },
@@ -174,7 +174,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 432.0, 275.0, 116.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 319.0, 116.0, 22.0 ],
                                     "text": "call ackermann 3 8"
                                 }
                             },
@@ -186,7 +186,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 27.0, 428.0, 146.0, 62.0 ],
+                                    "patching_rect": [ 533.0, 386.0, 146.0, 62.0 ],
                                     "text": "cache \"def factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n-1)\""
                                 }
                             },
@@ -198,7 +198,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 419.0, 350.0, 279.0, 116.0 ],
+                                    "patching_rect": [ 533.0, 549.0, 279.0, 116.0 ],
                                     "text": "cache \"def ackermann(m, n):\n    if m == 0:\n        return n + 1\n    elif n == 0:\n        return ackermann(m - 1, 1)\n    else:\n        return ackermann(m - 1, ackermann(m, n - 1))\n\""
                                 }
                             },
@@ -210,7 +210,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 27.0, 333.0, 164.0, 76.0 ],
+                                    "patching_rect": [ 533.0, 300.0, 164.0, 76.0 ],
                                     "text": "cache \"def fib(n):\n    if n <= 1:\n        return n\n    else:\n        return fib(n-1) + fib(n-2)\""
                                 }
                             },
@@ -221,7 +221,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 432.0, 226.0, 120.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 438.0, 120.0, 22.0 ],
                                     "text": "call process_signal 5"
                                 }
                             },
@@ -232,7 +232,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 26.0, 294.0, 181.0, 22.0 ],
+                                    "patching_rect": [ 533.0, 265.0, 181.0, 22.0 ],
                                     "text": "cache \"def square(x): return x*x\""
                                 }
                             },
@@ -243,7 +243,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 432.0, 175.0, 110.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 279.0, 110.0, 22.0 ],
                                     "text": "process_signal(10)"
                                 }
                             },
@@ -254,7 +254,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 363.0, 175.0, 60.0, 22.0 ],
+                                    "patching_rect": [ 25.0, 401.0, 60.0, 22.0 ],
                                     "text": "square(2)"
                                 }
                             },
@@ -353,7 +353,7 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 25.0, 204.0, 166.0, 76.0 ],
+                                    "patching_rect": [ 533.0, 175.0, 166.0, 76.0 ],
                                     "text": "cache \"def process_signal(x):\n    result = 0\n    for i in range(10):\n        result += x * i\n    return result\""
                                 }
                             },
@@ -428,36 +428,42 @@
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-1", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-10", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-11", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-12", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-14", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-16", 0 ]
                                 }
                             },
@@ -470,6 +476,7 @@
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-18", 0 ]
                                 }
                             },
@@ -482,24 +489,28 @@
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-20", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-21", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-22", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-23", 0 ]
                                 }
                             },
@@ -519,6 +530,7 @@
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-27", 0 ]
                                 }
                             },
@@ -531,12 +543,14 @@
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-29", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-30", 0 ]
                                 }
                             },
@@ -555,36 +569,42 @@
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-33", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-4", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-5", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-6", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-8", 0 ]
                                 }
                             },
                             {
                                 "patchline": {
                                     "destination": [ "obj-50", 0 ],
+                                    "hidden": 1,
                                     "source": [ "obj-9", 0 ]
                                 }
                             }
@@ -610,7 +630,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 885.0, 743.0 ],
+                        "rect": [ 0.0, 26.0, 855.0, 735.0 ],
                         "showontab": 2,
                         "boxes": [
                             {
@@ -1090,19 +1110,18 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 185.0, 123.0, 885.0, 743.0 ],
+                        "rect": [ 0.0, 26.0, 855.0, 735.0 ],
                         "showontab": 2,
                         "boxes": [
                             {
                                 "box": {
                                     "id": "obj-16",
-                                    "linecount": 2,
+                                    "linecount": 4,
                                     "maxclass": "comment",
                                     "numinlets": 1,
                                     "numoutlets": 0,
-                                    "patching_rect": [ 574.0, 651.0, 295.0, 33.0 ],
-                                    "presentation_linecount": 2,
-                                    "text": "This is a textbox which can be used to enter highlighted source code."
+                                    "patching_rect": [ 574.0, 651.0, 295.0, 60.0 ],
+                                    "text": "This is a textbox which can be used to enter highlighted source code. In addition, It has some nice features: tab does what it's supposed to and you can save the code with the patch."
                                 }
                             },
                             {
@@ -1150,7 +1169,7 @@
                             },
                             {
                                 "box": {
-                                    "code": "def color(x):\r\n    return x+1\r\n",
+                                    "code": "class Person:\r\n    \"\"\"A person class\"\"\"\r\n    def __init__(self, name, age):\r\n        self.name = name\r\n        self.age = age\r\n\r\ndef color(x):\r\n    return x+1\r\n",
                                     "fontface": 0,
                                     "fontname": "<Monospaced>",
                                     "fontsize": 12.0,
@@ -1520,7 +1539,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 885.0, 743.0 ],
+                        "rect": [ 0.0, 26.0, 855.0, 735.0 ],
                         "showontab": 1,
                         "boxes": [
                             {
@@ -2192,7 +2211,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 885.0, 743.0 ],
+                        "rect": [ 185.0, 123.0, 855.0, 735.0 ],
                         "showontab": 1,
                         "boxes": [
                             {
