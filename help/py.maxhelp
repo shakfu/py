@@ -9,7 +9,7 @@
             "modernui": 1
         },
         "classnamespace": "box",
-        "rect": [ 185.0, 97.0, 855.0, 761.0 ],
+        "rect": [ 185.0, 97.0, 891.0, 775.0 ],
         "showrootpatcherontab": 0,
         "showontab": 0,
         "boxes": [
@@ -29,7 +29,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 855.0, 735.0 ],
+                        "rect": [ 0.0, 26.0, 891.0, 749.0 ],
                         "showontab": 2,
                         "boxes": [
                             {
@@ -630,7 +630,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 855.0, 735.0 ],
+                        "rect": [ 0.0, 26.0, 891.0, 749.0 ],
                         "showontab": 2,
                         "boxes": [
                             {
@@ -1110,9 +1110,42 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 855.0, 735.0 ],
+                        "rect": [ 0.0, 26.0, 891.0, 749.0 ],
                         "showontab": 2,
                         "boxes": [
+                            {
+                                "box": {
+                                    "id": "obj-30",
+                                    "linecount": 2,
+                                    "maxclass": "comment",
+                                    "numinlets": 1,
+                                    "numoutlets": 0,
+                                    "patching_rect": [ 104.0, 529.0, 333.0, 33.0 ],
+                                    "text": "Max 9.1 added the textbox object which is perfect for sending a line of python source code to the py object!"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-27",
+                                    "maxclass": "comment",
+                                    "numinlets": 1,
+                                    "numoutlets": 0,
+                                    "patching_rect": [ 89.0, 471.0, 137.0, 20.0 ],
+                                    "text": "Max textbox as line repl"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "format": 8,
+                                    "id": "obj-20",
+                                    "maxclass": "number",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 89.0, 499.5, 348.0, 22.0 ]
+                                }
+                            },
                             {
                                 "box": {
                                     "id": "obj-16",
@@ -1284,7 +1317,7 @@
                                     "numoutlets": 2,
                                     "offset": [ 0.0, 0.0 ],
                                     "outlettype": [ "", "bang" ],
-                                    "patching_rect": [ 23.0, 471.0, 231.0, 28.0 ],
+                                    "patching_rect": [ 23.0, 366.0, 231.0, 28.0 ],
                                     "viewvisibility": 1
                                 }
                             },
@@ -1306,7 +1339,7 @@
                                     "maxclass": "comment",
                                     "numinlets": 1,
                                     "numoutlets": 0,
-                                    "patching_rect": [ 23.0, 409.0, 427.0, 47.0 ],
+                                    "patching_rect": [ 37.0, 400.0, 400.0, 47.0 ],
                                     "text": "This is a bpatcher which opens a file in your text editor (in this case sublime text) and then when the file is saved it sends the text out of the bottom outlet for execution by the py external. "
                                 }
                             },
@@ -1317,7 +1350,7 @@
                                     "maxclass": "comment",
                                     "numinlets": 1,
                                     "numoutlets": 0,
-                                    "patching_rect": [ 23.0, 387.0, 162.0, 20.0 ],
+                                    "patching_rect": [ 275.0, 370.0, 162.0, 20.0 ],
                                     "text": "py_external_editor_bp"
                                 }
                             },
@@ -1327,7 +1360,7 @@
                                     "maxclass": "newobj",
                                     "numinlets": 1,
                                     "numoutlets": 0,
-                                    "patching_rect": [ 23.0, 516.0, 47.0, 22.0 ],
+                                    "patching_rect": [ 23.0, 546.0, 47.0, 22.0 ],
                                     "text": "s to_py"
                                 }
                             },
@@ -1483,6 +1516,12 @@
                             },
                             {
                                 "patchline": {
+                                    "destination": [ "obj-7", 0 ],
+                                    "source": [ "obj-20", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
                                     "destination": [ "obj-24", 0 ],
                                     "source": [ "obj-25", 0 ]
                                 }
@@ -1539,7 +1578,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 855.0, 735.0 ],
+                        "rect": [ 0.0, 26.0, 891.0, 749.0 ],
                         "showontab": 1,
                         "boxes": [
                             {
@@ -2211,7 +2250,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 185.0, 123.0, 855.0, 735.0 ],
+                        "rect": [ 185.0, 123.0, 891.0, 749.0 ],
                         "showontab": 1,
                         "boxes": [
                             {

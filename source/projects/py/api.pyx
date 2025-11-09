@@ -3934,6 +3934,13 @@ cdef class Patcher:
         """Get the first line (patch-cord) in a patcher."""
         return mx.jpatcher_get_firstline(self.ptr)
 
+    def get_firstline(self):
+        """Get the first patchline (patch-cord) in a patcher."""
+        cdef mx.t_object* line = mx.jpatcher_get_firstline(self.ptr)
+        if line is NULL:
+            return None
+        return Patchline.from_ptr(line)
+
     cdef mx.t_object* get_first_view(self):
         """Get the first view (jpatcherview) for a given patcher."""
         return mx.jpatcher_get_firstview(self.ptr)
@@ -4335,6 +4342,477 @@ cdef class Box:
         """Retrieve a box's unique id."""
         cdef mx.t_symbol* _id = mx.jbox_get_id(self.ptr)
         return sym_to_str(_id)
+
+
+# ----------------------------------------------------------------------------
+# api.Patchline
+
+cdef class Patchline:
+    """Wraps a Max patchline (patch cord) object."""
+
+    cdef mx.t_object *ptr
+    cdef bint ptr_owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.ptr_owner = False
+
+    def __repr__(self) -> str:
+        if self.ptr is NULL:
+            return "<Patchline (null)>"
+        return f"<Patchline {<unsigned long long>self.ptr:#x}>"
+
+    @staticmethod
+    cdef Patchline from_ptr(mx.t_object *ptr):
+        """Create a Patchline object from a patchline pointer."""
+        cdef Patchline patchline = Patchline.__new__(Patchline)
+        patchline.ptr = ptr
+        patchline.ptr_owner = False
+        return patchline
+
+    def is_null(self) -> bool:
+        """Check if patchline pointer is null."""
+        return self.ptr is NULL
+
+    def get_box1(self) -> Box:
+        """Get the source box."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        cdef mx.t_object* box = mx.jpatchline_get_box1(self.ptr)
+        if box is NULL:
+            return None
+        return Box.from_ptr(box)
+
+    def get_box2(self) -> Box:
+        """Get the destination box."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        cdef mx.t_object* box = mx.jpatchline_get_box2(self.ptr)
+        if box is NULL:
+            return None
+        return Box.from_ptr(box)
+
+    def get_outletnum(self) -> int:
+        """Get the outlet number of the source box."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        return mx.jpatchline_get_outletnum(self.ptr)
+
+    def get_inletnum(self) -> int:
+        """Get the inlet number of the destination box."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        return mx.jpatchline_get_inletnum(self.ptr)
+
+    def get_startpoint(self) -> tuple:
+        """Get the start point as (x, y)."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        cdef double x, y
+        cdef mx.t_max_err err = mx.jpatchline_get_startpoint(self.ptr, &x, &y)
+        if err:
+            raise ValueError("Failed to get startpoint")
+        return (x, y)
+
+    def get_endpoint(self) -> tuple:
+        """Get the end point as (x, y)."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        cdef double x, y
+        cdef mx.t_max_err err = mx.jpatchline_get_endpoint(self.ptr, &x, &y)
+        if err:
+            raise ValueError("Failed to get endpoint")
+        return (x, y)
+
+    def get_hidden(self) -> bool:
+        """Get the hidden state."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        return mx.jpatchline_get_hidden(self.ptr) != 0
+
+    def set_hidden(self, hidden: bool):
+        """Set the hidden state."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        cdef mx.t_max_err err = mx.jpatchline_set_hidden(self.ptr, 1 if hidden else 0)
+        if err:
+            raise ValueError("Failed to set hidden state")
+
+    def get_nextline(self):
+        """Get the next patchline in the linked list."""
+        if self.ptr is NULL:
+            raise ValueError("Patchline is null")
+        cdef mx.t_object* nextline = mx.jpatchline_get_nextline(self.ptr)
+        if nextline is NULL:
+            return None
+        return Patchline.from_ptr(nextline)
+
+    def pointer(self) -> int:
+        """Get the raw pointer value."""
+        return <unsigned long long>self.ptr
+
+
+# ----------------------------------------------------------------------------
+# api.Inlet
+
+cdef class Inlet:
+    """Wraps a Max inlet object."""
+
+    cdef void *ptr
+    cdef long inlet_num
+    cdef bint is_proxy
+    cdef bint ptr_owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.inlet_num = 0
+        self.is_proxy = False
+        self.ptr_owner = False
+
+    def __repr__(self) -> str:
+        if self.is_proxy:
+            return f"<Inlet (proxy, num={self.inlet_num}, {<unsigned long long>self.ptr:#x})>"
+        elif self.ptr is not NULL:
+            return f"<Inlet {<unsigned long long>self.ptr:#x}>"
+        return "<Inlet (null)>"
+
+    def __dealloc__(self):
+        if self.ptr_owner and self.ptr is not NULL:
+            mx.inlet_delete(self.ptr)
+            self.ptr = NULL
+
+    @staticmethod
+    cdef Inlet from_ptr(void *ptr, long num=0, bint is_proxy=False):
+        """Create an Inlet object from a pointer."""
+        cdef Inlet inlet = Inlet.__new__(Inlet)
+        inlet.ptr = ptr
+        inlet.inlet_num = num
+        inlet.is_proxy = is_proxy
+        inlet.ptr_owner = False
+        return inlet
+
+    def is_null(self) -> bool:
+        """Check if inlet pointer is null."""
+        return self.ptr is NULL
+
+    def delete(self):
+        """Delete this inlet (if we own it)."""
+        if self.ptr is NULL:
+            raise ValueError("Inlet is null")
+        if not self.ptr_owner:
+            raise ValueError("Cannot delete inlet we don't own")
+        mx.inlet_delete(self.ptr)
+        self.ptr = NULL
+        self.ptr_owner = False
+
+    def pointer(self) -> int:
+        """Get the raw pointer value."""
+        return <unsigned long long>self.ptr
+
+    def get_num(self) -> int:
+        """Get the inlet number."""
+        return self.inlet_num
+
+    def is_proxy_inlet(self) -> bool:
+        """Check if this is a proxy inlet."""
+        return self.is_proxy
+
+
+# ----------------------------------------------------------------------------
+# api.Outlet
+
+cdef class Outlet:
+    """Wraps a Max outlet object."""
+
+    cdef void *ptr
+    cdef bint ptr_owner
+
+    def __cinit__(self):
+        self.ptr = NULL
+        self.ptr_owner = False
+
+    def __repr__(self) -> str:
+        if self.ptr is not NULL:
+            return f"<Outlet {<unsigned long long>self.ptr:#x}>"
+        return "<Outlet (null)>"
+
+    def __dealloc__(self):
+        # Outlets are typically freed by Max when the object is freed
+        # We don't manually free them
+        self.ptr = NULL
+
+    @staticmethod
+    cdef Outlet from_ptr(void *ptr):
+        """Create an Outlet object from a pointer."""
+        cdef Outlet outlet = Outlet.__new__(Outlet)
+        outlet.ptr = ptr
+        outlet.ptr_owner = False
+        return outlet
+
+    def __init__(self, object owner, str type_str=None):
+        """Create a new outlet.
+
+        Args:
+            owner: Owner object (MaxObject or pointer as int)
+            type_str: Type string for the outlet (e.g., None for generic)
+        """
+        cdef void* owner_ptr
+
+        # Handle owner as either MaxObject or raw pointer
+        if isinstance(owner, MaxObject):
+            owner_ptr = (<MaxObject>owner).ptr
+        elif isinstance(owner, int):
+            owner_ptr = <void*><unsigned long long>owner
+        else:
+            raise TypeError("Owner must be MaxObject or int pointer")
+
+        cdef const char* c_type_str = NULL
+        cdef bytes type_bytes
+        if type_str is not None:
+            type_bytes = type_str.encode('utf-8')
+            c_type_str = type_bytes
+
+        self.ptr = mx.outlet_new(owner_ptr, c_type_str)
+        self.ptr_owner = True
+
+    def is_null(self) -> bool:
+        """Check if outlet pointer is null."""
+        return self.ptr is NULL
+
+    def bang(self):
+        """Send a bang message."""
+        if self.ptr is NULL:
+            raise ValueError("Outlet is null")
+        mx.outlet_bang(self.ptr)
+
+    def int(self, value: int):
+        """Send an integer message."""
+        if self.ptr is NULL:
+            raise ValueError("Outlet is null")
+        mx.outlet_int(self.ptr, <long>value)
+
+    def float(self, value: float):
+        """Send a float message."""
+        if self.ptr is NULL:
+            raise ValueError("Outlet is null")
+        mx.outlet_float(self.ptr, <double>value)
+
+    def symbol(self, sym: str):
+        """Send a symbol message."""
+        if self.ptr is NULL:
+            raise ValueError("Outlet is null")
+        cdef mx.t_symbol* s = str_to_sym(sym)
+        mx.outlet_anything(self.ptr, s, 0, NULL)
+
+    def list(self, values: list):
+        """Send a list message."""
+        if self.ptr is NULL:
+            raise ValueError("Outlet is null")
+        cdef Atombuf atoms = Atombuf(values)
+        mx.outlet_list(self.ptr, NULL, <short>atoms.ptr.a_argc, atoms.ptr.a_argv)
+
+    def anything(self, symbol: str, values: list):
+        """Send an arbitrary message."""
+        if self.ptr is NULL:
+            raise ValueError("Outlet is null")
+        cdef mx.t_symbol* s = str_to_sym(symbol)
+        cdef Atom atoms = Atom(values)
+        mx.outlet_anything(self.ptr, s, atoms.size, atoms.ptr)
+
+    def pointer(self) -> int:
+        """Get the raw pointer value."""
+        return <unsigned long long>self.ptr
+
+
+# ----------------------------------------------------------------------------
+# Module-level inlet/outlet functions
+
+def inlet_new(object owner, str message_name=None):
+    """Create a general-purpose inlet.
+
+    Args:
+        owner: Owner object (MaxObject or pointer as int)
+        message_name: Optional message name for the inlet
+
+    Returns:
+        Inlet object
+    """
+    cdef void* owner_ptr
+
+    if isinstance(owner, MaxObject):
+        owner_ptr = (<MaxObject>owner).ptr
+    elif isinstance(owner, int):
+        owner_ptr = <void*><unsigned long long>owner
+    else:
+        raise TypeError("Owner must be MaxObject or int pointer")
+
+    cdef const char* c_msg = NULL
+    cdef bytes msg_bytes
+    if message_name is not None:
+        msg_bytes = message_name.encode('utf-8')
+        c_msg = msg_bytes
+
+    cdef void* inlet_ptr = mx.inlet_new(owner_ptr, c_msg)
+    if inlet_ptr is NULL:
+        raise ValueError("Failed to create inlet")
+
+    cdef Inlet inlet = Inlet.__new__(Inlet)
+    inlet.ptr = inlet_ptr
+    inlet.inlet_num = 0
+    inlet.is_proxy = False
+    inlet.ptr_owner = True
+    return inlet
+
+
+def proxy_new(object owner, long inlet_id, object stuffloc):
+    """Create a proxy inlet.
+
+    Args:
+        owner: Owner object (MaxObject or pointer as int)
+        inlet_id: Inlet identifier
+        stuffloc: Pointer to long variable for storing inlet number
+
+    Returns:
+        Inlet object configured as proxy
+    """
+    cdef void* owner_ptr
+
+    if isinstance(owner, MaxObject):
+        owner_ptr = (<MaxObject>owner).ptr
+    elif isinstance(owner, int):
+        owner_ptr = <void*><unsigned long long>owner
+    else:
+        raise TypeError("Owner must be MaxObject or int pointer")
+
+    cdef long* stuffloc_ptr
+    if isinstance(stuffloc, int):
+        stuffloc_ptr = <long*><unsigned long long>stuffloc
+    else:
+        raise TypeError("stuffloc must be int pointer")
+
+    cdef void* proxy_ptr = mx.proxy_new(owner_ptr, inlet_id, stuffloc_ptr)
+    if proxy_ptr is NULL:
+        raise ValueError("Failed to create proxy inlet")
+
+    cdef Inlet inlet = Inlet.__new__(Inlet)
+    inlet.ptr = proxy_ptr
+    inlet.inlet_num = inlet_id
+    inlet.is_proxy = True
+    inlet.ptr_owner = True
+    return inlet
+
+
+def proxy_getinlet(object owner) -> int:
+    """Get the inlet number where a message was received.
+
+    Args:
+        owner: Owner object (MaxObject or pointer as int)
+
+    Returns:
+        Inlet number
+    """
+    cdef mx.t_object* owner_ptr
+
+    if isinstance(owner, MaxObject):
+        owner_ptr = (<MaxObject>owner).ptr
+    elif isinstance(owner, int):
+        owner_ptr = <mx.t_object*><unsigned long long>owner
+    else:
+        raise TypeError("Owner must be MaxObject or int pointer")
+
+    return mx.proxy_getinlet(owner_ptr)
+
+
+# ----------------------------------------------------------------------------
+# api.Symbol
+
+cdef class Symbol:
+    """Wraps a Max t_symbol object.
+
+    Symbols in Max are interned strings - each unique string has exactly
+    one symbol object, making symbol comparisons very fast (pointer equality).
+    """
+
+    cdef mx.t_symbol *ptr
+
+    def __cinit__(self):
+        self.ptr = NULL
+
+    def __init__(self, str name=""):
+        """Create or retrieve a symbol with the given name.
+
+        Args:
+            name: The symbol name (default is empty string)
+        """
+        self.ptr = str_to_sym(name)
+
+    def __repr__(self) -> str:
+        if self.ptr is NULL:
+            return "<Symbol (null)>"
+        return f"<Symbol '{self.name}'>"
+
+    def __str__(self) -> str:
+        """Return the symbol name as a string."""
+        return self.name
+
+    def __eq__(self, other) -> bool:
+        """Compare symbols for equality.
+
+        Can compare with another Symbol or with a string.
+        Symbol comparison is very fast (pointer equality).
+        """
+        if isinstance(other, Symbol):
+            # Fast pointer comparison
+            return self.ptr == (<Symbol>other).ptr
+        elif isinstance(other, str):
+            # String comparison
+            return self.name == other
+        return False
+
+    def __hash__(self) -> int:
+        """Return hash of the symbol pointer.
+
+        This allows symbols to be used as dictionary keys.
+        """
+        return <long>self.ptr
+
+    @staticmethod
+    cdef Symbol from_ptr(mx.t_symbol *ptr):
+        """Create a Symbol object from a t_symbol pointer."""
+        cdef Symbol symbol = Symbol.__new__(Symbol)
+        symbol.ptr = ptr
+        return symbol
+
+    @property
+    def name(self) -> str:
+        """Get the symbol name as a string."""
+        if self.ptr is NULL:
+            return ""
+        return sym_to_str(self.ptr)
+
+    def pointer(self) -> int:
+        """Get the raw pointer value."""
+        return <unsigned long long>self.ptr
+
+    def is_null(self) -> bool:
+        """Check if symbol pointer is null."""
+        return self.ptr is NULL
+
+
+# def gensym(str name) -> Symbol:
+#     """Create or retrieve a symbol with the given name.
+
+#     This is the Max gensym() function exposed to Python.
+#     Symbols are interned, so calling gensym() with the same
+#     name will always return the same symbol object.
+
+#     Args:
+#         name: The symbol name
+
+#     Returns:
+#         Symbol object
+#     """
+#     return Symbol(name)
 
 
 # ----------------------------------------------------------------------------
