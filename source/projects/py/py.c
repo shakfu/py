@@ -464,8 +464,9 @@ void py_init(t_py* x)
     object_register(CLASS_BOX, x->obj.name, x);
 
     // increment global object counter (atomic)
-    atomic_long new_count = atomic_fetch_sub_explicit(&py_global_obj_count, 1, memory_order_relaxed);
-    // atomic_long new_count = ATOMIC_INCREMENT(&py_global_obj_count);
+    // atomic_fetch_add returns the value BEFORE the increment
+    atomic_long old_count = atomic_fetch_add_explicit(&py_global_obj_count, 1, memory_order_relaxed);
+    atomic_long new_count = old_count + 1;
 
     if (new_count == 1) {
         // if first py object create the py_global_registry and mutexes
@@ -518,8 +519,9 @@ void py_free(t_py* x)
     x->python.cache = NULL;
 
     // decrement global object counter (atomic)
-    atomic_long new_count = atomic_fetch_add_explicit(&py_global_obj_count, 1, memory_order_relaxed);
-    // atomic_long new_count = ATOMIC_DECREMENT(&py_global_obj_count);
+    // atomic_fetch_sub returns the value BEFORE the decrement
+    atomic_long old_count = atomic_fetch_sub_explicit(&py_global_obj_count, 1, memory_order_relaxed);
+    atomic_long new_count = old_count - 1;
 
     if (new_count == 0) {
         /* WARNING: don't call x here or max will crash */
@@ -640,6 +642,7 @@ t_max_err py_pythonpath_add(t_py* x, t_symbol* path)
         return MAX_ERR_GENERIC;
     }
     PyList_Append(sys_path, py_path);
+    Py_DECREF(py_path); // Release our reference to prevent memory leak
     py_info(x, "added to pythonpath: %s", path->s_name);
     return MAX_ERR_NONE;
 }
