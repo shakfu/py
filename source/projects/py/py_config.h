@@ -13,12 +13,30 @@
  * other behavioral parameters without modifying core source files.
  *
  * To customize the py external behavior:
- * 1. Modify the arrays and constants in this file
+ * 1. Choose a security preset below OR customize individual settings
  * 2. Rebuild the external using your build system
  *
  * Security Note: Changes to these configurations can affect the security
  * posture of the py external. Review all modifications carefully.
  */
+
+/*--------------------------------------------------------------------------*/
+/* Security Presets - Choose ONE or use CUSTOM */
+
+/**
+ * @brief Security Configuration Presets
+ *
+ * Choose one of the following presets by uncommenting the desired line:
+ * - STRICT: Maximum security, restricted imports, no file access
+ * - BALANCED: Moderate security, basic validation, controlled access (DEFAULT)
+ * - PERMISSIVE: Minimal restrictions, for trusted environments
+ * - CUSTOM: Define your own settings below
+ */
+
+// #define PY_SECURITY_PRESET_STRICT
+#define PY_SECURITY_PRESET_BALANCED    // Default
+// #define PY_SECURITY_PRESET_PERMISSIVE
+// #define PY_SECURITY_PRESET_CUSTOM
 
 /*--------------------------------------------------------------------------*/
 /* Security Configuration */
@@ -370,6 +388,58 @@ static const char* PY_UNSAFE_MODULES[] = {
 // };
 
 /*--------------------------------------------------------------------------*/
+/* Apply Security Presets */
+
+#ifdef PY_SECURITY_PRESET_STRICT
+    // STRICT PRESET: Maximum security for untrusted code
+    #undef PY_DEFAULT_SECURITY_MODE
+    #undef PY_DEFAULT_RESTRICT_IMPORTS
+    #undef PY_DEFAULT_RESTRICT_FILE_ACCESS
+    #undef PY_DEFAULT_MAX_EXECUTION_TIME
+
+    #define PY_DEFAULT_SECURITY_MODE 1
+    #define PY_DEFAULT_RESTRICT_IMPORTS 1
+    #define PY_DEFAULT_RESTRICT_FILE_ACCESS 1
+    #define PY_DEFAULT_MAX_EXECUTION_TIME 3000
+
+    #pragma message("Using STRICT security preset: Maximum restrictions enabled")
+#endif
+
+#ifdef PY_SECURITY_PRESET_BALANCED
+    // BALANCED PRESET: Moderate security (DEFAULT)
+    #undef PY_DEFAULT_SECURITY_MODE
+    #undef PY_DEFAULT_RESTRICT_IMPORTS
+    #undef PY_DEFAULT_RESTRICT_FILE_ACCESS
+    #undef PY_DEFAULT_MAX_EXECUTION_TIME
+
+    #define PY_DEFAULT_SECURITY_MODE 1
+    #define PY_DEFAULT_RESTRICT_IMPORTS 0
+    #define PY_DEFAULT_RESTRICT_FILE_ACCESS 0
+    #define PY_DEFAULT_MAX_EXECUTION_TIME 5000
+
+    #pragma message("Using BALANCED security preset: Moderate restrictions (default)")
+#endif
+
+#ifdef PY_SECURITY_PRESET_PERMISSIVE
+    // PERMISSIVE PRESET: Minimal restrictions for trusted environments
+    #undef PY_DEFAULT_SECURITY_MODE
+    #undef PY_DEFAULT_RESTRICT_IMPORTS
+    #undef PY_DEFAULT_RESTRICT_FILE_ACCESS
+    #undef PY_DEFAULT_MAX_EXECUTION_TIME
+
+    #define PY_DEFAULT_SECURITY_MODE 0
+    #define PY_DEFAULT_RESTRICT_IMPORTS 0
+    #define PY_DEFAULT_RESTRICT_FILE_ACCESS 0
+    #define PY_DEFAULT_MAX_EXECUTION_TIME 0  // No timeout
+
+    #pragma message("Using PERMISSIVE security preset: Minimal restrictions")
+#endif
+
+#ifdef PY_SECURITY_PRESET_CUSTOM
+    #pragma message("Using CUSTOM security configuration: Review settings carefully")
+#endif
+
+/*--------------------------------------------------------------------------*/
 /* Configuration Validation */
 
 // Compile-time validation of configuration
@@ -383,6 +453,12 @@ static const char* PY_UNSAFE_MODULES[] = {
 
 #if PY_DEFAULT_MAX_EXECUTION_TIME < 0
 #error "PY_DEFAULT_MAX_EXECUTION_TIME cannot be negative"
+#endif
+
+// Validate that exactly one preset is defined
+#if defined(PY_SECURITY_PRESET_STRICT) + defined(PY_SECURITY_PRESET_BALANCED) + \
+    defined(PY_SECURITY_PRESET_PERMISSIVE) + defined(PY_SECURITY_PRESET_CUSTOM) != 1
+#error "Exactly one security preset must be defined (STRICT, BALANCED, PERMISSIVE, or CUSTOM)"
 #endif
 
 #endif // PY_CONFIG_H

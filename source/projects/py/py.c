@@ -846,7 +846,10 @@ t_hashtab* py_get_global_registry(void)
         registry = py_global_registry;
         systhread_mutex_unlock(py_global_registry_mutex);
     } else {
-        registry = py_global_registry;
+        // Mutex not initialized - this should only happen during shutdown
+        // Return NULL to indicate registry is not available
+        error("py_get_global_registry: mutex not initialized, registry unavailable");
+        registry = NULL;
     }
     return registry;
 }
@@ -866,7 +869,10 @@ uintptr_t py_get_object_ref(void)
         ref = py_global_obj_ref;
         systhread_mutex_unlock(py_global_obj_ref_mutex);
     } else {
-        ref = py_global_obj_ref;
+        // Mutex not initialized - this should only happen during shutdown
+        // Return 0 to indicate no valid object reference
+        error("py_get_object_ref: mutex not initialized, reference unavailable");
+        ref = 0;
     }
     return ref;
 }
