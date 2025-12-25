@@ -40,6 +40,8 @@ def test_array_append():
 
 def test_array_array():
     """Make a copy of an array"""
+    # TODO: implement test for array copy method
+    pass
 
 
 def test_array_atoms():
@@ -85,7 +87,7 @@ def test_array_replace():
 
 def test_array_reserve():
     """Reserve memory for a provided number of entries (doesn't resize array)"""
-    mem["a"].clear(20)
+    mem["a"].reserve(20)
 
 
 def test_array_shrink():

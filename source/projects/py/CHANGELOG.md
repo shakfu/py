@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 #### Critical Bugs
+- **Multichannel buffer support (GitHub issue #19)**: Fixed `np.asarray(buf)` returning incorrect number of samples for multichannel buffers. The Buffer class now properly handles n-channel buffers:
+  - `__getbuffer__`: Returns 2D shape `(frames, channels)` for multichannel, 1D `(frames,)` for mono
+  - `n_samples` property: Now returns `framecount * channelcount` (total samples)
+  - `n_frames` property: Added as alias for `framecount`
+  - `set_samples()`: Now correctly divides sample count by channel count; validates divisibility
+  - `get_samples()`: Now returns all samples across all channels
+  ([api.pyx:1167-1240, 1411-1418, 1490-1528])
+
 - **Atomic operations bug in object lifecycle**: Fixed inverted atomic increment/decrement operations in `py_init()` and `py_free()`. The counter was using `atomic_fetch_sub` when it should increment and `atomic_fetch_add` when it should decrement, causing the Python interpreter initialization and finalization logic to be completely broken. ([py.c:466-470, 521-525])
 
 - **Memory leak in pythonpath management**: Fixed memory leak in `py_pythonpath_add()` where `PyUnicode_FromString()` created a new reference that was never decremented after `PyList_Append()`, causing one leaked Python string object per call. Added `Py_DECREF(py_path)` to properly release the reference. ([py.c:645])
@@ -17,7 +25,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Thread Safety
 - **Unsafe mutex fallback paths**: Fixed race conditions in `py_get_global_registry()` and `py_get_object_ref()` where NULL mutex checks would fall back to unsynchronized access to global state. Now returns NULL/0 with clear error messages instead of potentially unsafe access during initialization/shutdown. ([py.c:841-854, 864-878])
 
+#### Test Fixes
+- **test_api_buffer_scipy.py**: Fixed assertion `len(xs) == buf.n_samples` to use `xs.size` for compatibility with multichannel buffers
+- **test_api_buffer_array.py**: Added documentation for mono buffer assumptions in memoryview tests
+- **test_api_matrix.py, test_api_matrix_np.py**: Fixed `os.exists()` to `os.path.exists()`
+- **test_api_matrix_np.py**: Renamed duplicate function `test_matrix_set_cell2d` to `test_matrix_set_cell2d_simple`
+- **test_api_array.py**: Added `pass` to empty test body; fixed `clear(20)` to `reserve(20)`
+- **test_api_table.py**: Fixed unreachable code after `return` statement
+
 ### Added
+
+#### Tests
+- **test_api_buffer_multichannel.py**: Comprehensive test suite for multichannel buffer support (20 tests) covering:
+  - `n_samples`/`n_frames` properties for mono and multichannel (1-8 channels)
+  - `np.asarray()` shape verification for 1D mono and 2D multichannel
+  - `get_samples()` and `set_samples()` with interleaved data
+  - `memoryview` buffer protocol tests
+  - Round-trip data integrity verification
+  - GitHub issue #19 scenario reproduction
 
 #### Configuration
 - **Security configuration presets**: Added three security presets (STRICT, BALANCED, PERMISSIVE) to simplify configuration complexity. Users can now choose a single preset instead of managing 11+ individual configuration options. ([py_config.h:23-40, 391-462])

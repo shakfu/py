@@ -68,8 +68,9 @@ def test_buffer_protocol_read():
     buf = api.create_buffer(name, sample_file)
     api.post(f"created buffer name: '{name}' sample_file: '{sample_file}'")
     xs = np.asarray(buf)
-    assert len(xs) == buf.n_samples
-    api.post(f"len(x): {len(xs)} == buf.n_samples: {buf.n_samples}")
+    # Use xs.size for total elements (works for both 1D mono and 2D multichannel)
+    assert xs.size == buf.n_samples
+    api.post(f"xs.size: {xs.size} == buf.n_samples: {buf.n_samples}")
 
 
 def test_buffer_protocol_write():

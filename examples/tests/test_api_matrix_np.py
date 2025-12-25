@@ -77,7 +77,7 @@ def test_matrix_export_image():
     m = mem["m"]
     img = "/tmp/ok"
     m.export_image("/tmp/ok")  # defaults to png
-    assert os.exists("/tmp/ok.png"), "could not find exported image"
+    assert os.path.exists("/tmp/ok.png"), "could not find exported image"
     api.bang_success()
 
 
@@ -147,7 +147,7 @@ def test_matrix_set_cell2d():
     api.bang_success()
 
 
-def test_matrix_set_cell2d():
+def test_matrix_set_cell2d_simple():
     m = mem["m"]
     m.set_cell2d(5, x=3, y=2, plane=0)
     api.bang_success()

@@ -90,10 +90,13 @@ def test_buffer_set_samples2():
 
 
 def test_buffer_protocol_read():
+    """Test reading mono buffer via memoryview into array.array."""
     name = "drum1"
     sample_file = "jongly.aif"
     buf = api.create_buffer(name, sample_file)
     api.post(f"created buffer name: '{name}' sample_file: '{sample_file}'")
+    # Note: This pattern works for mono buffers (1D memoryview).
+    # For multichannel, use numpy or iterate over the 2D memoryview.
     with memoryview(buf) as mv_buf:
         xs = array("f", mv_buf)
         assert len(xs) == buf.n_samples
@@ -101,6 +104,7 @@ def test_buffer_protocol_read():
 
 
 def test_buffer_protocol_write():
+    """Test writing to mono buffer via memoryview from array.array."""
     name = "drum1"
     duration_ms = 500
     buf = api.create_empty_buffer(name, duration_ms)
@@ -109,6 +113,8 @@ def test_buffer_protocol_write():
     api.post(f"framecount: {buf.framecount}")
     t = linspace(0, 1, buf.framecount, endpoint=False)
     ys = array("f", [math.sin(i * 2 * math.pi * 5) for i in t])
+    # Note: Direct slice assignment works for mono (1D memoryview).
+    # For multichannel (2D), use proper shape matching or set_samples().
     with memoryview(buf) as xs:
         xs[:] = ys
 

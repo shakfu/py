@@ -75,7 +75,7 @@ def test_matrix_export_image():
     m = mem["m"]
     img = "/tmp/ok"
     m.export_image("/tmp/ok")  # defaults to png
-    assert os.exists("/tmp/ok.png"), "could not find exported image"
+    assert os.path.exists("/tmp/ok.png"), "could not find exported image"
     api.bang_success()
 
 

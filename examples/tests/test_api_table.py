@@ -22,8 +22,8 @@ def test_table_to_list():
     t = mem["t"]
     xs = t.to_list()
     assert len(xs) == t.size
-    return xs
     api.bang_success()
+    return xs
 
 
 def test_table_embed():
