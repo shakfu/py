@@ -34,8 +34,8 @@
  */
 
 // #define PY_SECURITY_PRESET_STRICT
-#define PY_SECURITY_PRESET_BALANCED    // Default
-// #define PY_SECURITY_PRESET_PERMISSIVE
+// #define PY_SECURITY_PRESET_BALANCED    
+#define PY_SECURITY_PRESET_PERMISSIVE   // Default
 // #define PY_SECURITY_PRESET_CUSTOM
 
 /*--------------------------------------------------------------------------*/

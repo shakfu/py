@@ -1170,8 +1170,9 @@ cdef class Buffer:
     cdef bint is_locked
     cdef float* samples
     cdef float[:] s_buffer # cython memoryview
-    cdef Py_ssize_t shape
-    cdef Py_ssize_t strides
+    cdef Py_ssize_t[2] shape    # support up to 2D (frames, channels)
+    cdef Py_ssize_t[2] strides  # corresponding strides
+    cdef int ndim               # 1 for mono, 2 for multichannel
 
     def __cinit__(self):
         self.name = None
@@ -1203,24 +1204,40 @@ cdef class Buffer:
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
         cdef Py_ssize_t itemsize = sizeof(float)
-        cdef Py_ssize_t buffersize = <Py_ssize_t>mp.buffer_getframecount(self.obj)
-
-        self.shape = buffersize
-        self.strides = itemsize
+        cdef Py_ssize_t framecount = <Py_ssize_t>mp.buffer_getframecount(self.obj)
+        cdef Py_ssize_t channelcount = <Py_ssize_t>mp.buffer_getchannelcount(self.obj)
+        cdef Py_ssize_t total_samples = framecount * channelcount
 
         self.locksamples()
 
         buffer.buf = self.samples
         buffer.obj = self
-        buffer.len = buffersize * itemsize   # product(shape) * itemsize
+        buffer.len = total_samples * itemsize
         buffer.itemsize = itemsize
         buffer.readonly = 0
-        buffer.ndim = 1
-        buffer.format = "f"                     # float not double!
-        buffer.shape = &self.shape
-        buffer.strides = &self.strides
-        buffer.suboffsets = NULL                # for pointer arrays only
-        buffer.internal = NULL                  # see References
+        buffer.format = "f"  # float not double!
+        buffer.suboffsets = NULL
+        buffer.internal = NULL
+
+        if channelcount == 1:
+            # Mono buffer: 1D array of shape (frames,)
+            self.ndim = 1
+            self.shape[0] = framecount
+            self.strides[0] = itemsize
+            buffer.ndim = 1
+            buffer.shape = &self.shape[0]
+            buffer.strides = &self.strides[0]
+        else:
+            # Multichannel buffer: 2D array of shape (frames, channels) for n channels
+            # Max buffers are interleaved: [ch0_f0, ch1_f0, ..., ch(n-1)_f0, ch0_f1, ...]
+            self.ndim = 2
+            self.shape[0] = framecount
+            self.shape[1] = channelcount
+            self.strides[0] = channelcount * itemsize  # stride to next frame
+            self.strides[1] = itemsize                  # stride to next channel
+            buffer.ndim = 2
+            buffer.shape = &self.shape[0]
+            buffer.strides = &self.strides[0]
 
     def __releasebuffer__(self, Py_buffer *buffer):
         self.unlocksamples()
@@ -1409,7 +1426,12 @@ cdef class Buffer:
 
     @property
     def n_samples(self) -> int:
-        """Get the number of samples in the buffer."""
+        """Get total number of samples in the buffer (framecount * channelcount)."""
+        return self.framecount * self.channelcount
+
+    @property
+    def n_frames(self) -> int:
+        """Get number of frames in the buffer (alias for framecount)."""
         return self.framecount
 
     # @property
@@ -1480,14 +1502,28 @@ cdef class Buffer:
 
     # float32 is the default in Max/MSP
     def set_samples(self, float[:] samples):
-        """Set samples from a memoryview"""
-        # assert samples.shape[0] <= self.n_samples
-        cdef long n_samples = <Py_ssize_t>samples.shape[0]
-        cdef int i
-        # resize buffer to samples.shape[0]
-        self.set_framecount(n_samples)
+        """Set samples from a memoryview.
+
+        For multichannel buffers (n channels), samples should be interleaved:
+        [ch0_f0, ch1_f0, ..., ch(n-1)_f0, ch0_f1, ch1_f1, ..., ch(n-1)_f1, ...]
+        The sample count must be divisible by the channel count.
+        """
+        cdef long total_samples = <Py_ssize_t>samples.shape[0]
+        cdef long channels = self.channelcount
+        cdef long i
+
+        if total_samples % channels != 0:
+            raise ValueError(
+                f"Sample count ({total_samples}) must be divisible by "
+                f"channel count ({channels})")
+
+        # Calculate framecount from total samples and channels
+        cdef long new_framecount = total_samples // channels
+
+        # Resize buffer to the calculated framecount
+        self.set_framecount(new_framecount)
         self.locksamples()
-        for i in range(n_samples):
+        for i in range(total_samples):
             self.samples[i] = samples[i]
         self.unlocksamples()
 
