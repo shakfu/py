@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Callable, Optional, Union
 from urllib.request import urlretrieve
 
-__version__ = "0.0.2"
+__version__ = "0.1.1"
 
 # ----------------------------------------------------------------------------
 # type aliases
@@ -79,7 +79,7 @@ PYTHON = sys.executable
 PLATFORM = platform.system()
 ARCH = platform.machine()
 PY_VER_MINOR = sys.version_info.minor
-DEFAULT_PY_VERSION = "3.13.5"
+DEFAULT_PY_VERSION = "3.13.11"
 DEBUG = getenv("DEBUG", default=True)
 COLOR = getenv("COLOR", default=True)
 
@@ -710,6 +710,57 @@ class PythonConfig313(PythonConfig312):
         self.cfg["disabled"].remove("spwd")
 
         self.cfg["disabled"].append("_testexternalinspection")
+
+
+class PythonConfig314(PythonConfig313):
+    """configuration class to build python 3.14"""
+
+    version = "3.14.0"
+
+    def patch(self):
+        """patch cfg attribute"""
+
+        super().patch()
+
+        # Add new extension definitions for 3.14
+        self.cfg["extensions"].update(
+            {
+                # _blake2 simplified in 3.14 (single file)
+                "_blake2": ["blake2module.c"],
+                # _hmac is new in 3.14
+                "_hmac": ["hmacmodule.c"],
+                # _zstd is new in 3.14 (disabled by default)
+                "_zstd": [
+                    "_zstd/_zstdmodule.c",
+                    "_zstd/compressor.c",
+                    "_zstd/decompressor.c",
+                    "_zstd/zstddict.c",
+                ],
+                # _remote_debugging is new in 3.14 (disabled by default)
+                "_remote_debugging": ["_remote_debugging_module.c"],
+            }
+        )
+
+        # Remove _contextvars from static (no longer needed as builtin)
+        if "_contextvars" in self.cfg["static"]:
+            self.cfg["static"].remove("_contextvars")
+        if "_contextvars" not in self.cfg["disabled"]:
+            self.cfg["disabled"].append("_contextvars")
+
+        # Add _blake2 and _hmac to shared
+        if "_blake2" in self.cfg["static"]:
+            self.cfg["static"].remove("_blake2")
+        if "_blake2" not in self.cfg["shared"]:
+            self.cfg["shared"].append("_blake2")
+
+        if "_hmac" not in self.cfg["shared"]:
+            self.cfg["shared"].append("_hmac")
+
+        # Disable _zstd and _remote_debugging
+        if "_zstd" not in self.cfg["disabled"]:
+            self.cfg["disabled"].append("_zstd")
+        if "_remote_debugging" not in self.cfg["disabled"]:
+            self.cfg["disabled"].append("_remote_debugging")
 
 
 # ----------------------------------------------------------------------------
@@ -1401,6 +1452,7 @@ class PythonBuilder(Builder):
             "3.11": PythonConfig311,
             "3.12": PythonConfig312,
             "3.13": PythonConfig313,
+            "3.14": PythonConfig314,
         }[self.ver](BASE_CONFIG)
 
     @property

@@ -55,6 +55,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Build-time preset reporting**: Added `#pragma message` directives to display which security preset is active during compilation for clarity. ([py_config.h:405, 420, 435, 439])
 
+#### Build System
+- **Python 3.14 support**: Added `PythonConfig314` class to `buildpy.py` for building with Python 3.14. Changes from 3.13: ([buildpy.py:715-763, 1455])
+  - Removed `_contextvars` from static modules (now a builtin)
+  - Simplified `_blake2` extension (single `blake2module.c`)
+  - Moved `_blake2` from static to shared modules
+  - Added new `_hmac` module to shared
+  - Disabled `_zstd` and `_remote_debugging` modules
+  - Inherits `_interpchannels`, `_interpqueues`, `_interpreters` in static from 3.13
+
 ### Documentation
 - **CODE_REVIEW.md**: Comprehensive code review document identifying critical issues, high-priority concerns, and areas for improvement across the entire codebase (~15K LOC).
 
