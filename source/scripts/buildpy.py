@@ -15,6 +15,7 @@ Config
     PythonConfig311
     PythonConfig312
     PythonConfig313
+    PythonConfig314
 
 ShellCmd
     Project
@@ -1309,26 +1310,12 @@ class XzBuilder(Builder):
     """lzma builder class"""
 
     name = "xz"
-    version = "5.6.3"
-    repo_url = "https://github.com/python/cpython-source-deps.git"
+    version = "5.8.2"
+    repo_url = "https://github.com/tukaani-project/xz.git"
     download_archive_template = "xz-{ver}.tar.gz"
-    download_url_template = "http://tukaani.org/xz/{archive}"  # not used
+    download_url_template = "https://github.com/tukaani-project/xz/releases/download/v{ver}/xz-{ver}.tar.gz"
     depends_on = []
     lib_products = ["liblzma.a"]
-
-    @property
-    def repo_branch(self):
-        """branch of git repository to use"""
-        return self.name
-
-    def setup(self):
-        """setup build environment"""
-        self.project.setup()
-        if not self.lib_products_exist():
-            if not self.src_dir.exists():
-                self.remove(self.src_dir)
-            self.git_clone(self.repo_url, self.repo_branch, self.src_dir)
-            assert self.src_dir.exists(), f"could not git clone {self.download_url}"
 
     def build(self):
         """main build method"""
