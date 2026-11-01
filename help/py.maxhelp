@@ -3428,9 +3428,7 @@
                                     "saved_object_attributes": {
                                         "autoload": 0,
                                         "file": "/Volumes/Minx/Users/sa/projects/py/examples/demos/cacheme.py",
-                                        "pythonpath": "",
-                                        "restrict_file_access": 1407374883553280000,
-                                        "restrict_imports": -8646911284551352320
+                                        "pythonpath": ""
                                     },
                                     "text": "py @name bob",
                                     "varname": "__main__"

@@ -6,9 +6,10 @@ import io
 import re
 import tokenize
 
+# PY_PRELUDE_MODULE uses `eval` unless the external is built with RESTRICTED_PYTHON
 inputs = {
-    'py_prelude.py' : 'PY_PRELUDE_MODULE',
-    # 'fn.py'     : 'PY_FUNCTIONAL_MODULE',
+    'py_prelude.py': '#ifdef RESTRICTED_PYTHON',
+    'py_prelude_legacy.py': '#else',
 }
 
 OUTPUT='py_prelude.h'
@@ -102,8 +103,9 @@ def main(strip_docstrings=True, strip_multiple_lines=True):
                     contents = remove_comments_and_docstrings(contents)
                 if strip_multiple_lines:
                     contents = remove_multiple_empty_lines(contents)
-                print(to_cstr(contents, inputs[filename]), 
-                    file=outfile)
+                print(inputs[filename], file=outfile)
+                print(to_cstr(contents, 'PY_PRELUDE_MODULE'), file=outfile)
+        print("#endif", file=outfile)
 
 
 if __name__ == '__main__':

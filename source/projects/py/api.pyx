@@ -70,9 +70,9 @@ from collections import namedtuple
 from typing import Optional
 
 from cython.view cimport array as cvarray
-from cpython.ref cimport PyObject
+from cpython.ref cimport PyObject, Py_INCREF
 from cpython cimport Py_buffer
-from libc.string cimport strcpy, strlen
+from libc.string cimport strcpy, strlen, strncpy
 from libc.stdint cimport uintptr_t
 
 cimport api_max as mx  # api is a cython keyword!
@@ -134,7 +134,34 @@ cdef mx.t_symbol* str_to_sym(str string):
 
 cdef str sym_to_str(mx.t_symbol* symbol):
     """converts a max symbol to a python string"""
+    if symbol is NULL:
+        return ""
     return symbol.s_name.decode()
+
+
+cdef extern from "Python.h":
+    PyObject* PyEval_GetGlobals()
+
+
+cdef px.t_py* caller_py_object() except NULL:
+    """Return the py object whose namespace is calling, else the newest py object.
+
+    Each py object runs in a module named after its registered name. Code in a
+    separately imported module has no such link, so it falls back to the newest.
+    """
+    cdef PyObject* frame_globals = PyEval_GetGlobals() # borrowed
+    cdef mx.t_object* obj = NULL
+    cdef px.t_py* x = NULL
+    if frame_globals is not NULL:
+        name = (<object>frame_globals).get("__name__")
+        if isinstance(name, str):
+            obj = <mx.t_object*>mx.object_findregistered(mx.CLASS_BOX, str_to_sym(name))
+            if obj is not NULL and mx.object_classname(obj) == mx.gensym("py"):
+                return <px.t_py*>obj
+    x = <px.t_py*>px.py_get_object_ref()
+    if x is NULL:
+        raise RuntimeError("no py object is available")
+    return x
 
 
 cdef mx.t_symbol* bytes_to_sym(bytes string):
@@ -216,6 +243,7 @@ cdef class MaxObject:
 
     cdef mx.t_object* ptr
     cdef bint ptr_owner
+    cdef object _parent              # keeps the owner of a borrowed object alive
     cdef public str name             # registered name
     cdef str _classname              # object classname
     cdef str _namespace              # 'box' or 'nobox'
@@ -259,9 +287,11 @@ cdef class MaxObject:
         cdef mx.t_object *patcher = NULL
         cdef mx.t_object *box = NULL
         cdef mx.t_object *obj = NULL
-        cdef px.t_py *x = <px.t_py*>px.py_get_object_ref()
+        cdef px.t_py *x = caller_py_object()
 
         mx.object_obex_lookup(x, mx.gensym("#P"), &patcher)
+        if patcher is NULL:
+            return NULL
         box = mx.jpatcher_get_firstobject(patcher)
         while box is not NULL:
             obj = mx.jbox_get_object(box)
@@ -317,6 +347,8 @@ cdef class MaxObject:
         """
         cdef mx.t_object* obj_ptr = <mx.t_object*>mx.object_new_parse(
             str_to_sym(namespace), str_to_sym(classname), parsestr.encode())
+        if obj_ptr is NULL:
+            raise ValueError(f"could not create {classname} object from '{parsestr}'")
         return MaxObject.from_ptr(obj_ptr, True)
 
     @property
@@ -360,9 +392,10 @@ cdef class MaxObject:
         cdef mx.t_atom * argv = NULL
         cdef long argc = 0
         cdef mx.t_max_err err = mx.object_getvalueof(<mx.t_object*>self.ptr, &argc, &argv)
-        cdef Atom atom = Atom.from_ptr(argv, argc)
         if err:
             raise ValueError("could not get object value")
+        # object_getvalueof allocates argv when passed NULL
+        cdef Atom atom = Atom.from_ptr(argv, argc, owner=True)
         return atom.value
 
     # attribute-related funcs
@@ -408,8 +441,9 @@ cdef class MaxObject:
         elif attr_type == "float64":
             mx.object_attr_setfloat(<mx.t_object*>self.ptr, str_to_sym(name), <double>value)
         elif attr_type == "object":
-            assert isinstance(value, MaxObject)
-            mx.object_attr_setobj(<mx.t_object*>self.ptr, str_to_sym(name), <mx.t_object*>value.ptr)
+            if not isinstance(value, MaxObject):
+                raise TypeError("expected a MaxObject value")
+            mx.object_attr_setobj(<mx.t_object*>self.ptr, str_to_sym(name), <mx.t_object*>(<MaxObject>value).ptr)
         else:
             raise NotImplementedError(f"attr {attr_type} setting not currently implemented")
 
@@ -671,6 +705,8 @@ cdef class MaxObject:
     def clone(self) -> MaxObject:
         """return clone of object"""
         cdef mx.t_object *ptr = <mx.t_object *>mx.object_clone(<mx.t_object *>self.ptr)
+        if ptr is NULL:
+            raise ValueError("could not clone object")
         return MaxObject.from_ptr(ptr, owner=True)
 
     # attach detach / subscribe unsubscribe
@@ -738,11 +774,18 @@ cdef class Atom:
     cdef mx.t_atom *ptr
     cdef bint ptr_owner
     cdef public long size
+    cdef object _parent # keeps the owner of borrowed atoms alive
 
     def __cinit__(self):
         self.ptr = NULL
         self.ptr_owner = False
         self.size = 0
+
+    cdef int _check(self, int idx) except -1:
+        """raise IndexError unless idx addresses an existing atom"""
+        if self.ptr is NULL or idx < 0 or idx >= self.size:
+            raise IndexError(f"atom index {idx} out of range for size {self.size}")
+        return 0
 
     def __dealloc__(self):
         # De-allocate if not null and flag is set
@@ -760,7 +803,7 @@ cdef class Atom:
             else: # convert to flattened list
                 args = self.__flatten(args)
             self.size = len(args)
-            self.ptr = <mx.t_atom *>mx.sysmem_newptr(self.size * sizeof(mx.t_atom))
+            self.ptr = <mx.t_atom *>mx.sysmem_newptrclear(self.size * sizeof(mx.t_atom))
             self.ptr_owner = True
             if self.ptr is NULL:
                 raise MemoryError("Atom.__init__ allocation error")
@@ -840,7 +883,7 @@ cdef class Atom:
     @staticmethod
     cdef Atom new(long size):
         """Create an empty Atom instance with an aribitrary length"""
-        cdef mx.t_atom *ptr = <mx.t_atom *>mx.sysmem_newptr(size * sizeof(mx.t_atom))
+        cdef mx.t_atom *ptr = <mx.t_atom *>mx.sysmem_newptrclear(size * sizeof(mx.t_atom))
         if ptr is NULL:
             raise MemoryError
         return Atom.from_ptr(ptr, size, owner=True)
@@ -862,18 +905,21 @@ cdef class Atom:
         cdef long size = len(seq)
         if not size:
             raise IndexError("sequence is empty")
-        ptr = <mx.t_atom *>mx.sysmem_newptr(size * sizeof(mx.t_atom))
+        ptr = <mx.t_atom *>mx.sysmem_newptrclear(size * sizeof(mx.t_atom))
         if ptr is NULL:
             raise MemoryError
 
         cdef int i
         for i, obj in enumerate(seq):
 
+            if i >= size: # len() and iteration disagree
+                break
+
             if isinstance(obj, float):
-                mx.atom_setfloat(ptr+i, <float>obj)
+                mx.atom_setfloat(ptr+i, <double>obj)
 
             elif isinstance(obj, int):
-                mx.atom_setlong(ptr+i, <long>obj)
+                mx.atom_setlong(ptr+i, <mx.t_atom_long>obj)
 
             elif isinstance(obj, bytes):
                 mx.atom_setsym(ptr+i, mx.gensym(obj))
@@ -897,32 +943,39 @@ cdef class Atom:
         else:
             return self.to_list()
 
-    def set_float(self, int idx, float f):
+    def set_float(self, int idx, double f):
         """Inserts a float into a t_atom and change its type to A_FLOAT."""
+        self._check(idx)
         mx.atom_setfloat(self.ptr + idx, f)
 
     def get_float(self, int idx=0) -> float:
         """Retrieves a float value from a t_atom."""
-        return <float>mx.atom_getfloat(self.ptr + idx)
+        self._check(idx)
+        return <double>mx.atom_getfloat(self.ptr + idx)
 
-    def set_long(self, int idx, long x):
+    def set_long(self, int idx, mx.t_atom_long x):
         """Inserts an integer into a t_atom and change its type to A_LONG."""
+        self._check(idx)
         mx.atom_setlong(self.ptr + idx, x)
 
     def get_long(self, int idx=0) -> int:
         """Retrieves a long integer value from a t_atom."""
-        return <long>mx.atom_getlong(self.ptr + idx)
+        self._check(idx)
+        return mx.atom_getlong(self.ptr + idx)
 
     def get_int(self, int idx=0) -> int:
         """Retrieves an integer value from a t_atom."""
+        self._check(idx)
         return <int>mx.atom_getlong(self.ptr + idx)
 
     def set_symbol(self, int idx, str symbol):
-        """Inserts a t_symbol∗ into a t_atom and change its type to A_SYM."""
+        """Inserts a t_symbol* into a t_atom and change its type to A_SYM."""
+        self._check(idx)
         mx.atom_setsym(self.ptr + idx, str_to_sym(symbol))
 
-    cdef mx.t_symbol *get_symbol(self, int idx=0):
-        """Retrieves a t_symbol ∗ value from a t_atom."""
+    cdef mx.t_symbol *get_symbol(self, int idx=0) except? NULL:
+        """Retrieves a t_symbol* value from a t_atom."""
+        self._check(idx)
         return mx.atom_getsym(self.ptr + idx)
 
     def get_string(self, int idx=0) -> str:
@@ -930,23 +983,23 @@ cdef class Atom:
         return sym_to_str(self.get_symbol(idx))
 
     def set_bytes(self, int idx, bytes x):
-        """Inserts an integer into a t_atom and change its type to A_LONG."""
+        """Inserts bytes into a t_atom as a symbol and change its type to A_SYM."""
+        self._check(idx)
         mx.atom_setsym(self.ptr + idx, bytes_to_sym(x))
 
     def get_bytes(self, int idx=0) -> bytes:
-        """Retrieves a long integer value from a t_atom."""
+        """Retrieves a symbol value from a t_atom as bytes."""
+        self._check(idx)
         return sym_to_bytes(mx.atom_getsym(self.ptr + idx))
 
     def is_symbol(self, int idx=0) -> bool:
         """check if index points to a symbol"""
-        if idx > self.size - 1:
-            raise IndexError(f"index should be < {self.size - 1}")
+        self._check(idx)
         return <bint>((self.ptr + idx).a_type == mx.A_SYM)
 
     def is_long(self, int idx=0) -> bool:
         """check if index points to a long"""
-        if idx > self.size - 1:
-            raise IndexError(f"index should be < {self.size - 1}")
+        self._check(idx)
         return <bint>((self.ptr + idx).a_type == mx.A_LONG)
 
     # alias is_int -> is_long
@@ -954,20 +1007,22 @@ cdef class Atom:
 
     def is_float(self, int idx=0) -> bool:
         """check if index points to a float"""
-        if idx > self.size - 1:
-            raise IndexError(f"index should be < {self.size - 1}")
+        self._check(idx)
         return <bint>((self.ptr + idx).a_type == mx.A_FLOAT)
 
     def is_string(self, int idx = 0) -> bool:
         """Determines whether or not an atom represents a t_string object."""
+        self._check(idx)
         return bool(mx.atomisstring(self.ptr + idx))
 
     def is_atomarray(self, int idx = 0) -> bool:
         """Determines whether or not an atom represents a t_atomarray object."""
+        self._check(idx)
         return bool(mx.atomisatomarray(self.ptr + idx))
 
     def is_dictionary(self, int idx = 0) -> bool:
         """Determines whether or not an atom represents a t_dictionary object."""
+        self._check(idx)
         return bool(mx.atomisdictionary(self.ptr + idx))
 
     def to_list(self) -> list:
@@ -1020,8 +1075,14 @@ cdef class Atom:
 
     cdef resize_ptr(self, mx.t_ptr_size new_size):
         """Resize an existing pointer."""
-        self.ptr = <mx.t_atom *>mx.sysmem_resizeptr(<mx.t_atom *>self.ptr,
+        if not self.ptr_owner:
+            raise ValueError("cannot resize atoms owned by another object")
+        cdef mx.t_atom *resized = <mx.t_atom *>mx.sysmem_resizeptr(<mx.t_atom *>self.ptr,
             new_size * sizeof(mx.t_atom))
+        if resized is NULL:
+            raise MemoryError
+        self.ptr = resized
+        self.size = new_size
 
     cdef mx.t_max_err setchar_array(self, long ac, long count, unsigned char *vals):
         """Assign an array of char values to an array of atoms."""
@@ -1167,7 +1228,7 @@ cdef class Buffer:
     cdef public str name
     cdef mp.t_buffer_obj *obj
     cdef mp.t_buffer_ref *ref
-    cdef bint is_locked
+    cdef int lock_count # buffer_locksamples calls awaiting an unlock
     cdef float* samples
     cdef float[:] s_buffer # cython memoryview
     cdef Py_ssize_t[2] shape    # support up to 2D (frames, channels)
@@ -1179,9 +1240,12 @@ cdef class Buffer:
         self.obj = NULL
         self.ref = NULL
         self.samples = NULL
-        self.is_locked = False
+        self.lock_count = 0
 
     def __dealloc__(self):
+        while self.lock_count > 0:
+            mp.buffer_unlocksamples(self.obj)
+            self.lock_count -= 1
         # De-allocate if not null
         if self.ref is not NULL:
             mx.object_free(self.ref)
@@ -1197,10 +1261,13 @@ cdef class Buffer:
         mx.atom_setlong(argv+3, channels)
         self.obj = <mx.t_object*>mx.object_new_typed(
             mx.CLASS_BOX, mx.gensym("buffer~"), argc, argv)
-        self.ref = mp.buffer_ref_new(self.obj, str_to_sym(name))
+        if self.obj is NULL:
+            raise ValueError(f"could not create buffer~ '{name}'")
+        self.ref = mp.buffer_ref_new(<mx.t_object*>caller_py_object(), str_to_sym(name))
+        self.name = name
 
     def __repr__(self) -> str:
-        return f"<Buffer '{self.name}' nframes:{self.framecount()}>"
+        return f"<Buffer '{self.name}' nframes:{self.framecount}>"
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
         cdef Py_ssize_t itemsize = sizeof(float)
@@ -1248,7 +1315,8 @@ cdef class Buffer:
         # Call to __new__ bypasses __init__ constructor
         cdef Buffer buffer = Buffer.__new__(Buffer)
         buffer.ref = mp.buffer_ref_new(x, str_to_sym(name))
-        assert(mp.buffer_ref_exists(buffer.ref))
+        if not mp.buffer_ref_exists(buffer.ref):
+            raise ValueError(f"no buffer~ named '{name}'")
         buffer.name = name
         buffer.obj = mp.buffer_ref_getobject(buffer.ref)
         return buffer
@@ -1265,6 +1333,8 @@ cdef class Buffer:
         mx.atom_setlong(argv+3, channels)
         cdef mx.t_object *b = <mx.t_object*>mx.object_new_typed(
             mx.CLASS_BOX, mx.gensym("buffer~"), argc, argv)
+        if b is NULL:
+            raise ValueError(f"could not create buffer~ '{name}'")
         argc = 3
         mx.atom_setsym(argv, str_to_sym(filename))
         mx.atom_setlong(argv+1, 0) # starting time
@@ -1401,7 +1471,8 @@ cdef class Buffer:
     def change_reference(self, str name):
         """Change a buffer reference to refer to a different buffer object by name."""
         mp.buffer_ref_set(self.ref, str_to_sym(name))
-        assert(mp.buffer_ref_exists(self.ref))
+        if not mp.buffer_ref_exists(self.ref):
+            raise ValueError(f"no buffer~ named '{name}'")
         self.obj = mp.buffer_ref_getobject(self.ref)
 
     def view(self):
@@ -1457,20 +1528,25 @@ cdef class Buffer:
             mp.buffer_setpadding(self.obj, count)
 
     def locksamples(self):
-        """Claim the buffer∼ and get a pointer to the first sample in memory."""
+        """Claim the buffer~ and get a pointer to the first sample in memory."""
         cdef float* ptr
         with nogil:
             ptr = mp.buffer_locksamples(self.obj)
+        if ptr is NULL:
+            # a failed lock must not be paired with buffer_unlocksamples
+            raise ValueError(f"could not lock samples of buffer~ '{self.name}'")
         self.samples = ptr
-        self.is_locked = True
+        self.lock_count += 1
 
     def unlocksamples(self):
         """Release claim on buffer's contents so other objects can read/write to it."""
+        if self.lock_count == 0:
+            return
         with nogil:
             mp.buffer_unlocksamples(self.obj)
-        if self.samples:
+        self.lock_count -= 1
+        if self.lock_count == 0:
             self.samples = NULL
-            self.is_locked = False
 
     def buffer_edit_begin(self):
         """begin buffer_edit block
@@ -1490,13 +1566,16 @@ cdef class Buffer:
     # TODO: add start:end slice
     def get_samples(self):
         """Get samples as a memoryview"""
-        cdef int i
+        cdef Py_ssize_t i
+        cdef Py_ssize_t n_samples = self.n_samples
         self.s_buffer = cvarray(
-            shape=(self.n_samples,), itemsize=sizeof(float), format="f")
+            shape=(n_samples,), itemsize=sizeof(float), format="f")
         self.locksamples()
-        for i in range(self.n_samples):
-            self.s_buffer[i] = self.samples[i]
-        self.unlocksamples()
+        try:
+            for i in range(n_samples):
+                self.s_buffer[i] = self.samples[i]
+        finally:
+            self.unlocksamples()
         cdef float[:] res = self.s_buffer
         return res
 
@@ -1523,9 +1602,14 @@ cdef class Buffer:
         # Resize buffer to the calculated framecount
         self.set_framecount(new_framecount)
         self.locksamples()
-        for i in range(total_samples):
-            self.samples[i] = samples[i]
-        self.unlocksamples()
+        try:
+            # a resize can be deferred or refused: never write past the samples there
+            if total_samples > self.n_samples:
+                raise ValueError("buffer~ is smaller than the samples to set")
+            for i in range(total_samples):
+                self.samples[i] = samples[i]
+        finally:
+            self.unlocksamples()
 
     def send(self, str msg, *args):
         """Generic message sender
@@ -1674,6 +1758,7 @@ cdef class Dictionary:
     cdef bint to_release
     cdef public str name
     cdef public dict type_map
+    cdef object _parent # keeps the owner of a borrowed dictionary alive
 
     def __cinit__(self):
         self.ptr = NULL
@@ -1704,13 +1789,23 @@ cdef class Dictionary:
                 self[key] = value
 
     def __dealloc__(self):
-        # De-allocate if not null
+        self._drop_ptr()
+
+    cdef void _drop_ptr(self):
+        """Give up this wrapper's claim on its dictionary, if it holds one."""
         if self.ptr is not NULL and self.ptr_owner:
             if self.to_release:
                 mx.dictobj_release(self.ptr)
             else:
                 mx.object_free(self.ptr)
-            self.ptr = NULL
+        self.ptr = NULL
+
+    cdef void _adopt_ptr(self, mx.t_dictionary* d):
+        """Replace the dictionary with a newly created one this wrapper owns."""
+        self._drop_ptr()
+        self.ptr = d
+        self.ptr_owner = True
+        self.to_release = False
 
     def __repr__(self) -> str:
         return f"<Dictionary '{self.name}'>"
@@ -1724,7 +1819,7 @@ cdef class Dictionary:
             self.set_float(key, <double>value)
         elif isinstance(value, int):
             self.type_map[key] = 'long'
-            self.set_long(key, <int>value)
+            self.set_long(key, <mx.t_atom_long>value)
         elif isinstance(value, str):
             self.type_map[key] = 'str'
             self.set_sym(key, value)
@@ -1783,32 +1878,36 @@ cdef class Dictionary:
     def from_atoms(cls, Atom atoms, str name = "") -> Dictionary:
         """Create an unregistered dictionary from atoms as dict-syntax"""
         cdef Dictionary _dict = cls(name)
-        cdef mx.t_max_err err = mx.dictobj_dictionaryfromatoms(&_dict.ptr, atoms.size, atoms.ptr)
+        cdef mx.t_dictionary* d = NULL # the sdk requires NULL
+        cdef mx.t_max_err err = mx.dictobj_dictionaryfromatoms(&d, atoms.size, atoms.ptr)
         if err:
             raise TypeError("Could not create an unregistered dictionary from atoms as dict-syntax")
+        _dict._adopt_ptr(d)
         return _dict
 
     @classmethod
     def from_atoms_extended(cls, Atom atoms, str name = "") -> Dictionary:
         """Create a new t_dictionary from an array of atoms that use Max dictionary syntax, JSON, or compressed JSON."""
         cdef Dictionary _dict = cls(name)
-        cdef mx.t_max_err err = mx.dictobj_dictionaryfromatoms_extended(&_dict.ptr, NULL, atoms.size, atoms.ptr)
+        cdef mx.t_dictionary* d = NULL # the sdk requires NULL
+        cdef mx.t_max_err err = mx.dictobj_dictionaryfromatoms_extended(&d, NULL, atoms.size, atoms.ptr)
         if err:
             raise TypeError("could not create dictionary from atoms")
+        _dict._adopt_ptr(d)
         return _dict
 
     @classmethod
     def from_string(cls, str dict_string, bint str_is_already_json=False) -> Dictionary:
         """Create a new t_dictionary from Dictionary Syntax which is passed in as a string."""
         cdef Dictionary _dict = cls()
-        cdef char * errorstring = NULL
-        cdef char* dict_string_ptr = <char *>mx.sysmem_newptr((len(dict_string)+1) * sizeof(char))
-        # cdef long n = len(dict_string) + 1
-        strcpy(dict_string_ptr, dict_string.encode())
-        cdef mx.t_max_err err = mx.dictobj_dictionaryfromstring(&_dict.ptr, dict_string_ptr, <int>str_is_already_json, errorstring)
+        cdef char errorstring[1024]
+        cdef mx.t_dictionary* d = NULL # the sdk requires NULL
+        cdef bytes encoded = dict_string.encode()
+        errorstring[0] = 0
+        cdef mx.t_max_err err = mx.dictobj_dictionaryfromstring(&d, encoded, <int>str_is_already_json, errorstring)
         if err:
-            raise ValueError(f"could not create dictionary from string: {errorstring.decode()}")
-        mx.sysmem_freeptr(dict_string_ptr)
+            raise ValueError(f"could not create dictionary from string: {errorstring.decode(errors='replace')}")
+        _dict._adopt_ptr(d)
         return _dict
 
     @staticmethod
@@ -1823,7 +1922,7 @@ cdef class Dictionary:
         _dict.name = name
         return _dict
 
-    def set_long(self, str key, int value):
+    def set_long(self, str key, mx.t_atom_long value):
         """Add a long integer value to the dictionary."""
         return mx.dictionary_appendlong(self.ptr, str_to_sym(key), value)
 
@@ -1842,7 +1941,7 @@ cdef class Dictionary:
 
     def set_atoms(self, str key, *args):
         """Add an array of atoms to the dictionary."""
-        cdef Atom atom = Atom(*args)
+        cdef Atom atom = args[0] if len(args) == 1 and isinstance(args[0], Atom) else Atom(*args)
         return mx.dictionary_appendatoms(self.ptr, str_to_sym(key), atom.size, atom.ptr)
 
     def set_bytes(self, str key, bytes value):
@@ -1851,22 +1950,37 @@ cdef class Dictionary:
 
     def set_object(self, str key, MaxObject obj):
         """Add a *t_object to the dictionary."""
-        return mx.dictionary_appendobject(self.ptr, str_to_sym(key), <mx.t_object*>obj.ptr)
+        return self.append_object(key, obj)
 
     def append_atomarray(self, str key, AtomArray atomarray):
         """Add an Atom Array object to the dictionary."""
+        if not atomarray.owner:
+            raise ValueError("atomarray is owned by another object")
         cdef mx.t_max_err err = mx.dictionary_appendatomarray(self.ptr,
             str_to_sym(key), <mx.t_object*>atomarray.ptr)
         if err:
             raise ValueError("could not append atomarray to dictionary")
+        atomarray.owner = False # the dictionary now frees it
 
     def append_dictionary(self, str key, Dictionary dict):
         """Add a dictionary object to the dictionary."""
-        return mx.dictionary_appenddictionary(self.ptr, str_to_sym(key), <mx.t_object*>dict.ptr)
+        if not dict.ptr_owner:
+            raise ValueError("dictionary is owned by another object")
+        cdef mx.t_max_err err = mx.dictionary_appenddictionary(self.ptr, str_to_sym(key), <mx.t_object*>dict.ptr)
+        if not err:
+            dict.ptr_owner = False # the dictionary now frees it
+        return err
 
     def append_object(self, str key, MaxObject obj):
-        """Add an object to the dictionary."""
-        return mx.dictionary_appendobject(self.ptr, str_to_sym(key), <mx.t_object*>obj.ptr)
+        """Add an object: an owned object moves to the dictionary, others are only referenced."""
+        cdef mx.t_max_err err
+        if not obj.ptr_owner:
+            return mx.dictionary_appendobject_flags(self.ptr, str_to_sym(key),
+                <mx.t_object*>obj.ptr, mx.OBJ_FLAG_REF)
+        err = mx.dictionary_appendobject(self.ptr, str_to_sym(key), <mx.t_object*>obj.ptr)
+        if not err:
+            obj.ptr_owner = False # the dictionary now frees it
+        return err
 
     cdef mx.t_max_err appendobject(self, mx.t_symbol* key, mx.t_object* value):
         """Add an object to the dictionary."""
@@ -1874,11 +1988,17 @@ cdef class Dictionary:
 
     def append_object_flags(self, str key, MaxObject obj, long flags):
         """Add an object to the dictionary with flags."""
-        return mx.dictionary_appendobject_flags(self.ptr, str_to_sym(key), <mx.t_object*>obj.ptr, flags)
+        cdef mx.t_max_err err = mx.dictionary_appendobject_flags(self.ptr, str_to_sym(key), <mx.t_object*>obj.ptr, flags)
+        if not err and not (flags & mx.OBJ_FLAG_REF):
+            obj.ptr_owner = False # the dictionary now frees it
+        return err
 
     def append_binbuf(self, str key, Binbuf binbuf):
         """Add a binary buffer to the dictionary."""
-        return mx.dictionary_appendbinbuf(self.ptr, str_to_sym(key), <mx.t_object*>binbuf.ptr)
+        cdef mx.t_max_err err = mx.dictionary_appendbinbuf(self.ptr, str_to_sym(key), <mx.t_object*>binbuf.ptr)
+        if not err:
+            binbuf.transferred = True # the dictionary now frees it
+        return err
 
     def get_long(self, str key) -> int:
         """Retrieve a long integer from the dictionary."""
@@ -1886,7 +2006,7 @@ cdef class Dictionary:
         cdef mx.t_max_err err = mx.dictionary_getlong(self.ptr, str_to_sym(key), &value)
         if err:
             raise ValueError(f"could not get long value from dict with key {key}")
-        return <int>value
+        return value
 
     def get_float(self, str key) -> float:
         """Retrieve a double-precision float from the dictionary."""
@@ -1894,7 +2014,7 @@ cdef class Dictionary:
         cdef mx.t_max_err err = mx.dictionary_getfloat(self.ptr, str_to_sym(key), &value)
         if err:
             raise ValueError(f"could not get float value from dict with key {key}")
-        return <float>value
+        return value
 
     def get_sym(self, str key) -> str:
         """Retrieve a t_symbol* as a python string from the dictionary."""
@@ -1918,6 +2038,7 @@ cdef class Dictionary:
         if err:
             raise ValueError(f"could not get atoms from dict with key {key}")
         atom =  Atom.from_ptr(argv, argc)
+        atom._parent = self
         return atom
 
     def get_list(self, str key) -> list:
@@ -1966,7 +2087,9 @@ cdef class Dictionary:
         cdef mx.t_max_err err = mx.dictionary_getatomarray(self.ptr, str_to_sym(key), &ptr)
         if err:
             raise ValueError("could not get atomarray from dictionary")
-        return AtomArray.from_ptr(<mx.t_atomarray*>ptr)
+        cdef AtomArray result = AtomArray.from_ptr(<mx.t_atomarray*>ptr)
+        result._parent = self
+        return result
 
     cdef mx.t_max_err getatomarray(self, mx.t_symbol* key, mx.t_object** value):
         """Retrieve a t_atomarray pointer from the dictionary."""
@@ -1978,7 +2101,9 @@ cdef class Dictionary:
         cdef mx.t_max_err err = mx.dictionary_getdictionary(self.ptr, str_to_sym(key), &ptr)
         if err:
             raise ValueError("could not get dictionary from dictionary")
-        return Dictionary.from_ptr(<mx.t_dictionary*>ptr)
+        cdef Dictionary result = Dictionary.from_ptr(<mx.t_dictionary*>ptr)
+        result._parent = self
+        return result
 
     cdef mx.t_max_err getdictionary(self, mx.t_symbol* key, mx.t_object** value):
         """Retrieve a t_dictionary pointer from the dictionary."""
@@ -1994,7 +2119,9 @@ cdef class Dictionary:
         cdef mx.t_max_err err = mx.dictionary_getobject(self.ptr, str_to_sym(key), &ptr)
         if err:
             raise ValueError(f"could not get object '{key}' from dictionary")
-        return MaxObject.from_ptr(ptr)
+        cdef MaxObject result = MaxObject.from_ptr(ptr)
+        result._parent = self
+        return result
 
     cdef mx.t_max_err getobject(self, mx.t_symbol* key, mx.t_object** value):
         """Retrieve a t_object pointer from the dictionary."""
@@ -2139,7 +2266,7 @@ cdef class Dictionary:
         cdef mx.t_max_err err = mx.dictionary_getdeffloat(self.ptr, str_to_sym(key), &value, default_value)
         if err:
             raise ValueError(f"could not get float value from dict with key {key}")
-        return <float>value
+        return value
 
     def get_default_sym(self, str key, str default_value) -> str:
         """Retrieve a t_symbol* from the dictionary or a default value if the key is not found."""
@@ -2189,6 +2316,8 @@ cdef class Dictionary:
 
     def copy_entries(self, Dictionary dst, list[str] keys):
         cdef mx.t_symbol** keys_ptr = <mx.t_symbol**>mx.sysmem_newptr(len(keys) * sizeof(mx.t_symbol*))
+        if keys_ptr is NULL:
+            raise MemoryError
         for i, key in enumerate(keys):
             keys_ptr[i] = str_to_sym(key)
         cdef mx.t_max_err err = mx.dictionary_copyentries(self.ptr, dst.ptr, keys_ptr)
@@ -2248,7 +2377,11 @@ cdef class Dictionary:
         """
         cdef mx.t_symbol* name_ptr = str_to_sym(name)
         cdef mx.t_dictionary* registered = mx.dictobj_register(self.ptr, &name_ptr)
-        return Dictionary.from_ptr(registered, owner=True, to_release=False, name=name)
+        # ownership moves to the returned wrapper: only one wrapper may free it
+        cdef bint was_owner = self.ptr_owner
+        self.ptr_owner = False
+        self.ptr = registered
+        return Dictionary.from_ptr(registered, owner=was_owner, to_release=False, name=name)
 
     def unregister(self):
         """Unregister a #t_dictionary with the dictionary passing system.
@@ -2282,6 +2415,7 @@ cdef class Dictionary:
         """Release a t_dictionary/name previously retained with dictobj_findregistered_retain()."""
         cdef mx.t_max_err err = mx.dictobj_release(self.ptr)
         self.name = ""
+        self.ptr = NULL # __dealloc__ must not release it again
         if err:
             raise ValueError("could not release dictionary")
 
@@ -2335,7 +2469,9 @@ cdef class Dictionary:
         cdef mx.t_max_err err = mx.dictobj_jsonfromstring(&jsonsize, &json, dict_string.encode())
         if err:
             raise ValueError("could not convert dictionary to json")
-        return json.decode()
+        cdef str result = json.decode()
+        mx.sysmem_freeptr(json)
+        return result
 
     # def from_atoms_extended(self, Atom atoms) -> Dictionary:
     #     """Create a new t_dictionary from an array of atoms that use Max dictionary syntax, JSON, or compressed JSON."""
@@ -2369,6 +2505,7 @@ cdef class DatabaseResult:
 
     cdef mx.t_db_result* ptr
     cdef bint ptr_owner
+    cdef object _view # keeps the view that owns a borrowed result alive
 
     def __cinit__(self):
         self.ptr = NULL
@@ -2391,7 +2528,11 @@ cdef class DatabaseResult:
     def nextrecord(self) -> list[str]:
         """Get the next record from the result."""
         cdef char** record = mx.db_result_nextrecord(self.ptr)
-        return [record[i].decode() for i in range(self.numfields())]
+        if record is NULL:
+            return None # no more records
+        # a NULL field is an SQL NULL
+        return [record[i].decode() if record[i] is not NULL else None
+                for i in range(self.numfields())]
 
     def reset(self):
         """Reset the result."""
@@ -2465,7 +2606,7 @@ cdef class DatabaseView:
         mx.db_view_create(db.ptr, sql.encode(), &self.ptr)
 
     def __dealloc__(self):
-        if self.ptr is not NULL and self.db and self.ptr_owner:
+        if self.ptr is not NULL and self.db and self.db.ptr is not NULL and self.ptr_owner:
             mx.db_view_remove(self.db.ptr, &self.ptr)
 
     def __repr__(self) -> str:
@@ -2486,7 +2627,10 @@ cdef class DatabaseView:
         cdef mx.t_max_err err = mx.db_view_getresult(self.ptr, &result)
         if err:
             raise ValueError("could not get result")
-        return DatabaseResult.from_ptr(result, True)
+        # the view keeps this pointer: ext_database.h calls it the view's result
+        cdef DatabaseResult wrapped = DatabaseResult.from_ptr(result, False)
+        wrapped._view = self
+        return wrapped
 
     def setquery(self, str sql):
         """Set the query of a view."""
@@ -2512,19 +2656,24 @@ cdef class Database:
         self.path = db_path
 
     def __dealloc__(self):
-        mx.db_close(&self.ptr)
-        self.ptr = NULL
+        if self.ptr is not NULL:
+            mx.db_close(&self.ptr)
+            self.ptr = NULL
 
     def __repr__(self) -> str:
-        return f"<Database '{self.db.name}'>"
+        return f"<Database '{self.name}'>"
 
     def open(self):
         """Open the database."""
-        mx.db_open(str_to_sym(self.name), self.path.encode(), &self.ptr)
+        cdef mx.t_max_err err = mx.db_open(str_to_sym(self.name), self.path.encode(), &self.ptr)
+        if err:
+            raise IOError(f"could not open database '{self.name}'")
 
     def close(self):
         """Close the database."""
-        mx.db_close(&self.ptr)
+        if self.ptr is not NULL:
+            mx.db_close(&self.ptr)
+            self.ptr = NULL
 
     def query_table_new(self, str tablename):
         """Create a new table."""
@@ -2600,10 +2749,16 @@ cdef class List:
     """Wraps the t_linklist object."""
 
     cdef mx.t_linklist* ptr
+    cdef list _refs # keeps stored objects alive for as long as the list
 
 
     def __cinit__(self):
         self.ptr = <mx.t_linklist*>mx.linklist_new()
+        if self.ptr is NULL:
+            raise MemoryError
+        # MaxObject wrappers decide what gets freed: the list must never free items
+        mx.linklist_flags(self.ptr, mx.OBJ_FLAG_REF)
+        self._refs = []
 
     def __dealloc__(self):
         mx.linklist_chuck(self.ptr)  # will free list only and not contained objects
@@ -2614,8 +2769,7 @@ cdef class List:
         return f"<List size:{self.get_size()}'>"
 
     def __getitem__(self, long index) -> MaxObject:
-        cdef mx.t_object* obj = <mx.t_object*>mx.linklist_getindex(self.ptr, index)
-        return MaxObject.from_ptr(obj)
+        return self.get(index)
 
     def __setitem__(self, long index, MaxObject obj):
         self.insert(index, obj)
@@ -2651,8 +2805,15 @@ cdef class List:
         When you free the linklist by calling object_free() it then tries to free all of the items it contains.
         If the linklist is storing a custom type of data, or should otherwise not free the data it contains,
         then call linklist_chuck() to free the object instead of object_free().
+
+        This wrapper continues with a new empty list, so __dealloc__ stays valid.
         """
         mx.linklist_chuck(self.ptr)
+        self.ptr = <mx.t_linklist*>mx.linklist_new()
+        if self.ptr is NULL:
+            raise MemoryError
+        mx.linklist_flags(self.ptr, mx.OBJ_FLAG_REF)
+        self._refs = []
 
     def get_size(self) -> int:
         """Get the size of the linklist."""
@@ -2670,12 +2831,14 @@ cdef class List:
         cdef mx.t_atom_long err = mx.linklist_append(self.ptr, obj.ptr)
         if err == -1:
             raise ValueError("append object failed")
+        self._refs.append(obj)
 
     def insert(self, long index, MaxObject obj):
         """Insert an object at a given index."""
         cdef mx.t_atom_long err = mx.linklist_insertindex(self.ptr, obj.ptr, index)
         if err == -1:
             raise ValueError("append object failed")
+        self._refs.append(obj)
 
     def delete_index(self, long index):
         """Remove the item from the list at the specified index and free it.
@@ -2794,6 +2957,7 @@ cdef class Binbuf:
     """Wraps the t_binbuf object."""
 
     cdef mx.t_binbuf* ptr
+    cdef bint transferred # a dictionary now owns ptr
 
     def __cinit__(self):
         self.ptr = <mx.t_binbuf*>mx.binbuf_new()
@@ -2801,7 +2965,8 @@ cdef class Binbuf:
             raise MemoryError
 
     def __dealloc__(self):
-        mx.object_free(self.ptr)
+        if not self.transferred:
+            mx.object_free(self.ptr)
 
     def __repr__(self) -> str:
         return "<Binbuf>"
@@ -2846,11 +3011,14 @@ cdef class Binbuf:
         binbuf_text() parses the text and converts it into binary format.
         Use it to evaluate a text file or text line entry into a  Binbuf.
         """
-        cdef char* src_text = <char *>mx.sysmem_newptr((len(text)+1) * sizeof(char))
-        cdef long n = len(text) + 1
+        cdef bytes encoded = text.encode() # size in bytes, not characters
+        cdef long n = len(encoded) + 1
+        cdef char* src_text = <char *>mx.sysmem_newptr(n * sizeof(char))
         cdef short err = 0
 
-        strcpy(src_text, text.encode())
+        if src_text is NULL:
+            raise MemoryError
+        strcpy(src_text, encoded)
         err = mx.binbuf_text(self.ptr, &src_text, n)
         mx.sysmem_freeptr(src_text)
         if err:
@@ -2964,9 +3132,12 @@ cdef class Atombuf:
         To use this routine to create a new Atombuf from the text buffer,
         first create a new empty t_atombuf with a call to atombuf_new(0,NULL).
         """
-        cdef char* src_text = <char *>mx.sysmem_newptr((len(text)+1) * sizeof(char))
-        cdef long n = len(text) + 1
-        strcpy(src_text, text.encode())
+        cdef bytes encoded = text.encode() # size in bytes, not characters
+        cdef long n = len(encoded) + 1
+        cdef char* src_text = <char *>mx.sysmem_newptr(n * sizeof(char))
+        if src_text is NULL:
+            raise MemoryError
+        strcpy(src_text, encoded)
         mx.atombuf_text(&self.ptr, &src_text, n)
         mx.sysmem_freeptr(src_text)
 
@@ -2998,14 +3169,21 @@ cdef class Hashtab:
     cdef mx.t_hashtab* ptr
     cdef public long slotcount
     cdef public dict type_map
+    cdef dict _refs # keeps stored objects alive for as long as they are stored
 
     def __cinit__(self, long slotcount = 59):
         self.ptr = mx.hashtab_new(slotcount)
+        if self.ptr is NULL:
+            raise MemoryError
+        # MaxObject wrappers decide what gets freed: the hashtab must never free items
+        mx.hashtab_flags(self.ptr, mx.OBJ_FLAG_REF)
         self.slotcount = slotcount
         self.type_map = {}
+        self._refs = {}
 
     def __dealloc__(self):
-        mx.object_free(self.ptr)
+        if self.ptr is not NULL:
+            mx.object_free(self.ptr)
 
     def __repr__(self) -> str:
         return f"<Hashtab size:{self.size}>"
@@ -3053,6 +3231,7 @@ cdef class Hashtab:
         cdef mx.t_max_err err = mx.hashtab_store(self.ptr, str_to_sym(key), val.ptr)
         if err:
             raise ValueError("could not store object in hashtab")
+        self._refs[key] = val
 
     def store_long(self, str key, long val):
         """Store a long in the hashtab."""
@@ -3079,6 +3258,7 @@ cdef class Hashtab:
         cdef mx.t_max_err err = mx.hashtab_store_safe(self.ptr, str_to_sym(key), val.ptr)
         if err:
             raise ValueError("could not store_safe object in hashtab")
+        self._refs[key] = val
 
     def store_with_flags(self, str key, MaxObject val, long flags):
         """Store an item in a hashtab with an associated key and also flags that define
@@ -3089,10 +3269,14 @@ cdef class Hashtab:
         cdef mx.t_max_err err = mx.hashtab_storeflags(self.ptr, str_to_sym(key), val.ptr, flags)
         if err:
             raise ValueError("could not store object in hashtab with flags")
+        self._refs[key] = val
 
     def lookup(self, str key) -> MaxObject:
         """Lookup an object in the hashtab."""
         cdef mx.t_object* val = NULL
+        # a stored long or symbol is not a t_object*
+        if self.type_map.get(key, 'object') != 'object':
+            raise TypeError(f"hashtab value at '{key}' is not an object")
         cdef mx.t_max_err err = mx.hashtab_lookup(self.ptr, str_to_sym(key), &val)
         if err:
             raise ValueError("could not lookup object in hashtab")
@@ -3146,6 +3330,7 @@ cdef class Hashtab:
         """Delete all items stored in a hashtab."""
         mx.hashtab_clear(self.ptr)
         self.type_map.clear()
+        self._refs.clear()
         # if err:
         #     raise ValueError(f"could not clear the hashtab")
 
@@ -3178,7 +3363,13 @@ cdef class Hashtab:
         cdef mx.t_max_err err = mx.hashtab_chuck(self.ptr)
         if err:
             raise ValueError("could not chuck the hashtab")
+        # continue with a new empty hashtab, so __dealloc__ stays valid
+        self.ptr = mx.hashtab_new(self.slotcount)
+        if self.ptr is NULL:
+            raise MemoryError
+        mx.hashtab_flags(self.ptr, mx.OBJ_FLAG_REF)
         self.type_map.clear()
+        self._refs.clear()
 
     cdef mx.t_max_err funall(self, mx.method fun, void* arg):
         """Call the specified function for every item in the hashtab.
@@ -3278,6 +3469,7 @@ cdef class AtomArray:
 
     cdef mx.t_atomarray *ptr
     cdef bint owner
+    cdef object _parent # keeps the owner of a borrowed atomarray alive
 
     def __cinit__(self):
         self.ptr = NULL
@@ -3314,10 +3506,12 @@ cdef class AtomArray:
     @staticmethod
     cdef AtomArray new(int size):
         """Create an AtomArray with a given size."""
-        cdef mx.t_atom *ptr = <mx.t_atom *>mx.sysmem_newptr(size * sizeof(mx.t_atom))
+        cdef mx.t_atom *ptr = <mx.t_atom *>mx.sysmem_newptrclear(size * sizeof(mx.t_atom))
         if ptr is NULL:
             raise MemoryError
-        return AtomArray.from_atom(ptr, size)
+        cdef AtomArray result = AtomArray.from_atom(ptr, size) # copies the atoms
+        mx.sysmem_freeptr(ptr)
+        return result
 
     def size(self) -> int:
         """get number of atoms in atom array"""
@@ -3346,7 +3540,9 @@ cdef class AtomArray:
         cdef mx.t_max_err err = mx.atomarray_getatoms(self.ptr, &ac, &av)
         if err:
             raise ValueError("could not get atoms from atomarray")
-        return Atom.from_ptr(av, ac)
+        cdef Atom atom = Atom.from_ptr(av, ac)
+        atom._parent = self
+        return atom
 
     def copy_atoms(self) -> Atom:
         """Retrieve a copy of the atoms in the array."""
@@ -3355,7 +3551,7 @@ cdef class AtomArray:
         cdef mx.t_max_err err = mx.atomarray_copyatoms(self.ptr, &ac, &av)
         if err:
             raise ValueError("could not copy atoms from atomarray")
-        return Atom.from_ptr(av, ac)
+        return Atom.from_ptr(av, ac, owner=True)
 
     def get_atom_from_index(self, long index) -> Atom:
         """Copy an a specific atom from the array."""
@@ -3370,7 +3566,7 @@ cdef class AtomArray:
         cdef mx.t_atomarray* dup = NULL
         if self.ptr is not NULL:
             dup = <mx.t_atomarray*>mx.atomarray_duplicate(self.ptr)
-            return AtomArray.from_ptr(dup)
+            return AtomArray.from_ptr(dup, owner=True)
         raise ValueError("could not duplicate an uninitialized atomarray")
 
     def clone(self) -> AtomArray:
@@ -3378,7 +3574,7 @@ cdef class AtomArray:
         cdef mx.t_atomarray* _clone = NULL
         if self.ptr is not NULL:
             _clone = <mx.t_atomarray*>mx.atomarray_clone(self.ptr)
-            return AtomArray.from_ptr(_clone)
+            return AtomArray.from_ptr(_clone, owner=True)
         raise ValueError("could not clone an uninitialized atomarray")
 
     def append_atom(self, Atom atom):
@@ -3621,6 +3817,8 @@ cdef class Patcher:
         """Get the object in a named box in the patcher."""
         cdef mx.t_object * box_ptr = <mx.t_object *>mx.object_method(
             self.ptr, mx.gensym("getnamedbox"), str_to_sym(name))
+        if box_ptr is NULL:
+            raise ValueError(f"no box named '{name}' in patcher")
         cdef mx.t_object * obj_ptr = <mx.t_object*>mx.jbox_get_object(box_ptr)
         return MaxObject.from_ptr(obj_ptr)
 
@@ -3629,6 +3827,8 @@ cdef class Patcher:
         # find obj by script name
         cdef mx.t_object * box = <mx.t_object *>mx.object_method(
             self.ptr, mx.gensym("getnamedbox"), str_to_sym(name))
+        if box is NULL:
+            return NULL
         # now you have a handle for the box, get the contained object
         return <mx.t_object*>mx.jbox_get_object(box)
 
@@ -3636,8 +3836,10 @@ cdef class Patcher:
         """Create a new object in a specified patcher with values using a
         combination of attribute and sprintf syntax.
         """
+        cdef bytes encoded = text.encode()
+        # text is not a format string: it can contain user-supplied '%'
         return <mx.t_object *>mx.newobject_sprintf(
-            <mx.t_object *>self.ptr, text.encode())
+            <mx.t_object *>self.ptr, "%s", <char*>encoded)
 
     def add_box(self, maxclass: str, x: float, y: float) -> Box:
         """Create a new box in the patcher."""
@@ -3920,11 +4122,11 @@ cdef class Patcher:
 
     def move(self, var1: str, x: int, y: int):
         """Move a named box."""
-        self.script("move", x, y)
+        self.script("move", var1, x, y)
 
     def offset(self, var1: str, x: int, y: int):
         """Relative 'offset' move of a named box."""
-        self.script("offset", x, y)
+        self.script("offset", var1, x, y)
 
     def offset_from(self, var2: str, var1: str, from_bottom_right: int,
                     from_top_left: int, x_distance: int, y_distance: int = 0):
@@ -3988,7 +4190,7 @@ cdef class Patcher:
 
     def get_title(self) -> str:
         """Retrieve a patcher's title."""
-        cdef mx.t_symbol* title = mx.jpatcher_get_name(self.ptr)
+        cdef mx.t_symbol* title = mx.jpatcher_get_title(self.ptr)
         return sym_to_str(title)
 
     def get_name(self) -> str:
@@ -4310,11 +4512,15 @@ cdef class Box:
     def get_nextobject(self) -> Box:
         """The next box in the patcher's (linked) list of boxes."""
         cdef mx.t_object* next_box = mx.jbox_get_nextobject(self.ptr)
+        if next_box is NULL:
+            return None # end of the list of boxes
         return Box.from_ptr(next_box)
 
     def get_prevobject(self) -> Box:
         """The prior box in the patcher's (linked) list of boxes."""
         cdef mx.t_object* next_box = mx.jbox_get_prevobject(self.ptr)
+        if next_box is NULL:
+            return None # start of the list of boxes
         return Box.from_ptr(next_box)
 
     def is_hidden(self) -> bool:
@@ -4860,8 +5066,10 @@ cdef class Matrix:
     cdef jt.t_jit_matrix_info info
     cdef char* data
     cdef public str name
-    cdef Py_ssize_t shape[jt.JIT_MATRIX_MAX_DIMCOUNT]
-    cdef Py_ssize_t strides[jt.JIT_MATRIX_MAX_DIMCOUNT]
+    cdef Py_ssize_t _shape[jt.JIT_MATRIX_MAX_DIMCOUNT + 1] # + 1 for planes
+    cdef Py_ssize_t _strides[jt.JIT_MATRIX_MAX_DIMCOUNT + 1]
+    cdef int export_count # exported buffers awaiting release
+    cdef long export_savelock # lock state to restore after the last release
 
     def __cinit__(self):
         self.ptr = NULL
@@ -4883,6 +5091,7 @@ cdef class Matrix:
         cdef int i
         cdef Py_ssize_t total_elements = 1
         cdef Py_ssize_t calculated_len = 0
+        cdef int export_ndim = 0
 
         # Validate buffer pointer
         if buffer is NULL:
@@ -4928,8 +5137,8 @@ cdef class Matrix:
                     raise ValueError(f"Invalid dimension size at index {i}: {self.info.dim[i]}")
                 if self.info.dimstride[i] < 0:
                     raise ValueError(f"Invalid stride at index {i}: {self.info.dimstride[i]}")
-                self.shape[i] = self.info.dim[i]
-                self.strides[i] = self.info.dimstride[i]
+                self._shape[i] = self.info.dim[i]
+                self._strides[i] = self.info.dimstride[i]
 
                 # Check for potential overflow
                 if total_elements > 0x7FFFFFFF // self.info.dim[i]:
@@ -4941,30 +5150,42 @@ cdef class Matrix:
             if calculated_len < 0 or calculated_len > 0x7FFFFFFF:  # Check for overflow/underflow
                 raise ValueError(f"Buffer length calculation overflow: {calculated_len}")
 
+            # planes are stored contiguously within each cell
+            export_ndim = self.ndim
+            if self.planecount > 1:
+                self._shape[export_ndim] = self.planecount
+                self._strides[export_ndim] = self.itemsize
+                export_ndim += 1
+
             # Set up buffer structure
             buffer.buf = <char *>self.data
             buffer.internal = NULL
             buffer.itemsize = self.itemsize
-            buffer.len = calculated_len
-            buffer.ndim = self.ndim
+            buffer.len = calculated_len # product(shape) * itemsize
+            buffer.ndim = export_ndim
             buffer.obj = self
             buffer.readonly = 0
-            buffer.shape = self.shape
-            buffer.strides = self.strides
+            buffer.shape = self._shape
+            buffer.strides = self._strides
             buffer.suboffsets = NULL
 
             # Set format string based on matrix type
             matrix_type = self.type
             if matrix_type == 'char':
-                buffer.format = 'b'  # signed char
+                buffer.format = 'B'  # unsigned char
             elif matrix_type == 'long':
-                buffer.format = 'l'  # signed long
+                buffer.format = 'i'  # 'l' is 8 bytes on 64-bit platforms, cells are 4
             elif matrix_type == 'float32':
                 buffer.format = 'f'  # float
             elif matrix_type == 'float64':
                 buffer.format = 'd'  # double
             else:
                 raise ValueError(f"Unsupported matrix type: {matrix_type}")
+
+            # hold the lock so a resize cannot invalidate exported data
+            if self.export_count == 0:
+                self.export_savelock = <long>self.lock()
+            self.export_count += 1
 
         except Exception as e:
             # Clean up buffer on error
@@ -4982,7 +5203,9 @@ cdef class Matrix:
             raise
 
     def __releasebuffer__(self, Py_buffer *buffer):
-        pass
+        self.export_count -= 1
+        if self.export_count == 0:
+            self.unlock(self.export_savelock)
 
     def __repr__(self) -> str:
         return f"<Matrix '{self.name}'>"
@@ -5065,7 +5288,7 @@ cdef class Matrix:
     @property
     def height(self) -> int:
         """height of matrix"""
-        return self.dim[1]
+        return self.dim[1] if self.dimcount > 1 else 1
 
     @property
     def itemsize(self) -> int:
@@ -5114,7 +5337,8 @@ cdef class Matrix:
         jt.jit_object_method_typed(<jt.t_object*>self.ptr,
             str_to_sym(method), atom.size, atom.ptr, result.ptr
         )
-        if result.ptr is not NULL:
+        # Atom.new zeroes atoms: A_NOTHING means the method set no result
+        if result.ptr[0].a_type != mx.A_NOTHING:
             return result.value
         return
 
@@ -5131,7 +5355,8 @@ cdef class Matrix:
         jt.jit_object_method_typed(<jt.t_object*>self.ptr,
             str_to_sym(method), atom.size, atom.ptr, result.ptr
         )
-        if result.ptr is not NULL:
+        # Atom.new zeroes atoms: A_NOTHING means the method set no result
+        if result.ptr[0].a_type != mx.A_NOTHING:
             return result.value
         return
 
@@ -5435,7 +5660,7 @@ cdef class Matrix:
         args = [x, y, z]
         assert len(values) == self.planecount , "len(values) must be equal to planecount"
         args.extend(values)
-        self.call_noreturn("setcell2d", args)
+        self.call_noreturn("setcell3d", args)
 
     def set_plane1d(self, int x, int plane, object value):
         """Set a cell in a plane to a value (1d, no val token)
@@ -5471,7 +5696,7 @@ cdef class Matrix:
         dimension count (1) is fixed, or use the `plane` token to specify
         which plane to set.
         """
-        self.call("setplane2d", x, y, z, plane, value)
+        self.call("setplane3d", x, y, z, plane, value)
 
     def set_val(self, *values):
         """Set all cells to a value and output the result
@@ -5534,56 +5759,72 @@ cdef class Matrix:
         else:
             raise TypeError("could not process this type")
 
+    cdef char* _cell_ptr(self, int row, int col):
+        """address of a cell: rows advance by dimstride[1], columns by dimstride[0]"""
+        cdef Py_ssize_t row_stride = self.info.dimstride[1] if self.info.dimcount > 1 else 0
+        return self.data + row * row_stride + col * self.info.dimstride[0]
+
+    cdef int _check_data_len(self, list data) except -1:
+        """raise unless data covers the whole matrix"""
+        cdef Py_ssize_t required = self.height * self.width * self.planecount
+        if len(data) < required:
+            raise ValueError(f"matrix needs {required} values, got {len(data)}")
+        return 0
+
     def get_char_data(self) -> list[int]:
         """retrieve char data from matrix as contiguous array."""
-        cdef list[int] results = []
+        cdef list results = []
         cdef int i, j, p
-        cdef char *m_ptr = NULL
+        cdef char *cell = NULL
+        self.refresh()
 
         for i in range(self.height):
-            m_ptr = self.data + i * self.info.dimstride[1]
             for j in range(self.width):
+                cell = self._cell_ptr(i, j)
                 for p in range(self.planecount):
-                    results.append(<jt.uchar>m_ptr[p])
+                    results.append(<int>(<jt.uchar*>cell)[p])
         return results
 
-    def get_long_data(self) -> list[long]:
+    def get_long_data(self) -> list[int]:
         """retrieve long data from matrix as contiguous array."""
-        cdef list[long] results = []
+        cdef list results = []
         cdef int i, j, p
-        cdef char *m_ptr = NULL
+        cdef char *cell = NULL
+        self.refresh()
 
         for i in range(self.height):
-            m_ptr = self.data + i * self.info.dimstride[1]
             for j in range(self.width):
+                cell = self._cell_ptr(i, j)
                 for p in range(self.planecount):
-                    results.append(<long>m_ptr[p])
+                    results.append(<long>(<mx.t_int32*>cell)[p])
         return results
 
     def get_float_data(self) -> list[float]:
         """retrieve float data from matrix as contiguous array."""
-        cdef list[float] results = []
+        cdef list results = []
         cdef int i, j, p
-        cdef char *m_ptr = NULL
+        cdef char *cell = NULL
+        self.refresh()
 
         for i in range(self.height):
-            m_ptr = self.data + i * self.info.dimstride[1]
             for j in range(self.width):
+                cell = self._cell_ptr(i, j)
                 for p in range(self.planecount):
-                    results.append(<float>m_ptr[p])
+                    results.append(<double>(<float*>cell)[p])
         return results
 
-    def get_double_data(self) -> list[double]:
+    def get_double_data(self) -> list[float]:
         """retrieve double data from matrix as contiguous array."""
-        cdef list[double] results = []
+        cdef list results = []
         cdef int i, j, p
-        cdef char *m_ptr = NULL
+        cdef char *cell = NULL
+        self.refresh()
 
         for i in range(self.height):
-            m_ptr = self.data + i * self.info.dimstride[1]
             for j in range(self.width):
+                cell = self._cell_ptr(i, j)
                 for p in range(self.planecount):
-                    results.append(<double>m_ptr[p])
+                    results.append(<double>(<double*>cell)[p])
         return results
 
     # def set_char_data(self, list[int] data):
@@ -5619,60 +5860,80 @@ cdef class Matrix:
     def set_char_data(self, list[int] data):
         """set char data to whole matrix"""
         cdef int i, j, p, k = 0
-        cdef char *m_ptr = <char *>self.data
-
-        for i in range(self.height):
-            for j in range(self.width):
-                for p in range(self.planecount):
-                    post(f"(i, j, p, k) = ({i}, {j}, {p}, {k}) = {data[k]}")
-                    m_ptr[k] = <jt.uchar>clamp(data[k], 0, 255)
-                    k += 1
+        cdef char *cell = NULL
+        self.refresh()
+        self._check_data_len(data)
+        cdef long savelock = <long>self.lock()
+        try:
+            for i in range(self.height):
+                for j in range(self.width):
+                    cell = self._cell_ptr(i, j)
+                    for p in range(self.planecount):
+                        (<jt.uchar*>cell)[p] = <jt.uchar>clamp(data[k], 0, 255)
+                        k += 1
+        finally:
+            self.unlock(savelock)
 
     def set_long_data(self, list[int] data):
         """set long data to whole matrix"""
         cdef int i, j, p, k = 0
-        cdef long *m_ptr = <long*>self.data
-
-        for i in range(self.height):
-            for j in range(self.width):
-                for p in range(self.planecount):
-                    post(f"(i, j, p, k) = ({i}, {j}, {p}, {k}) = {data[k]}")
-                    m_ptr[k] = <long>data[k]
-                    k += 1
+        cdef char *cell = NULL
+        self.refresh()
+        self._check_data_len(data)
+        cdef long savelock = <long>self.lock()
+        try:
+            for i in range(self.height):
+                for j in range(self.width):
+                    cell = self._cell_ptr(i, j)
+                    for p in range(self.planecount):
+                        (<mx.t_int32*>cell)[p] = <mx.t_int32>data[k]
+                        k += 1
+        finally:
+            self.unlock(savelock)
 
     def set_float_data(self, list[float] data):
         """set float data to whole matrix"""
         cdef int i, j, p, k = 0
-        cdef float *m_ptr =  <float*>self.data
+        cdef char *cell = NULL
+        self.refresh()
+        self._check_data_len(data)
+        cdef long savelock = <long>self.lock()
+        try:
+            for i in range(self.height):
+                for j in range(self.width):
+                    cell = self._cell_ptr(i, j)
+                    for p in range(self.planecount):
+                        (<float*>cell)[p] = <float>data[k]
+                        k += 1
+        finally:
+            self.unlock(savelock)
 
-        for i in range(self.height):
-            for j in range(self.width):
-                for p in range(self.planecount):
-                    post(f"(i, j, p, k) = ({i}, {j}, {p}, {k}) = {data[k]}")
-                    m_ptr[k] = <float>data[k]
-                    k += 1
-
-    def set_double_data(self, list[double] data):
-        """set long data to whole matrix"""
+    def set_double_data(self, list[float] data):
+        """set double data to whole matrix"""
         cdef int i, j, p, k = 0
-        cdef double *m_ptr =<double*> self.data
-
-        for i in range(self.height):
-            for j in range(self.width):
-                for p in range(self.planecount):
-                    post(f"(i, j, p, k) = ({i}, {j}, {p}, {k}) = {data[k]}")
-                    m_ptr[k] = <double>data[k]
-                    k += 1
+        cdef char *cell = NULL
+        self.refresh()
+        self._check_data_len(data)
+        cdef long savelock = <long>self.lock()
+        try:
+            for i in range(self.height):
+                for j in range(self.width):
+                    cell = self._cell_ptr(i, j)
+                    for p in range(self.planecount):
+                        (<double*>cell)[p] = <double>data[k]
+                        k += 1
+        finally:
+            self.unlock(savelock)
 
     def fill(self, Atom atom, int plane = 0, int offsetcount = 0):
         """fill a matrix plane with an atom's values
 
         basically is an initial cython translation of the fill method in `jit.fill`
         """
-        cdef long offset[jt.JIT_MATRIX_MAX_DIMCOUNT]
         cdef long argc, i, j
         cdef long savelock, offset0, offset1
         cdef char *p = NULL
+        cdef char *base = NULL # self.data must keep pointing at the first plane
 
         if atom.size and atom.ptr:
             savelock = <long>self.lock()
@@ -5685,8 +5946,9 @@ cdef class Matrix:
                 return
 
             # limited to filling at most into 2 dimensions per list
-            offset0 = offset[0] if offsetcount > 0 else 0
-            offset1 = offset[1] if offsetcount > 1 else 0
+            # no offset values can be passed in, so filling starts at the first cell
+            offset0 = 0
+            offset1 = 0
             offset0 = clamp(offset0, 0, self.info.dim[0] - 1)
             offset1 = clamp(offset1, 0, self.info.dim[1] - 1)
             argc = clamp(atom.size, 0, (self.info.dim[0] * (self.info.dim[1] - offset1)) - offset0)
@@ -5694,30 +5956,30 @@ cdef class Matrix:
             j = offset0 + offset1 * self.dim[0]
 
             if self.is_char_matrix():
-                self.data += plane
+                base = self.data + plane
                 for i in range(argc):
-                    p = self.data + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
+                    p = base + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
                     (<jt.uchar*>p)[0] = jt.jit_atom_getcharfix(atom.ptr + i)
                     j += 1
 
             elif self.is_long_matrix():
-                self.data += plane * 4
+                base = self.data + plane * 4
                 for i in range(argc):
-                    p = self.data + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
+                    p = base + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
                     (<mx.t_int32*>p)[0] = <mx.t_int32>jt.jit_atom_getlong(atom.ptr + i)
                     j += 1
 
             elif self.is_float_matrix():
-                self.data += plane * 4
+                base = self.data + plane * 4
                 for i in range(argc):
-                    p = self.data + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
+                    p = base + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
                     (<float*>p)[0] = <float>jt.jit_atom_getfloat(atom.ptr + i)
                     j += 1
 
             elif self.is_double_matrix():
-                self.data += plane * 8
+                base = self.data + plane * 8
                 for i in range(argc):
-                    p = self.data + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
+                    p = base + (j // self.info.dim[0]) * self.info.dimstride[1] + (j % self.info.dim[0]) * self.info.dimstride[0]
                     (<double*>p)[0] = <double>jt.jit_atom_getfloat(atom.ptr + i)
                     j += 1
 
@@ -5896,6 +6158,17 @@ cdef class Path:
         self.moddate = 0
         self.fh = NULL
 
+    def __dealloc__(self):
+        if self.fh is not NULL:
+            mx.sysfile_close(self.fh)
+            self.fh = NULL
+
+    cdef int _check_open(self) except -1:
+        """raise IOError unless a file is open"""
+        if self.fh is NULL:
+            raise IOError("no open file")
+        return 0
+
     def __init__(self, str filename = "", int path_id = 0, str ftype = 'TEXT'):
         self.filename = filename
         self.path_id = <short>path_id
@@ -5906,18 +6179,15 @@ cdef class Path:
             except IOError:
                 # assume pathname does not exist (for .create/.write/etc.)
                 self.update_from_pathname(filename)
-            except IOError:
-                # raise
-                pass
         self._get_info() # populate info attribute
 
     def __repr__(self):
-        f"<Path id={self.path_id}>"
+        return f"<Path id={self.path_id}>"
 
     def __enter__(self):
         return self
 
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_value, traceback):
         self.close_sysfile()
 
     @property
@@ -6140,7 +6410,11 @@ cdef class Path:
         """
         cdef short outvol = 0
         cdef short binflag = 0
-        cdef short err = mx.locatefile(name.encode(), &outvol, &binflag)
+        # locatefile can write to its name argument: pass a private buffer
+        cdef char _name[MAX_PATH_CHARS]
+        strncpy(_name, name.encode(), MAX_PATH_CHARS - 1)
+        _name[MAX_PATH_CHARS - 1] = 0
+        cdef short err = mx.locatefile(_name, &outvol, &binflag)
         if err:
             return 0
         else:
@@ -6156,10 +6430,15 @@ cdef class Path:
         cdef mx.t_fourcc outtype  = 0
         cdef short err = 0
 
-        err = mx.locatefile_extended(filename.encode(), &self.path_id,
+        # locatefile_extended writes the actual filename to its name argument
+        cdef char _name[MAX_PATH_CHARS]
+        strncpy(_name, filename.encode(), MAX_PATH_CHARS - 1)
+        _name[MAX_PATH_CHARS - 1] = 0
+        err = mx.locatefile_extended(_name, &self.path_id,
             &outtype, &ftype, 1)
         if err:
             raise IOError(f"can't find file '{filename}'")
+        self.filename = _name.decode()
         if ftype == outtype: # request and response match
             self.ftype = ftype
         else: # should not get here
@@ -6178,7 +6457,8 @@ cdef class Path:
         cdef short outpath
         cdef short err = 0
 
-        _name = <bytes>name
+        strncpy(_name, name.encode(), MAX_PATH_CHARS - 1)
+        _name[MAX_PATH_CHARS - 1] = 0
         err = mx.path_resolvefile(_name, path_id, &outpath)
         if err:
             raise IOError(f"could not resolvefile {name}")
@@ -6220,16 +6500,16 @@ cdef class Path:
     def copy_to_tempfile(self, str dst_filename, short dst_path_id) -> Path:
         """Copy file given destination filename and path id to a tempile"""
         cdef short outpath = 0
-        cdef char * outtempfile = NULL
+        cdef char outtempfile[MAX_PATH_CHARS]
         cdef short err = mx.path_copytotempfile(self.path_id, self.filename.encode(),
             &outpath, outtempfile)
         if err:
             raise IOError("could not copy filename to destination tempfile")
-        return Path(outtempfile, outpath)
+        return Path(outtempfile.decode(), outpath)
 
     def rename(self, str new_name):
         """Rename the file"""
-        cdef short err = mx.path_renamefile(self.filename.encode, self.path_id, new_name.encode())
+        cdef short err = mx.path_renamefile(self.filename.encode(), self.path_id, new_name.encode())
         if err:
             raise IOError(f"couldn't rename {self.filename}")
 
@@ -6245,7 +6525,7 @@ cdef class Path:
         >>> with Path('/tmp/demo.txt').open('w') as f:
             f.write('hello')
         """
-        self.open_sysfile(self.filename.encode(), self.path_id, perm)
+        self.open_sysfile(self.filename, self.path_id, perm)
         return self
 
     def open_sysfile(self, str filename, short path_id, str perm = 'w'):
@@ -6270,7 +6550,7 @@ cdef class Path:
         >>> with Path('/tmp/demo.txt').new() as f:
             f.write('hello')
         """
-        self.create_sysfile(self.filename.encode(), self.path_id, ftype)
+        self.create_sysfile(self.filename, self.path_id, ftype)
         return self
 
     def create_sysfile(self, str filename, short path_id, str ftype = 'TEXT'):
@@ -6297,7 +6577,10 @@ cdef class Path:
         It should be used instead of system-specific file closing routines in order to make max external
         code that will compile cross-platform.
         """
+        if self.fh is NULL:
+            return
         cdef mx.t_max_err err = mx.sysfile_close(self.fh)
+        self.fh = NULL
         if err:
             raise IOError("can't close open filehandle")
 
@@ -6311,36 +6594,47 @@ cdef class Path:
         The byte count actually read is set in "count", and the file position is
         updated by the actual byte count read.
         """
+        self._check_open()
         cdef char * bufptr = <char *>mx.sysmem_newptr(count * sizeof(char))
+        if bufptr is NULL:
+            raise MemoryError
         cdef mx.t_max_err err = mx.sysfile_read(self.fh, &count, <char *>bufptr)
+        cdef str result = None
+        if not err:
+            # the data is not null-terminated: count holds the bytes read
+            result = bufptr[:count].decode()
+        mx.sysmem_freeptr(bufptr)
         if err:
             raise IOError("could not read contents of from from disk")
-        cdef str result = bufptr.decode()
-        mx.sysmem_freeptr(bufptr)
         return result
 
-    def sysfile_readtohandle(self, int size) -> list[str]:
-        """Read the contents of a file into a handle."""
-        cdef int i = 0
-        cdef char** fh = <mx.t_handle>mx.sysmem_newhandleclear(<mx.t_ptr_size>size)
-        cdef mx.t_max_err err = mx.sysfile_readtohandle(self.fh, &fh)
+    def sysfile_readtohandle(self, int size = 0) -> list[str]:
+        """Read the contents of a file into a handle, and return its lines.
+
+        The handle is allocated by the read, so `size` is unused.
+        """
+        self._check_open()
+        cdef char** h = NULL
+        cdef mx.t_max_err err = mx.sysfile_readtohandle(self.fh, &h)
         if err:
             raise IOError("could not read contents of filehandle into a handle")
-        lines = []
-        for i in range(size):
-            line = fh[i].decode()
-            # line = fh[i][0].decode()
-            lines.append(line)
-        mx.sysmem_freehandle(fh)
-        return lines
+        # a handle is one pointer to one block of unterminated text
+        cdef str text = h[0][:mx.sysmem_handlesize(h)].decode()
+        mx.sysmem_freehandle(h)
+        return text.splitlines()
 
-    def sysfile_readtoptr(self, int bufsize) -> str:
-        """Read the contents of a file into a pointer."""
-        cdef char* bufptr = <char *>mx.sysmem_newptr(bufsize * sizeof(char))
+    def sysfile_readtoptr(self, int bufsize = 0) -> str:
+        """Read the contents of a file into a pointer.
+
+        The pointer is allocated by the read, so `bufsize` is unused.
+        """
+        self._check_open()
+        cdef char* bufptr = NULL
         cdef mx.t_max_err err = mx.sysfile_readtoptr(self.fh, &bufptr)
         if err:
             raise IOError("could not read contents of a file into a pointer")
-        cdef str result = bufptr.decode()
+        # the data is not null-terminated
+        cdef str result = bufptr[:mx.sysmem_ptrsize(bufptr)].decode()
         mx.sysmem_freeptr(bufptr)
         return result
 
@@ -6354,31 +6648,31 @@ cdef class Path:
         file position. The byte count actually written is set in "count", and the
         file position is updated by the actual byte count written.
         """
-        cdef mx.t_ptr_size count = <mx.t_ptr_size>len(contents)
-        cdef char* bufptr = <char *>mx.sysmem_newptr(count * sizeof(char))
-        cdef mx.t_max_err err = mx.MAX_ERR_NONE
+        self._check_open()
+        cdef bytes data
         if isinstance(contents, bytes):
-            bufptr = contents
+            data = contents
         elif isinstance(contents, str):
-            bufptr = <bytes>contents
+            data = contents.encode()
         else:
             raise TypeError("could not write this type file handler")
-        err = mx.sysfile_write(self.fh, &count, <char*>bufptr)
+        cdef mx.t_ptr_size count = <mx.t_ptr_size>len(data)
+        cdef mx.t_max_err err = mx.sysfile_write(self.fh, &count, <char*>data)
         if err:
             raise IOError("could not write contents file handler")
-        mx.sysmem_freeptr(bufptr)
-        # mx.post("wrote %d bytes to file handler", count)
 
     write = sysfile_write
 
     def sysfile_seteof(self, int nbytes):
         """Set the size of the file handle in bytes."""
+        self._check_open()
         cdef mx.t_max_err err = mx.sysfile_seteof(self.fh, <mx.t_ptr_size>nbytes)
         if err:
             raise ValueError("could not set the size of the file handle")
 
     def sysfile_geteof(self) -> int:
         """Get the size of a file handle."""
+        self._check_open()
         cdef mx.t_ptr_size nbytes = 0
         cdef mx.t_max_err err = mx.sysfile_geteof(self.fh, &nbytes)
         if err:
@@ -6387,6 +6681,7 @@ cdef class Path:
 
     def sysfile_getpos(self) -> int:
         """Get the current file position of a file handle."""
+        self._check_open()
         cdef mx.t_ptr_size filepos = 0
         cdef mx.t_max_err err = mx.sysfile_getpos(self.fh, &filepos)
         if err:
@@ -6410,38 +6705,39 @@ cdef class Path:
         maxlen from file handle at current file position into the htext
         handle, performing linebreak translation if set in flags.
         """
-        cdef int size = self.sysfile_geteof()
-        cdef mx.t_handle htext = <mx.t_handle>mx.sysmem_newhandleclear(<mx.t_ptr_size>size)
-        cdef mx.t_max_err err = mx.MAX_ERR_NONE
-        err = mx.sysfile_readtextfile(self.fh,
-            htext, <mx.t_ptr_size>maxlen, mx.TEXT_LB_NATIVE)
+        self._check_open()
+        cdef mx.t_handle htext = <mx.t_handle>mx.sysmem_newhandle(0)
+        cdef mx.t_max_err err = mx.sysfile_readtextfile(self.fh,
+            htext, <mx.t_ptr_size>maxlen,
+            <mx.t_sysfile_text_flags>(mx.TEXT_LB_NATIVE | mx.TEXT_NULL_TERMINATE))
+        cdef str result = None
+        if not err:
+            # a handle is one pointer to one block of text
+            result = htext[0].decode()
+        mx.sysmem_freehandle(htext)
         if err:
             raise ValueError("could not read text from the file handle")
-        lines = []
-        for i in range(size):
-            line = htext[i].decode()
-            lines.append(line)
-        mx.sysmem_freehandle(htext)
-        return "".join(lines)
+        return result
 
     def sysfile_writetextfile(self, str text):
-        """Write a text file to disk.
+        """Write a text file to disk, then close it.
 
         This function writes a text handle to a text file performing linebreak
         translation if set in flags.
 
         see: https://cycling74.com/forums/problem-with-sysfile_writetextfile
         """
-        cdef char* buf = <bytes>text
+        self._check_open()
+        cdef bytes encoded = text.encode()
         cdef mx.t_handle htext = mx.sysmem_newhandle(0)
         cdef mx.t_max_err err = mx.MAX_ERR_NONE
 
-        mx.sysmem_ptrandhand(buf, htext, strlen(buf))
+        mx.sysmem_ptrandhand(<char*>encoded, htext, len(encoded))
         err = mx.sysfile_writetextfile(self.fh, htext, mx.TEXT_LB_NATIVE)
+        mx.sysmem_freehandle(htext)
         if err:
             raise IOError("could not write text to handler")
-        mx.sysfile_close(self.fh)
-        mx.sysmem_freehandle(htext)
+        self.close_sysfile()
 
     cdef mx.t_max_err sysfile_openhandle(self, char **h, mx.t_sysfile_flags flags, mx.t_filehandle *fh):
         """Create a #t_filehandle from a pre-existing handle.
@@ -6485,9 +6781,8 @@ cdef class PyExternal:
         allows any module in the namespace to get a reference
         (as below) to its parent object.
         """
-        self.name = getattr(__builtins__, 'PY_OBJ_NAME')
-        self.ptr = <px.t_py *>mx.object_findregistered(
-            mx.CLASS_BOX, mx.gensym(self.name.encode()))
+        self.ptr = caller_py_object()
+        self.name = sym_to_str(<mx.t_symbol*>mx.object_attr_getsym(<mx.t_object*>self.ptr, mx.gensym("name")))
 
     def __repr__(self) -> str:
         return f"<PyExternal '{self.name}'>"
@@ -6506,15 +6801,18 @@ cdef class PyExternal:
 
     def log_info(self, str msg):
         """Log info using object_post."""
-        px.py_info(self.ptr, msg.encode())
+        cdef bytes encoded = msg.encode()
+        px.py_info(self.ptr, "%s", <char*>encoded) # msg is not a format string
 
     def log_debug(self, str msg):
         """Log debug using object_post."""
-        px.py_debug(self.ptr, msg.encode())
+        cdef bytes encoded = msg.encode()
+        px.py_debug(self.ptr, "%s", <char*>encoded) # msg is not a format string
 
     def log_error(self, str s):
         """Log error using object_error."""
-        px.py_error(self.ptr, s.encode())
+        cdef bytes encoded = s.encode()
+        px.py_error(self.ptr, "%s", <char*>encoded) # s is not a format string
 
     def scan(self):
         """Scan patcher for named objects."""
@@ -6655,7 +6953,7 @@ cdef class PyMxObject:
     cdef px.t_py *x
 
     def __cinit__(self):
-        self.x = <px.t_py*>px.py_get_object_ref()
+        self.x = caller_py_object()
 
     def __repr__(self) -> str:
         return f"<PyMxObject '{self.name}'>"
@@ -6855,22 +7153,35 @@ cdef class Table(Object):
     def __repr__(self) -> str:
         return f"<Table '{self.name}' size:{self.size}>"
 
+    cdef int _refresh(self) except -1:
+        """Fetch storage and size: both go stale when the table resizes or is deleted."""
+        if mx.table_get(str_to_sym(self.name), &self.storage, &self.size) != 0:
+            self.storage = NULL
+            self.size = 0
+            raise ValueError(f"no table named '{self.name}'")
+        return 0
+
     def __len__(self):
+        self._refresh()
         return self.size
 
     def __getitem__(self, int idx):
-        return self.get_int(idx)
+        self._refresh()
+        if idx < 0 or idx >= self.size:
+            raise IndexError(f"table index {idx} out of range")
+        return self.storage[0][idx]
 
     def __setitem__(self, int idx, int value):
         self.set_int(idx, value)
 
     def __iter__(self):
-        return iter(self.as_list())
+        return iter(self.to_list())
 
     # helper methods
 
     def populate(self, list[int] xs):
         """Populate a table from a python list of ints"""
+        self._refresh()
         if len(xs) <= self.size:
             for i, x in enumerate(xs):
                 self.storage[0][i] = <long>x
@@ -6881,6 +7192,7 @@ cdef class Table(Object):
 
     def to_list(self):
         """Convert a table to a python list of ints"""
+        self._refresh()
         cdef long value
         cdef list[int] xs = []
         for i in range(self.size):
@@ -8980,7 +9292,8 @@ def out(object obj):
 
 def out2(object obj):
     """Send an object to the outlet."""
-    cdef px.t_py* x = <px.t_py*>px.py_get_object_ref()
+    cdef px.t_py* x = caller_py_object()
+    Py_INCREF(obj) # py_handle_output consumes a reference
     px.py_handle_output(x, <PyObject *>obj)
 
 def send(name, *args):
@@ -8995,11 +9308,13 @@ def lookup(name):
 
 def post(str s):
     """Post a message to the console."""
-    mx.post(s.encode())
+    cdef bytes encoded = s.encode()
+    mx.post("%s", <char*>encoded) # s is not a format string
 
 def error(str s):
     """Post an error message to the console."""
-    mx.error(s.encode())
+    cdef bytes encoded = s.encode()
+    mx.error("%s", <char*>encoded) # s is not a format string
 
 
 # key directories
@@ -9061,7 +9376,7 @@ def scan_objects() -> dict[str, MaxObject]:
     cdef mx.t_object *patcher = NULL
     cdef mx.t_object *box = NULL
     cdef mx.t_object *obj = NULL
-    cdef px.t_py *x = <px.t_py*>px.py_get_object_ref()
+    cdef px.t_py *x = caller_py_object()
     cdef int i = 0
     cdef dict objdict = {}
     cdef MaxObject mxo

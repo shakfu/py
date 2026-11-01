@@ -16,6 +16,7 @@ Config
     PythonConfig312
     PythonConfig313
     PythonConfig314
+    PythonConfig315
 
 ShellCmd
     Project
@@ -29,6 +30,7 @@ ShellCmd
 
 """
 
+import copy
 import argparse
 import datetime
 import json
@@ -460,7 +462,7 @@ class Config:
     log: logging.Logger
 
     def __init__(self, cfg: dict):
-        self.cfg = cfg.copy()
+        self.cfg = copy.deepcopy(cfg) # patch() mutates nested lists
         self.out = ["# -*- makefile -*-"] + self.cfg["header"] + ["\n# core\n"]
         self.log = logging.getLogger(self.__class__.__name__)
         self.patch()
@@ -762,6 +764,45 @@ class PythonConfig314(PythonConfig313):
             self.cfg["disabled"].append("_zstd")
         if "_remote_debugging" not in self.cfg["disabled"]:
             self.cfg["disabled"].append("_remote_debugging")
+
+
+class PythonConfig315(PythonConfig314):
+    """configuration class to build python 3.15"""
+
+    version = "3.15.2"
+
+    def patch(self):
+        """patch cfg attribute"""
+
+        super().patch()
+
+        self.cfg["extensions"].update(
+            {
+                # compiled into libpython so static builds link it: XML_DEV_URANDOM
+                # needs a header 3.15 no longer ships in this include path
+                "pyexpat": [
+                    "expat/xmlparse.c",
+                    "expat/xmlrole.c",
+                    "expat/xmltok.c",
+                    "expat/xcs.c",
+                    "pyexpat.c",
+                    "-I$(srcdir)/Modules/expat",
+                    "-DHAVE_EXPAT_CONFIG_H",
+                    "-DUSE_PYEXPAT_CAPI",
+                ],
+                # _math_integer is new in 3.15
+                "_math_integer": ["mathintegermodule.c"],
+                # _remote_debugging became a package in 3.15 (disabled by default)
+                "_remote_debugging": ["_remote_debugging/module.c", "_remote_debugging/object_reading.c", "_remote_debugging/code_objects.c", "_remote_debugging/frames.c", "_remote_debugging/threads.c", "_remote_debugging/asyncio.c", "_remote_debugging/interpreters.c"],
+            }
+        )
+
+        if "_math_integer" not in self.cfg["shared"]:
+            self.cfg["shared"].append("_math_integer")
+
+        # xxlimited_3_13 is new in 3.15: an example module
+        if "xxlimited_3_13" not in self.cfg["disabled"]:
+            self.cfg["disabled"].append("xxlimited_3_13")
 
 
 # ----------------------------------------------------------------------------
@@ -1440,6 +1481,7 @@ class PythonBuilder(Builder):
             "3.12": PythonConfig312,
             "3.13": PythonConfig313,
             "3.14": PythonConfig314,
+            "3.15": PythonConfig315,
         }[self.ver](BASE_CONFIG)
 
     @property

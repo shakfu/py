@@ -6,7 +6,7 @@ include(${CMAKE_SOURCE_DIR}/source/scripts/cmake/fn_python3_external.cmake)
 option(INCLUDE_NUMPY "include numpy headers if available")
 option(INCLUDE_API_MODULE "include api c module" ON)
 option(REGEN_API_MODULE "enable cython regen of api.c if api.pyx is modified")
-option(RESTRICTED_PYTHON, "enable restrictions to prevent import, file access, etc.")
+option(RESTRICTED_PYTHON "use the prelude that replaces eval with name lookup")
 
 set(SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/scripts)
 set(API_PYX_FILE ${CMAKE_CURRENT_SOURCE_DIR}/api.pyx)

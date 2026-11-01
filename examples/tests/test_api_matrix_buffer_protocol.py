@@ -51,8 +51,8 @@ def test_matrix_buffer_protocol_basic():
     
     # Verify format matches matrix type
     expected_formats = {
-        'char': 'b',
-        'long': 'l', 
+        'char': 'B',
+        'long': 'i',
         'float32': 'f',
         'float64': 'd'
     }
@@ -167,7 +167,7 @@ def test_matrix_memoryview_char():
     
     # Test correct usage
     mv = m.as_char_memoryview()
-    assert mv.format == 'b', f"Expected format 'b', got '{mv.format}'"
+    assert mv.format == 'B', f"Expected format 'B', got '{mv.format}'"
     api.post(f"char memoryview shape: {mv.shape}")
     api.bang_success()
 
@@ -188,7 +188,7 @@ def test_matrix_memoryview_long():
     
     # Test correct usage
     mv = m.as_long_memoryview()
-    assert mv.format == 'l', f"Expected format 'l', got '{mv.format}'"
+    assert mv.format == 'i', f"Expected format 'i', got '{mv.format}'"
     api.post(f"long memoryview shape: {mv.shape}")
     api.bang_success()
 
@@ -202,8 +202,8 @@ def test_matrix_memoryview_generic():
     
     # Verify format matches matrix type
     expected_formats = {
-        'char': 'b',
-        'long': 'l', 
+        'char': 'B',
+        'long': 'i',
         'float32': 'f',
         'float64': 'd'
     }

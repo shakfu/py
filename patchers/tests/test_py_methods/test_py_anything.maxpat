@@ -158,9 +158,7 @@
 					"saved_object_attributes" : 					{
 						"autoload" : 0,
 						"file" : "",
-						"pythonpath" : "",
-						"restrict_file_access" : 1407374883553280000,
-						"restrict_imports" : -8646911284551352320
+						"pythonpath" : ""
 					}
 ,
 					"text" : "py",

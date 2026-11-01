@@ -46,7 +46,7 @@ struct t_py {
     /* python-related */
     struct {
         t_symbol* pythonpath;    /*!< path to python directory */
-        t_bool debug;            /*!< bool to switch per-object debug state */
+        long debug;              /*!< bool to switch per-object debug state */
         PyObject* globals;       /*!< per object 'globals' python namespace */
         psc_instance_t* cache;   /*!< python function / code object cache */
     } python;
@@ -71,14 +71,14 @@ struct t_py {
         long run_on_close;       /*!< evaluate/run code in editor on close */
         t_symbol* code_filepath; /*!< default python filepath to load into
                                  the code editor and 'globals' namespace */
-        t_bool autoload;         /*!< bool to autoload of code_filepath  */
+        long autoload;           /*!< bool to autoload of code_filepath  */
     } editor;
 
     /* security settings */
     struct {
-        t_bool security_mode;        /*!< enable enhanced security checks */
-        t_bool restrict_imports;     /*!< restrict module imports */
-        t_bool restrict_file_access; /*!< restrict file system access */
+        long security_mode;          /*!< enable enhanced security checks */
+        long restrict_imports;       /*!< restrict module imports */
+        long restrict_file_access;   /*!< restrict file system access */
         long max_execution_time;     /*!< max execution time in ms */
     } security;
 
@@ -301,7 +301,7 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
         x->python.pythonpath = gensym("");
 
         // text editor
-        x->editor.code = (t_handle)sysmem_newhandle(0);
+        x->editor.code = (t_handle)sysmem_newhandleclear(1); // valid empty string
         x->editor.code_size = 0;
         x->editor.code_editor = NULL;
         x->editor.code_filetype = FOUR_CHAR_CODE('TEXT');
@@ -344,20 +344,23 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
         }
 
         // create scripting name
-        t_max_err err = jbox_set_varname(x->obj.box, x->obj.name);
-        if (err != MAX_ERR_NONE) {
+        if (x->obj.box && jbox_set_varname(x->obj.box, x->obj.name) != MAX_ERR_NONE) {
             error("py: failed to set scripting name to box");
         }
 
         // initialize python interpreter
         py_init(x);
+        if (x->python.globals == NULL) {
+            // py_free skips python cleanup when globals is NULL
+            object_free(x);
+            return NULL;
+        }
 
         post("initialized python version: %s", PY_VERSION);
 
         py_debug(x, "object created");
         for (int i = 0; i < argc; i++) {
             py_debug(x, "%d: %s", i, atom_getsym(argv + i)->s_name);
-            post("argc: %d  argv: %s", i, atom_getsym(argv + i)->s_name);
         }
 
         t_dictionary* dict = (t_dictionary*)gensym("#D")->s_thing;
@@ -365,25 +368,28 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
             // dictionary_getsym(dict, gensym("name"), &x->obj.name);
             dictionary_getsym(dict, gensym("file"), &x->editor.code_filepath);
             dictionary_getsym(dict, gensym("pythonpath"), &x->python.pythonpath);
-            dictionary_getlong(dict, gensym("autoload"), (t_atom_long*)&x->editor.autoload);
+            t_atom_long autoload = 0;
+            if (dictionary_getlong(dict, gensym("autoload"), &autoload) == MAX_ERR_NONE) {
+                x->editor.autoload = (long)autoload;
+            }
         }
 
         // process autoload
         py_debug(x, "checking autoload / code_filepath / pythonpath");
-        py_debug(x, "autoload: %d\ncode_filepath: %s\npythonpath: %s",
+        py_debug(x, "autoload: %ld\ncode_filepath: %s\npythonpath: %s",
                  x->editor.autoload, x->editor.code_filepath->s_name,
                  x->python.pythonpath->s_name);
         py_debug(x, "via object_attr_getsym: %s",
                  object_attr_getsym(x, gensym("file"))->s_name);
 
+        // if pythonpath is set, add it to sys.path before autoload can import
+        if (x->python.pythonpath != gensym("")) {
+            py_pythonpath_add(x, x->python.pythonpath);
+        }
+
         if ((x->editor.autoload == 1) && (x->editor.code_filepath != gensym(""))) {
             py_debug(x, "autoloading: %s", x->editor.code_filepath->s_name);
             py_load(x, x->editor.code_filepath);
-        }
-
-        // if pythonpath is set, add it to sys.path
-        if (x->python.pythonpath != gensym("")) {
-            py_pythonpath_add(x, x->python.pythonpath);
         }
 
         // process @arg attributes
@@ -400,60 +406,50 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
  */
 void py_init(t_py* x)
 {
-    wchar_t* python_home = NULL;
+    if (!Py_IsInitialized()) {
+        wchar_t* python_home = NULL;
 
 #if defined(__APPLE__) && defined(PY_STATIC_EXT)
-    const char* resources_path = string_getptr(
-        py_get_path_to_external(py_class, "/Contents/Resources"));
-    python_home = Py_DecodeLocale(resources_path, NULL);
+        t_string* home_path = py_get_path_to_external(py_class, "/Contents/Resources");
+        python_home = Py_DecodeLocale(string_getptr(home_path), NULL);
+        object_free(home_path);
 #endif
 
 #if defined(__APPLE__) && defined(PY_SHARED_PKG)
-    const char* package_path = string_getptr(
-        py_get_path_to_package(py_class, "/support/python" PY_VER));
-    python_home = Py_DecodeLocale(package_path, NULL);
+        t_string* home_path = py_get_path_to_package(py_class, "/support/python" PY_VER);
+        python_home = Py_DecodeLocale(string_getptr(home_path), NULL);
+        object_free(home_path);
 #endif
 
 #if PY_WITH_API
-    // add the `api` module as a built-in module to the python interpreter
-    if (!Py_IsInitialized()) {
-        // NOTE: without the above test, adding more than one instance of `py` will
-        // cause a crash.
-        // https://gitlab.archlinux.org/archlinux/packaging/packages/blender/-/issues/18
-
         /* Add the cythonized 'api' built-in module, before Py_Initialize */
         if (PyImport_AppendInittab("api", PyInit_api) == -1) {
             py_error(x, "failed to add API module to builtin modules table");
         }
-    }
 #endif
 
-#if PY_VERSION_HEX < 0x0308000
-    if (python_home != NULL) {
-        Py_SetPythonHome(python_home);
-        PyMem_RawFree(python_home);
-    }
-    Py_Initialize();
-#else
-    PyStatus status;
+        PyConfig config;
+        PyConfig_InitPythonConfig(&config);
+        config.parse_argv = 0; // Disable parsing command line arguments
+        config.isolated = PY_CFG_ISOLATED;
+        config.install_signal_handlers = 0; // signals belong to the Max process
+        config.configure_c_stdio = 0; // stdio belongs to the Max process
+        config.home = python_home; // owned by config: freed by PyConfig_Clear
 
-    PyConfig config;
-    PyConfig_InitPythonConfig(&config);
-    config.parse_argv = 0; // Disable parsing command line arguments
-    config.isolated = PY_CFG_ISOLATED; // enabled by default
-    config.home = python_home;
-
-    status = Py_InitializeFromConfig(&config);
-    if (PyStatus_Exception(status)) {
+        PyStatus status = Py_InitializeFromConfig(&config);
         PyConfig_Clear(&config);
-        py_error(x, "failed to initialize Python interpreter");
+        if (PyStatus_Exception(status)) {
+            py_error(x, "failed to initialize Python interpreter");
+            return;
+        }
     }
-
-    PyConfig_Clear(&config);
-#endif
 
     // python init
     PyObject* main_mod = PyImport_AddModule(x->obj.name->s_name); // borrowed
+    if (main_mod == NULL) {
+        py_handle_error(x, "could not create module %s", x->obj.name->s_name);
+        return;
+    }
     x->python.globals = PyModule_GetDict(main_mod); // borrowed reference
     py_init_builtins(x); // does this have to be a separate function?
     x->python.cache = psc_create_instance(NULL);
@@ -509,10 +505,24 @@ void py_free(t_py* x)
         sysmem_freehandle(x->editor.code);
     }
 
+    // python init failed: this object was never counted and has no cache
+    if (x->python.globals == NULL) {
+        return;
+    }
+
     // NOTE: x->python.globals is a borrowed reference from PyModule_GetDict()
     // and should NOT be decremented. Removed: Py_XDECREF(x->python.globals);
     // python objects cleanup
     py_debug(x, "will be deleted");
+
+    // the api module must not reach this object through the global ref
+    if (py_global_obj_ref_mutex) {
+        systhread_mutex_lock(py_global_obj_ref_mutex);
+        if (py_global_obj_ref == (uintptr_t)x) {
+            py_global_obj_ref = 0;
+        }
+        systhread_mutex_unlock(py_global_obj_ref_mutex);
+    }
 
     // destroy python cache
     psc_destroy_instance(x->python.cache);
@@ -641,8 +651,12 @@ t_max_err py_pythonpath_add(t_py* x, t_symbol* path)
         py_error(x, "failed to set Python path");
         return MAX_ERR_GENERIC;
     }
-    PyList_Append(sys_path, py_path);
+    int res = PyList_Append(sys_path, py_path);
     Py_DECREF(py_path); // Release our reference to prevent memory leak
+    if (res != 0) {
+        py_handle_error(x, "failed to add to pythonpath: %s", path->s_name);
+        return MAX_ERR_GENERIC;
+    }
     py_info(x, "added to pythonpath: %s", path->s_name);
     return MAX_ERR_NONE;
 }
@@ -1010,6 +1024,8 @@ t_string* py_get_path_to_package(t_class* c, const char* subpath)
     path_splitnames(externals_folder, package_folder,
                     _dummy); // ignore filename
 
+    object_free(external_path);
+
     result = string_new((char*)package_folder);
 
     if (subpath != NULL) {
@@ -1212,14 +1228,7 @@ void path_join(char* destination, const char* path1, const char* path2)
 #ifdef WIN32
         directory_separator[0] = '\\';
 #endif
-        const char* last_char = path1;
-        while (*last_char != '\0') {
-            last_char++;
-        }
-        int append_directory_separator = 0;
-        if (strcmp(last_char, directory_separator) != 0) {
-            append_directory_separator = 1;
-        }
+        int append_directory_separator = path1[strlen(path1) - 1] != directory_separator[0];
         strncpy_zero(destination, path1, MAX_PATH_CHARS);
         if (append_directory_separator) {
             strncat_zero(destination, directory_separator, MAX_PATH_CHARS);
@@ -1275,24 +1284,22 @@ void py_metadata(t_py* x)
     path_toabsolutesystempath(defaultpath_id, "", output_path);
     post("defaultpath: %s", output_path);
 
-    const char* external_path = string_getptr(
-        py_get_path_to_external(py_class, NULL));
+    t_string* external_str = py_get_path_to_external(py_class, NULL);
+    const char* external_path = string_getptr(external_str);
 
     post("externalpath: %s", external_path);
 
     // test new path finding
-    char* package_path[MAX_PATH_CHARS];
-    char* package_externals_path[MAX_PATH_CHARS];
-    char* external_name[MAX_PATH_CHARS];
-    char* externals_folder[MAX_PATH_CHARS];
+    char package_path[MAX_PATH_CHARS];
+    char package_externals_path[MAX_PATH_CHARS];
+    char external_name[MAX_PATH_CHARS];
+    char externals_folder[MAX_PATH_CHARS];
 
-    path_splitnames(external_path, (char*)package_externals_path,
-                    (char*)external_name);
+    path_splitnames(external_path, package_externals_path, external_name);
     post("package_externals_path: %s", package_externals_path);
     post("external_name: %s", external_name);
 
-    path_splitnames((char*)package_externals_path, (char*)package_path,
-                    (char*)externals_folder);
+    path_splitnames(package_externals_path, package_path, externals_folder);
     post("package_path: %s", package_path);
     post("externals_folder: %s", externals_folder);
 
@@ -1305,10 +1312,12 @@ void py_metadata(t_py* x)
 
     path_join(external_contents_path, external_path, "Contents");
     path_join(external_resources_path, external_contents_path, "Resources");
-    path_join(python_path, (char*)package_path, support_python_path);
+    path_join(python_path, package_path, support_python_path);
 
     post("external_resources_path: %s", external_resources_path);
     post("python_path: %s", python_path);
+
+    object_free(external_str);
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1357,13 +1366,7 @@ t_max_err py_sched(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     // schedule a python call
     // [sched <time> func arg1 arg2 ... argN]
-    float time = 0.0;
-
-    // first atom in argv must be a float
-    if (argv->a_type != A_FLOAT) {
-        py_error(x, "first argument must be a float");
-        goto error;
-    }
+    double time = 0.0;
 
     if (argc < 2) {
         py_error(x, "scheduler requires at least 2 arguments");
@@ -1377,7 +1380,8 @@ t_max_err py_sched(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     // argv+0 is the object name to send to
     time = atom_getfloat(argv);
-    if (time == 0.0) {
+    if (time < 0.0) {
+        py_error(x, "scheduling time must not be negative");
         goto error;
     }
 
@@ -1408,7 +1412,7 @@ t_max_err py_sched(t_py* x, t_symbol* s, long argc, t_atom* argv)
     goto finally;
 
 error:
-    py_error(x, "failed to send message");
+    py_error(x, "failed to schedule call");
     ret = MAX_ERR_GENERIC;
 
 finally:
@@ -1435,9 +1439,7 @@ t_max_err py_task(t_py* x)
         return MAX_ERR_GENERIC;
     }
     py_debug(x, "%lx instance is executing at time %.2f", x, time);
-    py_call(x, gensym(""), argc, argv);
-    py_bang_success(x);
-    return MAX_ERR_NONE;
+    return py_call(x, gensym(""), argc, argv); // py_call bangs its own result
 }
 
 
@@ -1473,13 +1475,18 @@ void py_handle_error(t_py* x, char* fmt, ...)
     PyErr_NormalizeException(&ptype, &pvalue, &ptraceback);
     Py_XDECREF(ptype);
 
-    PyObject* pvalue_pstr = PyObject_Repr(pvalue);
-    const char* pvalue_str = PyUnicode_AsUTF8(pvalue_pstr);
-    Py_XDECREF(pvalue);
-    Py_XDECREF(pvalue_pstr);
+    // pvalue_str points into pvalue_pstr: keep it alive until after logging
+    PyObject* pvalue_pstr = pvalue ? PyObject_Repr(pvalue) : NULL;
+    const char* pvalue_str = pvalue_pstr ? PyUnicode_AsUTF8(pvalue_pstr) : NULL;
+    if (pvalue_str == NULL) {
+        PyErr_Clear(); // the repr itself failed
+        pvalue_str = "<unprintable exception>";
+    }
 
     object_error((t_object*)x, "[ERROR] (%s) %s: %s", x->obj.name->s_name, msg,
                  pvalue_str);
+    Py_XDECREF(pvalue_pstr);
+    Py_XDECREF(pvalue);
     Py_XDECREF(ptraceback);
 }
 
@@ -1499,7 +1506,7 @@ t_max_err py_handle_float_output(t_py* x, PyObject* pfloat)
     }
 
     if (PyFloat_Check(pfloat)) {
-        float float_result = (float)PyFloat_AsDouble(pfloat);
+        double float_result = PyFloat_AsDouble(pfloat);
         if (PyErr_Occurred()) {
             goto error;
         }
@@ -1531,7 +1538,7 @@ t_max_err py_handle_long_output(t_py* x, PyObject* plong)
     }
 
     if (PyLong_Check(plong)) {
-        long long_result = PyLong_AsLong(plong);
+        t_atom_long long_result = PyLong_AsLongLong(plong); // long is 32-bit on windows
         if (PyErr_Occurred()) {
             goto error;
         }
@@ -1599,76 +1606,73 @@ t_max_err py_handle_list_output(t_py* x, PyObject* plist)
         && !PyBytes_Check(plist) && !PyByteArray_Check(plist)) {
         PyObject* iter = NULL;
         PyObject* item = NULL;
-        int i = 0;
+        long i = 0;
 
         t_atom atoms_static[PY_MAX_ELEMS];
         t_atom* atoms = NULL;
-        int is_dynamic = 0;
+        int failed = 0;
 
         Py_ssize_t seq_size = PySequence_Length(plist);
-        py_debug(x, "seq_size: %d", seq_size);
+        py_debug(x, "seq_size: %ld", (long)seq_size);
+
+        if (seq_size < 0) {
+            goto error;
+        }
 
         if (seq_size == 0) {
             py_error(x, "cannot convert empty Python list to atoms");
             goto error;
         }
 
-        if (seq_size > PY_MAX_ELEMS) {
-            py_debug(x, "dynamically increasing size of atom array");
-            atoms = atom_dynamic_start(atoms_static, PY_MAX_ELEMS,
-                                       seq_size + 1);
-            is_dynamic = 1;
-
-        } else {
-            atoms = atoms_static;
-        }
-
         if ((iter = PyObject_GetIter(plist)) == NULL) {
             goto error;
         }
-        py_debug(x, "seq_size2: %d", seq_size);
 
-        while ((item = PyIter_Next(iter)) != NULL) {
-            if (PyLong_Check(item)) {
-                long long_item = PyLong_AsLong(item);
+        // __iter__ can yield more items than __len__ reports: bound writes by capacity
+        long capacity = seq_size > PY_MAX_ELEMS ? (long)seq_size + 1 : PY_MAX_ELEMS;
+        atoms = atom_dynamic_start(atoms_static, PY_MAX_ELEMS, capacity);
+
+        while (!failed && (item = PyIter_Next(iter)) != NULL) {
+            if (i >= capacity) {
+                py_error(x, "sequence yielded more items than its length");
+                failed = 1;
+            } else if (PyLong_Check(item)) {
+                t_atom_long long_item = PyLong_AsLongLong(item);
                 if (long_item == -1 && PyErr_Occurred()) {
-                    goto error;
+                    failed = 1;
+                } else {
+                    atom_setlong(atoms + i, long_item);
+                    i++;
                 }
-                atom_setlong(atoms + i, long_item);
-                py_debug(x, "%d long: %ld\n", i, long_item);
-                i++;
-            }
-
-            if (PyFloat_Check(item)) {
-                float float_item = PyFloat_AsDouble(item);
+            } else if (PyFloat_Check(item)) {
+                double float_item = PyFloat_AsDouble(item);
                 if (float_item == -1.0 && PyErr_Occurred()) {
-                    goto error;
+                    failed = 1;
+                } else {
+                    atom_setfloat(atoms + i, float_item);
+                    i++;
                 }
-                atom_setfloat(atoms + i, float_item);
-                py_debug(x, "%d float: %f\n", i, float_item);
-                i++;
-            }
-
-            if (PyUnicode_Check(item)) {
+            } else if (PyUnicode_Check(item)) {
                 const char* unicode_item = PyUnicode_AsUTF8(item);
                 if (unicode_item == NULL) {
-                    goto error;
+                    failed = 1;
+                } else {
+                    atom_setsym(atoms + i, gensym(unicode_item));
+                    i++;
                 }
-                atom_setsym(atoms + i, gensym(unicode_item));
-                py_debug(x, "%d unicode: %s\n", i, unicode_item);
-                i++;
             }
             Py_DECREF(item);
         }
+        Py_DECREF(iter);
+
+        if (failed || PyErr_Occurred()) {
+            atom_dynamic_end(atoms_static, atoms);
+            goto error;
+        }
 
         outlet_list(x->p_outlet_left, NULL, i, atoms);
+        atom_dynamic_end(atoms_static, atoms);
         py_bang_success(x);
-        py_debug(x, "end iter op: %d", i);
-
-        if (is_dynamic) {
-            py_debug(x, "restoring to static atom array");
-            atom_dynamic_end(atoms_static, atoms);
-        }
     }
 
     Py_XDECREF(plist);
@@ -1713,9 +1717,8 @@ t_max_err py_handle_dict_output(t_py* x, PyObject* pdict)
         }
 
         if (PyList_Check(pval)) {           // expecting a python list
-            py_handle_list_output(x, pval); // this decrefs pval
-            py_bang_success(x);
-            return MAX_ERR_NONE;
+            Py_DECREF(pdict);
+            return py_handle_list_output(x, pval); // decrefs pval, bangs result
         }
 
         py_error(x, "expected list output, got different type");
@@ -1725,6 +1728,7 @@ t_max_err py_handle_dict_output(t_py* x, PyObject* pdict)
 error:
     py_handle_error(x, "failed to handle dictionary output");
     Py_XDECREF(pval);
+    Py_XDECREF(pdict);
     // fail bang
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
@@ -1747,6 +1751,7 @@ t_max_err py_handle_output(t_py* x, PyObject* pval)
 
     if (pval == Py_None) {
         /* not an error */
+        Py_DECREF(pval);
         return MAX_ERR_NONE;
     }
 
@@ -1772,11 +1777,9 @@ t_max_err py_handle_output(t_py* x, PyObject* pval)
     }
 
     if (PyFunction_Check(pval)) {
-        return py_func_to_pyobj(x, "sig", pval);
-    }
-
-    if (Py_IsNone(pval)) {
-        return MAX_ERR_GENERIC;
+        t_max_err err = py_func_to_pyobj(x, "sig", pval); // borrows pval
+        Py_DECREF(pval);
+        return err;
     }
 
     // try to convert it repr(pval) string
@@ -1787,9 +1790,43 @@ t_max_err py_handle_output(t_py* x, PyObject* pval)
         return py_handle_string_output(x, rep);
     }
 
-    py_error(x, "cannot handle this Python value type");
+    py_handle_error(x, "cannot handle this Python value type");
+    py_bang_failure(x);
     return MAX_ERR_GENERIC;
-    
+}
+
+/**
+ * @brief Output a python call result and bang exactly once.
+ *
+ * @param x pointer to object struct
+ * @param pval python object: reference is consumed
+ * @return t_max_err error code
+ *
+ * py_handle_output bangs success or failure, except for None.
+ */
+static t_max_err py_handle_call_result(t_py* x, PyObject* pval)
+{
+    if (pval == Py_None) {
+        Py_DECREF(pval);
+        py_bang_success(x);
+        return MAX_ERR_NONE;
+    }
+    if (!PyUnicode_Check(pval)) {
+        return py_handle_output(x, pval);
+    }
+    // special case strings, which will cause crash if handled
+    // out of this methods's scope. (huge PITA to debug!)
+    const char* unicode_result = PyUnicode_AsUTF8(pval);
+    if (unicode_result == NULL) {
+        py_handle_error(x, "failed to convert result to utf-8");
+        Py_DECREF(pval);
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+    outlet_anything(x->p_outlet_left, gensym(unicode_result), 0, NIL);
+    Py_DECREF(pval);
+    py_bang_success(x);
+    return MAX_ERR_NONE;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -1827,7 +1864,7 @@ PyObject* py_atoms_to_list(t_py* x, long argc, t_atom* argv, int start_from)
             break;
         }
         case A_LONG: {
-            PyObject* p_long = PyLong_FromLong(atom_getlong(argv + i));
+            PyObject* p_long = PyLong_FromLongLong(atom_getlong(argv + i));
             if (p_long == NULL) {
                 goto error;
             }
@@ -1854,6 +1891,7 @@ PyObject* py_atoms_to_list(t_py* x, long argc, t_atom* argv, int start_from)
 
 error:
     py_error(x, "failed to convert atoms to Python list");
+    Py_XDECREF(plist);
     return NULL;
 }
 
@@ -1914,6 +1952,10 @@ static t_bool py_is_module_unsafe(const char* module_name)
 
 t_max_err py_import(t_py* x, t_symbol* s)
 {
+    if (s == gensym("")) {
+        return MAX_ERR_NONE;
+    }
+
     if (x->security.restrict_imports) {
         const char* module_name = s->s_name;
 
@@ -1933,19 +1975,18 @@ t_max_err py_import(t_py* x, t_symbol* s)
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
-    PyObject* x_module = NULL;
-
-    if (s != gensym("")) {
-        x_module = PyImport_ImportModule(s->s_name);
-        // x_module borrrowed ref
-        if (x_module == NULL) {
-            goto error;
-        }
-        PyDict_SetItemString(x->python.globals, s->s_name, x_module);
-        PyGILState_Release(gstate);
-        py_bang_success(x);
-        py_debug(x, "imported: %s", s->s_name);
+    PyObject* x_module = PyImport_ImportModule(s->s_name); // new
+    if (x_module == NULL) {
+        goto error;
     }
+    int res = PyDict_SetItemString(x->python.globals, s->s_name, x_module);
+    Py_DECREF(x_module);
+    if (res != 0) {
+        goto error;
+    }
+    PyGILState_Release(gstate);
+    py_bang_success(x);
+    py_debug(x, "imported: %s", s->s_name);
     return MAX_ERR_NONE;
 
 error:
@@ -1966,6 +2007,12 @@ error:
  */
 t_max_err py_eval(t_py* x, t_symbol* s, long argc, t_atom* argv)
 {
+    if (argc < 1) {
+        py_error(x, "eval needs an expression");
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
@@ -2004,6 +2051,12 @@ t_max_err py_eval(t_py* x, t_symbol* s, long argc, t_atom* argv)
  */
 t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
 {
+    if (argc < 1) {
+        py_error(x, "exec needs code to run");
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
@@ -2065,7 +2118,7 @@ t_max_err py_execfile(t_py* x, t_symbol* s)
         }
     }
 
-    if (s == gensym("") || x->editor.code_filepath == gensym("")) {
+    if (x->editor.code_filepath == gensym("")) {
         py_error(x, "failed to set file path");
         goto error;
     }
@@ -2073,7 +2126,7 @@ t_max_err py_execfile(t_py* x, t_symbol* s)
     // assume x->editor.code_filepath has be been set without errors
 
     py_debug(x, "pathname: %s", x->editor.code_filepath->s_name);
-    fhandle = fopen(x->editor.code_filepath->s_name, "r+");
+    fhandle = fopen(x->editor.code_filepath->s_name, "r");
 
     if (fhandle == NULL) {
         py_error(x, "failed to open file");
@@ -2202,7 +2255,7 @@ t_max_err py_cachefile(t_py* x, t_symbol* s)
         }
     }
 
-    if (s == gensym("") || x->editor.code_filepath == gensym("")) {
+    if (x->editor.code_filepath == gensym("")) {
         py_error(x, "failed to set file path");
         goto error;
     }
@@ -2210,7 +2263,7 @@ t_max_err py_cachefile(t_py* x, t_symbol* s)
     // assume x->editor.code_filepath has be been set without errors
 
     py_debug(x, "pathname: %s", x->editor.code_filepath->s_name);
-    fhandle = fopen(x->editor.code_filepath->s_name, "r+");
+    fhandle = fopen(x->editor.code_filepath->s_name, "r");
 
     if (fhandle == NULL) {
         py_error(x, "failed to open file");
@@ -2366,7 +2419,7 @@ t_max_err py_assign(t_py* x, t_symbol* s, long argc, t_atom* argv)
     }
 
     // first atom in argv must be a symbol
-    if (argv->a_type != A_SYM) {
+    if (argc < 1 || argv->a_type != A_SYM) {
         py_error(x, "first argument must be a symbol");
         goto error;
 
@@ -2444,7 +2497,7 @@ t_max_err py_eval_text(t_py* x, long argc, t_atom* argv, long flags)
 
     co = Py_CompileString(new_text, x->obj.name->s_name, Py_eval_input);
 
-    if (PyErr_ExceptionMatches(PyExc_SyntaxError)) {
+    if (co == NULL && PyErr_ExceptionMatches(PyExc_SyntaxError)) {
         PyErr_Clear();
         // co = Py_CompileString(new_text, x->obj.name->s_name, Py_single_input);
         co = Py_CompileString(new_text, x->obj.name->s_name, Py_file_input);
@@ -2458,16 +2511,15 @@ t_max_err py_eval_text(t_py* x, long argc, t_atom* argv, long flags)
         goto error;
     }
 
-    // sysmem_freeptr(text);
-
     pval = PyEval_EvalCode(co, x->python.globals, x->python.globals);
+    Py_DECREF(co);
     if (pval == NULL) {
         goto error;
     }
-    Py_DECREF(co);
 
     if (!is_eval) {
         // bang for exec-type op
+        Py_DECREF(pval);
         PyGILState_Release(gstate);
         py_bang_success(x);
     } else {
@@ -2583,14 +2635,11 @@ void py_int(t_py* x, long value)
         return;
     }
 
-    t_max_err err = py_handle_output(x, result);
+    t_max_err err = py_handle_call_result(x, result); // bangs its own result
     PyGILState_Release(gstate);
 
     if (err != MAX_ERR_NONE) {
         py_error(x, "Could not output %s result to outlet", last_func);
-        py_bang_failure(x);
-    } else {
-        py_bang_success(x);
     }
 }
 
@@ -2675,14 +2724,11 @@ void py_float(t_py* x, double value)
         return;
     }
 
-    t_max_err err = py_handle_output(x, result);
+    t_max_err err = py_handle_call_result(x, result); // bangs its own result
     PyGILState_Release(gstate);
 
     if (err != MAX_ERR_NONE) {
         py_error(x, "Could not output %s result to outlet", last_func);
-        py_bang_failure(x);
-    } else {
-        py_bang_success(x);
     }
 }
 
@@ -2699,7 +2745,7 @@ void py_float(t_py* x, double value)
  */
 t_max_err py_anything(t_py* x, t_symbol* s, long argc, t_atom* argv)
 {
-    t_atom atoms[PY_MAX_ELEMS];
+    t_atom atoms_static[PY_MAX_ELEMS];
     int offset = 0;
 
     if (s == gensym("")) {
@@ -2714,40 +2760,30 @@ t_max_err py_anything(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     // handle quoted single symbol case
     if (argc == 0) {
-        atom_setsym(atoms, s);
-        return py_eval_text(x, 1, atoms,
+        atom_setsym(atoms_static, s);
+        return py_eval_text(x, 1, atoms_static,
             OBEX_UTIL_ATOM_GETTEXT_SYM_NO_QUOTE |
             OBEX_UTIL_ATOM_GETTEXT_NOESCAPE
         );
     }
 
     if (s != gensym("list")) {
-        // if not list set symbol as first atom in new atoms array
-        atom_setsym(atoms, s);
+        // if not list the symbol becomes the first atom
         offset = 1;
     }
 
-    for (int i = 0; i < argc; i++) {
-        switch ((argv + i)->a_type) {
-        case A_FLOAT: {
-            atom_setfloat((atoms + (i + offset)), atom_getfloat(argv + i));
-            break;
-        }
-        case A_LONG: {
-            atom_setlong((atoms + (i + offset)), atom_getlong(argv + i));
-            break;
-        }
-        case A_SYM: {
-            atom_setsym((atoms + (i + offset)), atom_getsym(argv + i));
-            break;
-        }
-        default:
-            py_debug(x, "cannot process unknown type");
-            break;
-        }
+    t_atom* atoms = atom_dynamic_start(atoms_static, PY_MAX_ELEMS, argc + offset);
+
+    if (offset) {
+        atom_setsym(atoms, s);
+    }
+    for (long i = 0; i < argc; i++) {
+        atoms[i + offset] = argv[i];
     }
 
-    return py_eval_text(x, argc + offset, atoms, OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
+    t_max_err err = py_eval_text(x, argc + offset, atoms, OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
+    atom_dynamic_end(atoms_static, atoms);
+    return err;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -2794,25 +2830,11 @@ t_max_err py_func_to_list(t_py* x, const char* pyfunc_name, t_symbol* s, long ar
         goto error;
     }
 
-    Py_XDECREF(plist);
+    Py_DECREF(plist);
 
-    if (!PyUnicode_Check(pval)) {
-        py_handle_output(x, pval); // this decrefs pval
-    } else {
-        // special case strings, which will cause crash if handled
-        // out of this methods's scope. (huge PITA to debug!)
-        const char* unicode_result = PyUnicode_AsUTF8(pval);
-        if (unicode_result == NULL) {
-            goto error;
-        }
-        outlet_anything(x->p_outlet_left, gensym(unicode_result), 0, NIL);
-        py_bang_success(x);
-        Py_XDECREF(pval);
-    }
-
+    t_max_err err = py_handle_call_result(x, pval);
     PyGILState_Release(gstate);
-    py_bang_success(x);
-    return MAX_ERR_NONE;
+    return err;
 
 error:
     py_handle_error(x, "Python function '%s' call failed", pyfunc_name);
@@ -2855,11 +2877,11 @@ t_max_err py_func_to_atoms(t_py* x, const char* pyfunc_name, t_symbol* s, long a
 
     // convert list to tuple
     ptuple = PySequence_Tuple(plist);
-    if (plist == NULL) {
+    if (ptuple == NULL) {
          py_error(x, "failed to convert Python list to tuple");
          goto error;
     }
-    Py_XDECREF(plist);
+    Py_CLEAR(plist);
 
     // depends on definition in py_prelude.h
     pyfunc = PyDict_GetItemString(x->python.globals, pyfunc_name);
@@ -2875,24 +2897,10 @@ t_max_err py_func_to_atoms(t_py* x, const char* pyfunc_name, t_symbol* s, long a
         goto error;
     }
 
-    if (!PyUnicode_Check(pval)) {
-        py_handle_output(x, pval); // this decrefs pval
-    } else {
-        // special case strings, which will cause crash if handled
-        // out of this methods's scope. (huge PITA to debug!)
-        const char* unicode_result = PyUnicode_AsUTF8(pval);
-        if (unicode_result == NULL) {
-            goto error;
-        }
-        outlet_anything(x->p_outlet_left, gensym(unicode_result), 0, NIL);
-        py_bang_success(x);
-        Py_XDECREF(pval);
-    }
-
-    Py_XDECREF(ptuple);
+    Py_DECREF(ptuple);
+    t_max_err err = py_handle_call_result(x, pval);
     PyGILState_Release(gstate);
-    py_bang_success(x);
-    return MAX_ERR_NONE;
+    return err;
 
 error:
     py_handle_error(x, "Python function '%s' call failed", pyfunc_name);
@@ -2936,23 +2944,9 @@ t_max_err py_func_to_pyobj(t_py* x, const char* pyfunc_name, PyObject* obj)
         goto error;
     }
 
-    if (!PyUnicode_Check(pval)) {
-        py_handle_output(x, pval); // this decrefs pval
-    } else {
-        // special case strings, which will cause crash if handled
-        // out of this methods's scope. (huge PITA to debug!)
-        const char* unicode_result = PyUnicode_AsUTF8(pval);
-        if (unicode_result == NULL) {
-            goto error;
-        }
-        outlet_anything(x->p_outlet_left, gensym(unicode_result), 0, NIL);
-        py_bang_success(x);
-        Py_XDECREF(pval);
-    }
-
+    t_max_err err = py_handle_call_result(x, pval);
     PyGILState_Release(gstate);
-    py_bang_success(x);
-    return MAX_ERR_NONE;
+    return err;
 
 error:
     py_handle_error(x, "Python function '%s' call failed", pyfunc_name);
@@ -2982,25 +2976,26 @@ t_max_err py_func_to_text(t_py* x, const char* pyfunc_name, t_symbol* s, long ar
 
     long textsize = 0;
     char* text = NULL;
-    t_max_err err;
     PyObject* pyfunc = NULL;
     PyObject* pval = NULL;
     PyObject* pstr = NULL;
 
-    err = atom_gettext(argc, argv, &textsize, &text,
-                       OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
-    if (err != MAX_ERR_NONE || !textsize || !text) {
+    t_max_err text_err = atom_gettext(argc, argv, &textsize, &text,
+                                      OBEX_UTIL_ATOM_GETTEXT_DEFAULT);
+    if (text_err != MAX_ERR_NONE || !textsize || !text) {
         py_error(x, "failed to convert atom to text");
+        if (text) {
+            sysmem_freeptr(text);
+        }
         goto error;
     }
 
     pstr = PyUnicode_FromString(text);
+    sysmem_freeptr(text);
     if (pstr == NULL) {
         py_error(x, "failed to convert C string to Python unicode");
         goto error;
     }
-
-    sysmem_freeptr(text);
 
     // depends on definition in py_prelude.h
     pyfunc = PyDict_GetItemString(x->python.globals, pyfunc_name);
@@ -3016,24 +3011,10 @@ t_max_err py_func_to_text(t_py* x, const char* pyfunc_name, t_symbol* s, long ar
         goto error;
     }
 
-    if (!PyUnicode_Check(pval)) {
-        py_handle_output(x, pval); // this decrefs pval
-    } else {
-        // special case strings, which will cause crash if handled
-        // out of this methods's scope. (huge PITA to debug!)
-        const char* unicode_result = PyUnicode_AsUTF8(pval);
-        if (unicode_result == NULL) {
-            goto error;
-        }
-        outlet_anything(x->p_outlet_left, gensym(unicode_result), 0, NIL);
-        py_bang_success(x);
-        Py_XDECREF(pval);
-    }
-
-    Py_XDECREF(pstr);
+    Py_DECREF(pstr);
+    t_max_err err = py_handle_call_result(x, pval);
     PyGILState_Release(gstate);
-    py_bang_success(x);
-    return MAX_ERR_NONE;
+    return err;
 
 error:
     py_handle_error(x, "Python function '%s' call failed", pyfunc_name);
@@ -3218,16 +3199,14 @@ t_max_err py_call(t_py* x, t_symbol* s, long argc, t_atom* argv)
             return MAX_ERR_GENERIC;
         }
 
-        t_max_err err = py_handle_output(x, result);
+        t_max_err err = py_handle_call_result(x, result); // bangs its own result
         PyGILState_Release(gstate);
 
         if (err != MAX_ERR_NONE) {
             py_error(x, "Could not output %s result to outlet", func_name);
-            py_bang_failure(x);
             return MAX_ERR_GENERIC;
         }
 
-        py_bang_success(x);
         return MAX_ERR_NONE;
     }
 
@@ -3346,10 +3325,8 @@ t_max_err py_send(t_py* x, t_symbol* s, long argc, t_atom* argv)
         goto error;
     }
 
-    // if registry is empty, scan it
-    if (hashtab_getsize(py_global_registry) == 0) {
-        py_scan(x);
-    }
+    // rescan on every send: stored pointers go stale when boxes are deleted
+    py_scan(x);
 
     // // lookup name in registry
     err = hashtab_lookup(py_global_registry, gensym(obj_name), &obj);
@@ -3398,15 +3375,8 @@ t_max_err py_send(t_py* x, t_symbol* s, long argc, t_atom* argv)
         break;
     }
     default:
-        py_debug(x, "cannot process unknown type");
-        break;
-    }
-
-    // methods to get method type
-    t_messlist* messlist = object_mess(obj, msg_sym);
-    if (messlist) {
-        post("messlist->m_sym  (name of msg): %s", messlist->m_sym->s_name);
-        post("messlist->m_type (type of msg): %d", messlist->m_type[0]);
+        py_error(x, "cannot process unknown type");
+        goto error;
     }
 
     err = object_method_typed(obj, msg_sym, argc, argv, NULL);
@@ -3470,12 +3440,12 @@ void py_doread(t_py* x, t_symbol* s, long argc, t_atom* argv)
     short err;
     t_filehandle fh;
 
-    py_locate_path_from_symbol(x, s);
+    if (py_locate_path_from_symbol(x, s) != MAX_ERR_NONE) {
+        return;
+    }
     err = path_opensysfile(x->editor.code_filename, x->editor.code_path, &fh, READ_PERM);
     if (!err) {
-        sysfile_readtextfile(fh, x->editor.code, 0, TEXT_LB_NATIVE);
-        // sysfile_readtextfile(fh, x->p_code, 0,
-        //                      TEXT_LB_UNIX | TEXT_NULL_TERMINATE);
+        sysfile_readtextfile(fh, x->editor.code, 0, TEXT_LB_NATIVE | TEXT_NULL_TERMINATE);
         sysfile_close(fh);
         x->editor.code_size = sysmem_handlesize(x->editor.code);
     }
@@ -3494,8 +3464,8 @@ void py_run(t_py* x)
 
     PyObject* pval = NULL;
 
-    if ((*(x->editor.code) != NULL) && (*(x->editor.code)[0] == '\0')) {
-        // is empty string
+    if (*(x->editor.code) == NULL || (*(x->editor.code))[0] == '\0') {
+        py_error(x, "no code to run");
         goto error;
     }
 

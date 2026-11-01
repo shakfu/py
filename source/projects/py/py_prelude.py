@@ -28,6 +28,28 @@ EDITOR = "Sublime Text"
 # private utilities
 
 
+def __resolve(name: str, gdict: dict) -> Any:
+    """returns the object a name or dotted name refers to, without eval"""
+    import builtins
+
+    first, *rest = name.split(".")
+    if first in gdict:
+        obj = gdict[first]
+    elif hasattr(builtins, first):
+        obj = getattr(builtins, first)
+    else:
+        raise LookupError(name)
+    for part in rest:
+        # private attributes are the usual route out of a namespace
+        if not part.isidentifier() or part.startswith("_"):
+            raise LookupError(name)
+        try:
+            obj = getattr(obj, part)
+        except AttributeError:
+            raise LookupError(name) from None
+    return obj
+
+
 def __to_val(elem: Any, gdict: Optional[dict] = None) -> Any:
     if not gdict:
         gdict = globals()
@@ -45,10 +67,12 @@ def __to_val(elem: Any, gdict: Optional[dict] = None) -> Any:
             # First try safe literal evaluation
             val = ast.literal_eval(elem)
         except (ValueError, SyntaxError):
-            # Only allow simple variable lookup if it's a valid identifier
-            if elem.isidentifier() and elem in gdict:
-                val = gdict[elem]
-            else:
+            # builtins are excluded: a plain string such as 'max' stays a string
+            try:
+                if elem.split(".")[0] not in gdict:
+                    raise LookupError(elem)
+                val = __resolve(elem, gdict)
+            except LookupError:
                 # For safety, return the string as-is rather than eval
                 print(f"Warning: Cannot safely evaluate '{elem}', returning as string")
                 return elem
@@ -64,24 +88,13 @@ def __to_fn(s: str, gdict: Optional[dict] = None) -> Callable:
     if not gdict:
         gdict = globals()
 
-    # Security: only allow valid identifiers to prevent code injection
-    if not s.isidentifier():
-        raise ValueError(f"Function name '{s}' is not a valid identifier")
-
-    # Check in provided globals first
-    if s in gdict:
-        fn = gdict[s]
-        if callable(fn):
-            return fn
-
-    # Check in builtins for common safe functions
-    import builtins
-    if hasattr(builtins, s):
-        fn = getattr(builtins, s)
-        if callable(fn):
-            return fn
-
-    raise ValueError(f"Function '{s}' not defined")
+    try:
+        fn = __resolve(s, gdict)
+    except LookupError:
+        raise ValueError(f"Function '{s}' not defined") from None
+    if not callable(fn):
+        raise ValueError(f"'{s}' is not callable")
+    return fn
 
 
 def __analyze(s: str, gdict: Optional[dict] = None) -> tuple[list[Callable], list[Any], list[tuple[Any, Any]]]:
@@ -104,11 +117,9 @@ def __analyze(s: str, gdict: Optional[dict] = None) -> tuple[list[Callable], lis
             try:
                 value = ast.literal_eval(v)
             except (ValueError, SyntaxError):
-                # If it's a valid identifier, try variable lookup
-                if v.strip().isidentifier() and v.strip() in gdict:
-                    value = gdict[v.strip()]
-                else:
-                    # Fall back to string value
+                try:
+                    value = __resolve(v.strip(), gdict)
+                except LookupError:
                     value = v
             kwargs.append((key, value))
         else:
@@ -118,20 +129,9 @@ def __analyze(s: str, gdict: Optional[dict] = None) -> tuple[list[Callable], lis
                 # First try literal evaluation
                 elem = ast.literal_eval(str_arg)
             except (ValueError, SyntaxError):
-                # If it's a valid identifier, try variable/function lookup
-                if str_arg.isidentifier():
-                    if str_arg in gdict:
-                        elem = gdict[str_arg]
-                    else:
-                        # Check builtins for safe functions
-                        import builtins
-                        if hasattr(builtins, str_arg):
-                            elem = getattr(builtins, str_arg)
-                        else:
-                            # Default to string value
-                            elem = str_arg
-                else:
-                    # Default to string value
+                try:
+                    elem = __resolve(str_arg, gdict)
+                except LookupError:
                     elem = str_arg
 
             if callable(elem):

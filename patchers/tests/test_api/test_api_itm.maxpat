@@ -347,9 +347,7 @@
                         "autoload": 0,
                         "debug": 1,
                         "file": "/Volumes/Minx/Users/sa/projects/py/examples/tests/test_api_itm.py",
-                        "pythonpath": "/",
-                        "restrict_file_access": 1407374883553280000,
-                        "restrict_imports": -8646911284551352320
+                        "pythonpath": "/"
                     },
                     "text": "py",
                     "varname": "__main__"

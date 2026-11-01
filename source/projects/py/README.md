@@ -84,8 +84,8 @@ Download codesigned and notarized externals from [releases](https://github.com/s
 
 **Requirements:**
 
-- macOS: Xcode, Python 3.8-3.13, Cython (`pip install cython`)
-- Windows: Visual Studio, Python 3.8-3.13 from python.org
+- macOS: Xcode, Python 3.10-3.15, Cython (`pip install cython`)
+- Windows: Visual Studio, Python 3.10-3.15 from python.org
 
 **Quick Build (linked to system Python):**
 
@@ -287,7 +287,8 @@ The `py` external consists of three integrated components:
 - Pure Python utility functions available in every `py` instance
 - Provides Max-friendly function calling syntax
 - Includes functional programming utilities (`pipe`, `fold`, `compose`)
-- **Auto-generated**: Compiled into `py_prelude.h` during build
+- **Auto-generated**: `scripts/py2c.py` converts it and `py_prelude_legacy.py` into `py_prelude.h`
+- **Two versions**: `py_prelude_legacy.py` (`eval`, default) and `py_prelude.py` (name lookup, with `-DRESTRICTED_PYTHON=ON`)
 
 ### 3. API Module (`api.pyx`)
 
@@ -526,7 +527,7 @@ make test-shared-pkg      # Test specific variant
 
 ### Compatibility Notes
 
-**Python Versions:** 3.8.20, 3.9.22, 3.10.17, 3.11.12, 3.12.10, 3.13.3 tested
+**Python Versions:** 3.8.20, 3.9.22, 3.10.17, 3.11.12, 3.12.10, 3.13.3, 3.15.2 tested
 **Max Versions:** Max 8 and Max 9 supported
 **Platforms:** macOS (mature), Windows (experimental)
 

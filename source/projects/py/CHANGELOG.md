@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `py_prelude_legacy.py`, which uses `eval` so inline expressions such as `pipe 10+1 f` work. It is now the default prelude. Building with `-DRESTRICTED_PYTHON=ON` selects `py_prelude.py`, which resolves names without `eval`. Both over a single prelude because expressions need `eval` and name lookup alone cannot provide them. `RESTRICTED_PYTHON` is not a security boundary: `eval` and `shell` stay callable.
+
+- Added Python 3.15 to `buildpy.py`. On 3.15 the hand-compiled `pyexpat` drops `-DXML_DEV_URANDOM`, which fails on the new `random_dev_urandom.h` header. Static builds still compile expat into `libpython`, because the externals do not link `libexpat.a`. `_math_integer` is added so `math.integer` works.
+
 ### Fixed
+
+- Fixed dotted names in `py_prelude.py`: `call math.sqrt 16` returned `None` and `fold operator.add 1 2 3` returned `[]`, because the name stayed a string and no function was found. Private attributes are rejected.
+
+- Fixed memory-safety defects in `py.c`: use-after-free when logging every Python error, stack overflows from messages of 1024+ atoms and from sequences whose `__len__` understates `__iter__`, a double decref when `product` fails, and unterminated editor text from `read`.
+
+- Fixed memory-safety defects in `api.pyx`: format-string use of `post`, `error` and the logging methods, `strcpy` overflow on non-ASCII text, unchecked `Atom` indexes, heap corruption in `Path.sysfile_write`, `Matrix.set_long_data` overrun, and double frees of objects stored in `Dictionary`, `Hashtab` and `List`. A failed `Buffer` lock now raises and is no longer unlocked.
+
+- Changed success bangs: each message now bangs once. Calls previously banged up to three times, and also banged success after failed output. `sched` also accepts a delay of 0.
+
+- Changed `api` calls to act on the calling `py` object by its module name, over the newest instance. Code in a separately imported module still resolves to the newest instance.
+
+- Changed `Matrix` buffer format to `B` for char and `i` for long: `l` is 8 bytes on 64-bit platforms and cells are 4. Multi-plane matrices now export planes as a final dimension.
 
 #### Critical Bugs
 - **Multichannel buffer support (GitHub issue #19)**: Fixed `np.asarray(buf)` returning incorrect number of samples for multichannel buffers. The Buffer class now properly handles n-channel buffers:
