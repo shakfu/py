@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_clipboard.h -- system clipboard (implemented in py_clipboard.mm). */
 
 #pragma once

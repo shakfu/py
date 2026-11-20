@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_path.cpp -- see py_path.h. */
 
 #include "py_path.h"

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_code.cpp -- `py_code`: in-patch Python editor for the `py` object.
  *
  * UI and glue only. Text, caret and undo live in `py_buffer`; parsing,
@@ -12,9 +12,11 @@
  * the patch cord untouched (no Max message parsing in between).
  *
  * Keys: Shift-Return line, Cmd-Return top-level block, Cmd-Shift-Return all.
- * A selection always wins. Derived from `sc_code` (sc3-tilde) by the same
- * author; the SuperCollider-specific parts (sclang lexer, regions, class
- * index, call aid) are replaced or dropped.
+ * A selection always wins.
+ *
+ * Derived from `sc_code` by Gustavo (gus74vv/sc3-tilde, GPL-3.0-only); see
+ * LICENSE.md in this directory. The SuperCollider parts (sclang lexer,
+ * regions, class index, call aid) are replaced or dropped.
  */
 
 #include "ext.h"

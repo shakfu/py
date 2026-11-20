@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_snip.h -- snippets file: evaluating exactly `snip.KEY` inserts KEY's body.
  *
  * Format (UTF-8, no escapes): a line `### key` (key = [A-Za-z0-9_]+) starts an

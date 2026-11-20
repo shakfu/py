@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_filedialog.h -- save/open panels for `.py` files.
  *
  * NSSavePanel/NSOpenPanel directly, not the SDK `saveas_dialog`: Max maps

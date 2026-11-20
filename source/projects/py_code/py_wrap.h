@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_wrap.h -- soft wrap at the box width, no Max dependency.
  *
  * One cell = one code point (monospace font). Rows are numbered globally, so

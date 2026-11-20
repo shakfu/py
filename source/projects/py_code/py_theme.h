@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_theme.h -- named color presets for `@theme`.
  *
  * 21 roles, one per color attribute, in the order the object copies them.

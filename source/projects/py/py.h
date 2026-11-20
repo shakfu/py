@@ -100,7 +100,7 @@ t_max_err py_eval_text(t_py* x, long argc, t_atom* argv, long flags);
 
 /* security helpers */
 
-t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval);
+t_max_err py_validate_code(t_py* x, const char* code);
 PyObject* py_safe_run_string(t_py* x, const char* code, int mode);
 
 /* api module helpers */

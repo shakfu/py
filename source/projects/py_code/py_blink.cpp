@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_blink.cpp -- see py_blink.h. */
 
 #include "py_blink.h"

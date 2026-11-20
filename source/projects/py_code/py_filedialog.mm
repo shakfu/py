@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_filedialog.mm -- NSSavePanel/NSOpenPanel for `.py` files.
  *
  * Not ARC: Max loads the bundle into its own process, so every call runs in an

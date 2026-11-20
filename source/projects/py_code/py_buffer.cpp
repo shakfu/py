@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_buffer.cpp -- see py_buffer.h. */
 
 #include "py_buffer.h"

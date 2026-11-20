@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_scroll.h -- vertical scroll geometry, no Max dependency.
  *
  * `y` is the content offset in pixels (0 = top). Content height includes the

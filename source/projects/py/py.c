@@ -899,10 +899,9 @@ uintptr_t py_get_object_ref(void)
  *
  * @param x pointer to object struct
  * @param code code string to validate
- * @param is_eval true if eval mode, false if exec mode
  * @return t_max_err validation result
  */
-t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval)
+t_max_err py_validate_code(t_py* x, const char* code)
 {
     if (!code) {
         return MAX_ERR_GENERIC;
@@ -914,17 +913,6 @@ t_max_err py_validate_code(t_py* x, const char* code, t_bool is_eval)
             if (strstr(code, PY_DANGEROUS_PATTERNS[i])) {
                 py_error(x, "dangerous code pattern detected: %s",
                          PY_DANGEROUS_PATTERNS[i]);
-                return MAX_ERR_GENERIC;
-            }
-        }
-    }
-
-    // Additional validation for eval mode
-    if (is_eval) {
-        // Check for statements that should only be in exec mode
-        for (int i = 0; PY_EXEC_ONLY_STATEMENTS[i]; i++) {
-            if (strstr(code, PY_EXEC_ONLY_STATEMENTS[i])) {
-                py_error(x, "statement '%s' not allowed in eval mode", PY_EXEC_ONLY_STATEMENTS[i]);
                 return MAX_ERR_GENERIC;
             }
         }
@@ -2020,7 +2008,7 @@ t_max_err py_eval(t_py* x, t_symbol* s, long argc, t_atom* argv)
     py_debug(x, "%s %s", s->s_name, py_argv);
 
     // Input validation
-    if (py_validate_code(x, py_argv, 1) != MAX_ERR_NONE) {
+    if (py_validate_code(x, py_argv) != MAX_ERR_NONE) {
         py_error(x, "eval input failed security validation");
         PyGILState_Release(gstate);
         py_bang_failure(x);
@@ -2069,7 +2057,7 @@ t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
     }
 
     // Input validation
-    if (py_validate_code(x, py_argv, 0) != MAX_ERR_NONE) {
+    if (py_validate_code(x, py_argv) != MAX_ERR_NONE) {
         py_error(x, "exec input failed security validation");
         goto error;
     }
@@ -2206,7 +2194,7 @@ t_max_err py_cache(t_py* x, t_symbol* s, long argc, t_atom* argv)
     }
 
     // Input validation
-    if (py_validate_code(x, py_argv, 0) != MAX_ERR_NONE) {
+    if (py_validate_code(x, py_argv) != MAX_ERR_NONE) {
         py_error(x, "exec input failed security validation");
         goto error;
     }
@@ -3554,7 +3542,7 @@ t_max_err py_edsave(t_py* x, char** text, long size)
         py_debug(x, "run-on-save activated");
 
         // Input validation before execution
-        if (py_validate_code(x, *text, 0) != MAX_ERR_NONE) {
+        if (py_validate_code(x, *text) != MAX_ERR_NONE) {
             py_error(x, "editor save: code validation failed");
             goto error;
         }

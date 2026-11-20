@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `eval` rejecting valid expressions that contain `=`, `import `, `from `, `def ` or `class ` as text, such as `f(a=1)`, `x == 1` or `'from here'`. The check matched substrings regardless of `security_mode`. It was removed because `eval` already compiles with `Py_eval_input`, which rejects every statement with a `SyntaxError`.
+
+- Raised the `eval` input limit from 1024 characters to `PY_MAX_CODE_LENGTH` (65536), the `exec` limit, so long expressions from `py_code` are accepted.
+
 - Fixed dotted names in `py_prelude.py`: `call math.sqrt 16` returned `None` and `fold operator.add 1 2 3` returned `[]`, because the name stayed a string and no function was found. Private attributes are rejected.
 
 - Fixed memory-safety defects in `py.c`: use-after-free when logging every Python error, stack overflows from messages of 1024+ atoms and from sequences whose `__len__` understates `__iter__`, a double decref when `product` fails, and unterminated editor text from `read`.

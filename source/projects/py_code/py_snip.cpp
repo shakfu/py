@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_snip.cpp -- see py_snip.h. */
 
 #include "py_snip.h"

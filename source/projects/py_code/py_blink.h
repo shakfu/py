@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_blink.h -- fade of the evaluated block: state and opacity curve (InCubic,
  * 1 -> 0 over `@blinkduration` ms). The object repaints every kStep ms. */
 

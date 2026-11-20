@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_buffer.h -- UTF-8 text buffer of `py_code`.
  *
  * Invariants:

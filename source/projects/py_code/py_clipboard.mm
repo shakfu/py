@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_clipboard.mm -- system clipboard through NSPasteboard. The Max SDK has no
  * clipboard API. Not ARC: explicit @autoreleasepool and release. */
 

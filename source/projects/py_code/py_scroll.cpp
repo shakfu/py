@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_scroll.cpp -- see py_scroll.h. */
 
 #include "py_scroll.h"

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_path.h -- path handling for Finder drops and `@snippets`.
  *
  *   - `path_to_posix` drops Max's volume prefix (`Macintosh HD:/Users/...`).

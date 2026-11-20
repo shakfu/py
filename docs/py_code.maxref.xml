@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<?xml-stylesheet href="./_c74_ref.xsl" type="text/xsl"?>
+
+<c74object name="py_code" module="max" category="Python">
+	<digest>Python code editor for py</digest>
+	<description>
+		An in-patch Python editor with tree-sitter syntax highlighting, auto-indent, bracket matching, undo, completion and snippets. Each evaluation leaves its outlet as one <m>exec</m> or <m>eval</m> message; connect it to <o>py</o>. The text is saved with the patch.
+	</description>
+
+	<!--METADATA-->
+	<metadatalist>
+		<metadata name="author">shakfu</metadata>
+		<metadata name="tag">Python</metadata>
+		<metadata name="tag">User Interface</metadata>
+		<metadata name="tag">live coding</metadata>
+	</metadatalist>
+
+	<!--INLETS-->
+	<inletlist>
+		<inlet id="0" type="message">
+			<digest>Messages and attributes</digest>
+			<description>Receives <m>theme</m>, <m>themes</m>, <m>snippets</m>, <m>scrollspeed</m> and attribute messages.</description>
+		</inlet>
+	</inletlist>
+
+	<!--OUTLETS-->
+	<outletlist>
+		<outlet id="0" type="symbol">
+			<digest><m>exec</m> or <m>eval</m> code, to <o>py</o></digest>
+			<description>The code goes as one symbol, so line breaks, commas, semicolons and quotes reach <o>py</o> intact. A single expression is sent as <m>eval</m>, so <o>py</o> outputs its value; statements are sent as <m>exec</m>, and <o>py</o> bangs on success.</description>
+		</outlet>
+	</outletlist>
+
+	<!--ARGUMENTS-->
+	<objarglist />
+
+	<!--MESSAGES-->
+	<methodlist>
+		<method name="(keyboard)">
+			<arglist />
+			<digest>Edit and evaluate</digest>
+			<description>
+				Click the box to give it the focus, then:
+				<br />Shift+Return: evaluate the current line.
+				<br />Cmd+Return: evaluate the selection, else the top-level statement under the caret (a whole function or class, with its decorators), else the line.
+				<br />Cmd+Shift+Return: evaluate the whole text.
+				<br />Indented code is dedented before it is sent, so a line inside a function can be run alone.
+				<br />Return: new line, indented one level after a colon, one level less after return, pass, break, continue or raise, and inside open brackets either one level in or aligned with the first argument.
+				<br />Typing else:, elif, except or finally, or a closing bracket at the start of a line, moves the line back to its block.
+				<br />Tab: insert the completion candidate, else indent. Shift+Tab: next candidate, else outdent. Esc: close the candidate.
+				<br />Cmd+Z, Cmd+Shift+Z: undo, redo. Cmd+X, Cmd+C, Cmd+V, Cmd+A: cut, copy, paste, select all.
+			</description>
+		</method>
+		<method name="(mouse)">
+			<arglist />
+			<digest>Select, scroll, context menu</digest>
+			<description>Click and drag to select; double-click selects a word, triple-click a line. The wheel or trackpad scrolls (see <at>scrollspeed</at>). Right-click opens a menu: Undo, Redo, Cut, Copy, Paste, Delete, Select All, Save to .py and Load from .py. Saving or loading sets <at>file</at> to the chosen path.</description>
+		</method>
+		<method name="(drag)">
+			<arglist />
+			<digest>Drop files to insert their paths</digest>
+			<description>Dropping files from the Finder inserts each absolute path as a double-quoted Python string at the caret.</description>
+		</method>
+		<method name="theme">
+			<arglist><arg name="name" type="symbol" optional="0" /></arglist>
+			<digest>Apply a color preset</digest>
+			<description>Same as setting <at>theme</at>.</description>
+		</method>
+		<method name="themes">
+			<arglist />
+			<digest>List the presets</digest>
+			<description>Posts the preset names and the one in use to the Max console.</description>
+		</method>
+		<method name="snippets">
+			<arglist><arg name="path" type="symbol" optional="1" /></arglist>
+			<digest>Load a snippets file</digest>
+			<description>Loads a text file of entries, each starting with a line <m>### key</m> and followed by its body verbatim. Evaluating exactly <m>snip.key</m> replaces it with the body (one undo step) and sends nothing. The file is reloaded when it changes. With no path, snippets are cleared.</description>
+		</method>
+		<method name="scrollspeed">
+			<arglist><arg name="speed" type="float" optional="0" /></arglist>
+			<digest>Set the scroll speed</digest>
+			<description>Same as setting <at>scrollspeed</at>.</description>
+		</method>
+	</methodlist>
+
+	<!--ATTRIBUTES-->
+	<attributelist>
+		<attribute name="theme" get="1" set="1" type="symbol" size="1">
+			<digest>Color preset</digest>
+			<description>Copies a preset over the 21 color attributes: onedark (default), catppuccin, dracula, nord, gruvbox, monokai, solarized. Names ignore case, spaces, - and _. A color attribute set in the box overrides the preset.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="enum" /></attributelist>
+		</attribute>
+		<attribute name="fontsize" get="1" set="1" type="float" size="1">
+			<digest>Font size</digest>
+			<description>Menlo, in points, clamped to 6-48. Default 12.</description>
+		</attribute>
+		<attribute name="tabwidth" get="1" set="1" type="int" size="1">
+			<digest>Indent width</digest>
+			<description>Spaces per indent level, for Tab, Shift+Tab and auto-indent, clamped to 1-16. Default 4.</description>
+		</attribute>
+		<attribute name="linenumbers" get="1" set="1" type="int" size="1">
+			<digest>Show line numbers</digest>
+			<description>Line-number gutter. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="readonly" get="1" set="1" type="int" size="1">
+			<digest>Read-only</digest>
+			<description>Disables editing. Navigation, copy and evaluation still work. Default 0.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="autoclose" get="1" set="1" type="int" size="1">
+			<digest>Auto-close brackets and quotes</digest>
+			<description>Inserts the closing ) ] } or quote. A quote after a word does not pair (<m>don't</m>) unless the word is a string prefix (<m>f"</m>, <m>rb'</m>); a third quote closes as a triple. Typing a closer over the same character moves past it. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="wrap" get="1" set="1" type="int" size="1">
+			<digest>Wrap lines</digest>
+			<description>Wraps lines at the box width. 0 keeps one row per line. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="matchbrackets" get="1" set="1" type="int" size="1">
+			<digest>Highlight matching bracket</digest>
+			<description>Highlights the bracket paired with the one next to the caret. Brackets inside strings and comments never match. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="titlebar" get="1" set="1" type="int" size="1">
+			<digest>Show title strip</digest>
+			<description>A strip at the top labelled python. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="completion" get="1" set="1" type="int" size="1">
+			<digest>Show completion bar</digest>
+			<description>Reserves a line at the bottom. After three letters it shows the best candidate from the document's names and Python keywords and builtins; Tab inserts it, Shift+Tab cycles. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="autoload" get="1" set="1" type="int" size="1">
+			<digest>Read file when set</digest>
+			<description>Reads <at>file</at> into the editor when the attribute is set. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="autowrite" get="1" set="1" type="int" size="1">
+			<digest>Write file after edits</digest>
+			<description>Writes the text to <at>file</at> 400 ms after the last edit, and when the object is deleted. Default 0.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="blink" get="1" set="1" type="int" size="1">
+			<digest>Flash evaluated code</digest>
+			<description>Flashes the evaluated span in <at>blinkcolor</at>. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="file" get="1" set="1" type="symbol" size="1">
+			<digest>Python file</digest>
+			<description>Path of a .py file. Read when set if <at>autoload</at> is on; written by <at>autowrite</at> and by Save in the context menu. Text saved with the patch wins over the file.</description>
+		</attribute>
+		<attribute name="snippets" get="1" set="1" type="symbol" size="1">
+			<digest>Snippets file</digest>
+			<description>Path of a snippets file (~ is expanded, one pair of quotes is dropped). See the <m>snippets</m> message.</description>
+		</attribute>
+		<attribute name="blinkduration" get="1" set="1" type="int" size="1">
+			<digest>Flash duration (ms)</digest>
+			<description>Clamped to 50-5000. Default 500.</description>
+		</attribute>
+		<attribute name="scrollspeed" get="1" set="1" type="float" size="1">
+			<digest>Wheel and trackpad speed</digest>
+			<description>Multiplies the scroll delta, clamped to 0.05-50. Default 3.</description>
+		</attribute>
+		<attribute name="bgcolor" get="1" set="1" type="float" size="4">
+			<digest>Background color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="textcolor" get="1" set="1" type="float" size="4">
+			<digest>Text color (names and other untagged text)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="selcolor" get="1" set="1" type="float" size="4">
+			<digest>Selection color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="caretcolor" get="1" set="1" type="float" size="4">
+			<digest>Caret and focus ring color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="curlinecolor" get="1" set="1" type="float" size="4">
+			<digest>Current line band (alpha 0 disables it)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="keywordcolor" get="1" set="1" type="float" size="4">
+			<digest>Keyword color (def, if, return, ...)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="builtincolor" get="1" set="1" type="float" size="4">
+			<digest>Builtin color (print, len, None, True, False)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="functioncolor" get="1" set="1" type="float" size="4">
+			<digest>Function name color (definitions and calls)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="classcolor" get="1" set="1" type="float" size="4">
+			<digest>Class color (Capitalized names, type annotations)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="decoratorcolor" get="1" set="1" type="float" size="4">
+			<digest>Decorator color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="stringcolor" get="1" set="1" type="float" size="4">
+			<digest>String color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="escapecolor" get="1" set="1" type="float" size="4">
+			<digest>Escape sequence and f-string brace color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="numbercolor" get="1" set="1" type="float" size="4">
+			<digest>Number and ALL_CAPS constant color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="selfcolor" get="1" set="1" type="float" size="4">
+			<digest>self and cls color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="commentcolor" get="1" set="1" type="float" size="4">
+			<digest>Comment color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="bracketcolor" get="1" set="1" type="float" size="4">
+			<digest>Bracket color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="operatorcolor" get="1" set="1" type="float" size="4">
+			<digest>Operator color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="matchcolor" get="1" set="1" type="float" size="4">
+			<digest>Matching bracket highlight</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="blinkcolor" get="1" set="1" type="float" size="4">
+			<digest>Evaluation flash color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="barcolor" get="1" set="1" type="float" size="4">
+			<digest>Completion bar background</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="barhighlight" get="1" set="1" type="float" size="4">
+			<digest>Completion candidate color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+	</attributelist>
+
+	<!--SEEALSO-->
+	<seealsolist>
+		<seealso name="py" />
+		<seealso name="textedit" />
+	</seealsolist>
+
+	<discussion>
+		<o>py_code</o> never runs Python: it only sends messages from its outlet. Expanding a <m>snip.key</m> sends nothing. The text, caret and scroll position are saved with the patch. <o>py_code</o> is derived from <o>sc_code</o> in gus74vv/sc3-tilde and is licensed GPL-3.0-only.
+	</discussion>
+</c74object>

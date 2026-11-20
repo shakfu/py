@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_complete.h -- completion candidates: `text + caret -> one candidate`.
  *
  * Sources: the document's identifiers (ranked by frequency), then Python

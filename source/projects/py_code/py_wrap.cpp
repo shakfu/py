@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_wrap.cpp -- see py_wrap.h. */
 
 #include "py_wrap.h"

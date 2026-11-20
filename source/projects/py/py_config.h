@@ -120,26 +120,6 @@ static const char* PY_DANGEROUS_PATTERNS[] = {
     NULL  // Terminator - do not remove
 };
 
-/**
- * @brief Statements only allowed in exec mode (not eval mode)
- *
- * These patterns are blocked when using the 'eval' method but allowed
- * in 'exec' method. This enforces the Python distinction between
- * expressions (eval) and statements (exec).
- */
-static const char* PY_EXEC_ONLY_STATEMENTS[] = {
-    "import ",
-    "from ",
-    "def ",
-    "class ",
-    "=",  // Assignment
-
-    // Add custom exec-only patterns here
-    // "your_exec_only_pattern",
-
-    NULL  // Terminator - do not remove
-};
-
 /*--------------------------------------------------------------------------*/
 /* Module Import Configuration */
 
@@ -297,11 +277,11 @@ static const char* PY_UNSAFE_MODULES[] = {
 /**
  * @brief Maximum length for eval expressions (characters)
  *
- * Eval expressions are typically shorter than full code blocks.
- * This provides additional protection for eval operations.
+ * Defaults to PY_MAX_CODE_LENGTH: an expression sent from an editor such as
+ * py_code can be as long as an exec block.
  */
 #ifndef PY_MAX_EVAL_LENGTH
-#define PY_MAX_EVAL_LENGTH 1024
+#define PY_MAX_EVAL_LENGTH PY_MAX_CODE_LENGTH
 #endif
 
 /**

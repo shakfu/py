@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-only
 /* py_theme.cpp -- see py_theme.h. */
 
 #include "py_theme.h"
