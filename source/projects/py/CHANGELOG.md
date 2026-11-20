@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `api.pyi`, a type stub for the built-in `api` module, so language servers can complete it; `api` is compiled into the external and has no source they can read. The build copies it to `py.mxo/Contents/Resources/stubs/`. `scripts/gen_api_stub.py` (`make stub`) generates it from `api.pyx` with Cython's parser, over a hand-written stub that would drift from 899 functions; the `py_api_stub` test fails when it is stale.
+
 - Added `py_prelude_legacy.py`, which uses `eval` so inline expressions such as `pipe 10+1 f` work. It is now the default prelude. Building with `-DRESTRICTED_PYTHON=ON` selects `py_prelude.py`, which resolves names without `eval`. Both over a single prelude because expressions need `eval` and name lookup alone cannot provide them. `RESTRICTED_PYTHON` is not a security boundary: `eval` and `shell` stay callable.
 
 - Added Python 3.15 to `buildpy.py`. On 3.15 the hand-compiled `pyexpat` drops `-DXML_DEV_URANDOM`, which fails on the new `random_dev_urandom.h` header. Static builds still compile expat into `libpython`, because the externals do not link `libexpat.a`. `_math_integer` is added so `math.integer` works.

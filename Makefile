@@ -7,9 +7,11 @@ PKG_NAME = py
 MAX_VERSIONS := 8 9
 
 CYTHON_OPTIONS := --timestamps -E INCLUDE_NUMPY=$(ENABLE_NUMPY) -X emit_code_comments=False
+# the interpreter Cython is installed in: gen_api_stub.py imports Cython
+CYTHON_PYTHON = $(shell head -1 "$$(command -v cython)" | cut -c3-)
 
 
-.phony: all build api clean setup update-submodules link test
+.phony: all build api stub clean setup update-submodules link test
 
 all: build
 
@@ -23,11 +25,14 @@ source/projects/py/api.c: source/projects/py/api.pyx
 	@echo "generating source/projects/py/api.c"
 	@cython -3 $(CYTHON_OPTIONS) $(API_MODULE)
 
-api: source/projects/py/api.c
+api: source/projects/py/api.c stub
+
+stub:
+	@$(CYTHON_PYTHON) $(PYDIR)/scripts/gen_api_stub.py
 
 test:
 	@cmake -S . -B build && \
-		cmake --build build --config Release --target py_code_tests && \
+		cmake --build build --config Release --target py_code_tests py_code_lsp_integration && \
 		cd build && ctest -C Release --output-on-failure
 
 clean:

@@ -4,7 +4,7 @@
 <c74object name="py_code" module="max" category="Python">
 	<digest>Python code editor for py</digest>
 	<description>
-		An in-patch Python editor with tree-sitter syntax highlighting, auto-indent, bracket matching, undo, completion and snippets. Each evaluation leaves its outlet as one <m>exec</m> or <m>eval</m> message; connect it to <o>py</o>. The text is saved with the patch.
+		An in-patch Python editor with tree-sitter syntax highlighting, auto-indent, bracket matching, undo, snippets, and completion, signature help and diagnostics from a language server. Each evaluation leaves its outlet as one <m>exec</m> or <m>eval</m> message; connect it to <o>py</o>. The text is saved with the patch.
 	</description>
 
 	<!--METADATA-->
@@ -47,7 +47,9 @@
 				<br />Indented code is dedented before it is sent, so a line inside a function can be run alone.
 				<br />Return: new line, indented one level after a colon, one level less after return, pass, break, continue or raise, and inside open brackets either one level in or aligned with the first argument.
 				<br />Typing else:, elif, except or finally, or a closing bracket at the start of a line, moves the line back to its block.
-				<br />Tab: insert the completion candidate, else indent. Shift+Tab: next candidate, else outdent. Esc: close the candidate.
+				<br />Tab after a name or a dot: open the completion popup (also opened by typing a dot while the language server is ready). In the popup: Up/Down select, Tab or Return accept, typing filters, Shift+Tab selects the previous item, Esc closes.
+				<br />Tab elsewhere: indent (every selected line when the selection spans lines). Shift+Tab: outdent.
+				<br />Up/Down move by visual row; PageUp/PageDown by a page; Cmd+Up/Down to the document start/end.
 				<br />Cmd+Z, Cmd+Shift+Z: undo, redo. Cmd+X, Cmd+C, Cmd+V, Cmd+A: cut, copy, paste, select all.
 			</description>
 		</method>
@@ -87,7 +89,7 @@
 	<attributelist>
 		<attribute name="theme" get="1" set="1" type="symbol" size="1">
 			<digest>Color preset</digest>
-			<description>Copies a preset over the 21 color attributes: onedark (default), catppuccin, dracula, nord, gruvbox, monokai, solarized. Names ignore case, spaces, - and _. A color attribute set in the box overrides the preset.</description>
+			<description>Copies a preset over the 23 color attributes: onedark (default), catppuccin, dracula, nord, gruvbox, monokai, solarized. Names ignore case, spaces, - and _. A color attribute set in the box overrides the preset.</description>
 			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="enum" /></attributelist>
 		</attribute>
 		<attribute name="fontsize" get="1" set="1" type="float" size="1">
@@ -129,9 +131,18 @@
 			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
 		</attribute>
 		<attribute name="completion" get="1" set="1" type="int" size="1">
-			<digest>Show completion bar</digest>
-			<description>Reserves a line at the bottom. After three letters it shows the best candidate from the document's names and Python keywords and builtins; Tab inserts it, Shift+Tab cycles. Default 1.</description>
+			<digest>Completion popup</digest>
+			<description>Enables the completion popup opened by Tab after a name or dot. Candidates come from the language server when it is ready (see <at>lsp</at>), else from the document's names and Python keywords and builtins. Default 1.</description>
 			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="statusbar" get="1" set="1" type="int" size="1">
+			<digest>Show the status line</digest>
+			<description>Reserves a line at the bottom. It shows the signature of the call at the caret, with the current parameter in <at>barhighlight</at>, else the diagnostic on the caret line. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="lsp" get="1" set="1" type="symbol" size="1">
+			<digest>Language server command</digest>
+			<description>Command that starts a Python language server, run through the login shell so the terminal PATH applies. <m>auto</m> (default) uses the first found of pylsp, basedpyright-langserver, pyright-langserver, jedi-language-server and ty. Empty turns the server off. Boxes with the same command share one server. The command is saved with the patch and runs when the patch opens.</description>
 		</attribute>
 		<attribute name="autoload" get="1" set="1" type="int" size="1">
 			<digest>Read file when set</digest>
@@ -260,12 +271,22 @@
 			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
 		</attribute>
 		<attribute name="barcolor" get="1" set="1" type="float" size="4">
-			<digest>Completion bar background</digest>
+			<digest>Status line and popup background</digest>
 			<description>RGBA. Default from <at>theme</at>.</description>
 			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
 		</attribute>
 		<attribute name="barhighlight" get="1" set="1" type="float" size="4">
-			<digest>Completion candidate color</digest>
+			<digest>Current parameter color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="errorcolor" get="1" set="1" type="float" size="4">
+			<digest>Error underline and message color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="warningcolor" get="1" set="1" type="float" size="4">
+			<digest>Warning underline and message color</digest>
 			<description>RGBA. Default from <at>theme</at>.</description>
 			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
 		</attribute>
@@ -278,6 +299,6 @@
 	</seealsolist>
 
 	<discussion>
-		<o>py_code</o> never runs Python: it only sends messages from its outlet. Expanding a <m>snip.key</m> sends nothing. The text, caret and scroll position are saved with the patch. <o>py_code</o> is derived from <o>sc_code</o> in gus74vv/sc3-tilde and is licensed GPL-3.0-only.
+		<o>py_code</o> never runs Python: it only sends messages from its outlet. Expanding a <m>snip.key</m> sends nothing. The text, caret and scroll position are saved with the patch. The language server sees the document as <at>file</at> when set, else as an unsaved temporary path; it resolves imports with its own Python environment, not the one embedded in <o>py</o>.
 	</discussion>
 </c74object>

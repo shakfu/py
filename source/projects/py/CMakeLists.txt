@@ -64,5 +64,23 @@ if(INCLUDE_API_MODULE AND REGEN_API_MODULE)
 endif()
 
 
+if(INCLUDE_API_MODULE)
+	# Type stub for the built-in `api` module: py_code passes it to its language server.
+	set(API_STUB_DIR $<TARGET_BUNDLE_DIR:${PROJECT_NAME}>/Contents/Resources/stubs)
+	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${API_STUB_DIR}
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/api.pyi ${API_STUB_DIR}/api.pyi
+	)
+endif()
+
+# api.pyi must match api.pyx; skipped (77) without Cython.
+find_program(CYTHON_PROGRAM cython)
+if(CYTHON_PROGRAM)
+	file(STRINGS ${CYTHON_PROGRAM} CYTHON_SHEBANG LIMIT_COUNT 1)
+	string(REGEX REPLACE "^#! *" "" CYTHON_PYTHON "${CYTHON_SHEBANG}")
+	add_test(NAME py_api_stub
+		COMMAND ${CYTHON_PYTHON} ${SCRIPTS}/gen_api_stub.py --check ${API_PYX_FILE} ${CMAKE_CURRENT_SOURCE_DIR}/api.pyi)
+	set_tests_properties(py_api_stub PROPERTIES SKIP_RETURN_CODE 77)
+endif()
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../max-sdk-base/script/max-posttarget.cmake)
