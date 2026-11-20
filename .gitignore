@@ -13,10 +13,10 @@
 *.sln
 *.suo
 #workbook.leo
+.cache
 .DS_Store
 .env
-.mypy_cache
-.pytest_cache
+.*_cache
 .quarto
 .vs
 .vscode

@@ -9,7 +9,7 @@ MAX_VERSIONS := 8 9
 CYTHON_OPTIONS := --timestamps -E INCLUDE_NUMPY=$(ENABLE_NUMPY) -X emit_code_comments=False
 
 
-.phony: all build api clean setup update-submodules link
+.phony: all build api clean setup update-submodules link test
 
 all: build
 
@@ -24,6 +24,11 @@ source/projects/py/api.c: source/projects/py/api.pyx
 	@cython -3 $(CYTHON_OPTIONS) $(API_MODULE)
 
 api: source/projects/py/api.c
+
+test:
+	@cmake -S . -B build && \
+		cmake --build build --config Release --target py_code_tests && \
+		cd build && ctest -C Release --output-on-failure
 
 clean:
 	@rm -rf exterals build

@@ -61,6 +61,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     endif()
 endif()
 
+enable_testing()
+
 # include functions to use later
 include(${CMAKE_SOURCE_DIR}/source/scripts/cmake/fn_python3_external.cmake)
 
