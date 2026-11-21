@@ -616,11 +616,24 @@ class PythonConfig311(Config):
         )
 
     def framework_mid(self):
-        """framework build variant mid-size"""
-        self.framework_max()
-        # as static_mid: _ssl and _hashlib built into the framework, one OpenSSL copy
-        self.move_shared_to_static("_ssl", "_hashlib")
-        self.disable_shared("_decimal")
+        """framework build variant mid-size: as static_mid, plus _ctypes; all built in"""
+        self.static_mid()
+        self.enable_static("_ctypes")
+        if PLATFORM == "Darwin":  # the sources and flags configure uses with the SDK's libffi
+            sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
+            self.cfg["extensions"]["_ctypes"] = [
+                "_ctypes/_ctypes.c",
+                "_ctypes/callbacks.c",
+                "_ctypes/callproc.c",
+                "_ctypes/stgdict.c",
+                "_ctypes/cfield.c",
+                "_ctypes/malloc_closure.c",
+                f"-I{sdk}/usr/include/ffi",
+                "-DUSING_APPLE_OS_LIBFFI",  # no "=": makesetup reads such a line as a variable
+                "-DUSING_MALLOC_CLOSURE_DOT_C",
+                "-lffi",
+                "-ldl",
+            ]
 
 
 class PythonConfig312(PythonConfig311):
@@ -1586,12 +1599,13 @@ class PythonBuilder(Builder):
         pc_env = f"PKG_CONFIG_PATH= PKG_CONFIG_LIBDIR='{pc_dirs}'"
         if PLATFORM == "Darwin" and self.build_type in ("shared", "framework"):
             # libpython.dylib and the framework link $(LIBS) but not the libraries
-            # of modules built into them (_ssl, _hashlib, _bz2, _lzma), whose symbols
+            # of modules built into them (_ssl, _bz2, _ctypes, _scproxy, ...), whose symbols
             # would be missing at import. Hidden, so they cannot clash in the host.
             d = self.project.install
             pc_env += (
                 f" LIBS='-L{d}/openssl/lib -Wl,-hidden-lssl -Wl,-hidden-lcrypto"
-                f" -L{d}/bzip2/lib -Wl,-hidden-lbz2 -L{d}/xz/lib -Wl,-hidden-llzma -lz -lsqlite3'"
+                f" -L{d}/bzip2/lib -Wl,-hidden-lbz2 -L{d}/xz/lib -Wl,-hidden-llzma"
+                " -lz -lsqlite3 -lffi -framework SystemConfiguration'"
             )
         self.cmd(f"{pc_env} ./configure --prefix={prefix} {config_opts}", cwd=self.src_dir)
 

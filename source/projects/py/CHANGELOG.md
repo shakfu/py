@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `framework-ext` and `framework-pkg` now build `_ctypes`, `_bz2`, `_lzma`, `_sqlite3`, `_scproxy`, `zlib` and `binascii` into the framework instead of `lib-dynload`, and `framework-ext` leaves the C headers out of the bundle: 14.0 MB, down from 17.0 MB. Built-in `_ctypes` uses configure's flags for the SDK's libffi, written as `-DNAME` because `makesetup` reads any `Setup` line containing `=` as a Make variable. `LIBS` now also has `-framework SystemConfiguration`, which built-in `_scproxy` needs and the `shared-ext` dylib lacked.
+
 - Fixed `shared-ext`, `framework-ext` and `framework-pkg` Pythons lacking `ssl` and `hashlib`: their `*_mid` configurations left out `_ssl` and `_hashlib`, unlike `static_mid`. They now build both into `libpython` or the framework, which holds one OpenSSL copy instead of one per extension module. CPython links neither with the libraries of built-in modules, so `_ssl` failed with `symbol not found '_X509_OBJECT_free'`; `buildpy.py` now passes OpenSSL, bzip2 and xz in `LIBS` with `-hidden-l`, which also fixes the built-in `_bz2` and `_lzma` of `shared_mid` and keeps OpenSSL from clashing with another copy in Max. `static-ext` links OpenSSL the same way, so `py.mxo` no longer exports it (1937 symbols, down from 7503).
 
 - Fixed `py.mxo` built against a `buildpy.py` Python targeting macOS 11.0 while `libpython` targeted 12.6, so it needed 12.6 regardless. The deployment target is now read from the bundled Python's `sysconfig`, over a second hard-coded value that can drift, and the `buildpy.py` default is 11.0.

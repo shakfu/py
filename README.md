@@ -29,7 +29,7 @@ These targets build a self-contained `py.mxo` that carries its own Python:
 
 Each target runs `source/scripts/buildpy.py -t <variant>`, which downloads and builds Python with OpenSSL, bzip2 and xz into `build/install`, then deletes and rebuilds `externals/py.mxo` against it. Python is built once; later runs reuse it. All four variants have been tested in Max 9 on macOS (Apple silicon) with `py.maxhelp`.
 
-All variants use buildpy's `*_mid` configurations, which leave out `_decimal` and build `_ssl` and `_hashlib` into Python, with OpenSSL linked statically. OpenSSL's symbols are hidden, so they cannot clash with another copy loaded in Max.
+All variants use buildpy's `*_mid` configurations: `_decimal` is left out, and `_ssl`, `_hashlib`, `_bz2`, `_lzma`, `_sqlite3`, `_scproxy`, `zlib` and `binascii` are built into Python, with OpenSSL, bzip2 and xz linked statically and their symbols hidden. The framework variants also build in `_ctypes`; `static-ext` and `shared-ext` have no `ctypes`.
 
 Options:
 

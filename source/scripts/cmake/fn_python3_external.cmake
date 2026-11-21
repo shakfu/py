@@ -262,10 +262,13 @@ function(python3_external)
     endif()
 
     if(BUILD_FRAMEWORK_EXT)
-        # After the build, as for lib/ above; ditto keeps the framework's symlinks.
+        set(PY_FW_VER ${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR})
+        # After the build, as for lib/ above. rsync -a keeps the framework's
+        # symlinks; the C headers (2.3 MB) are only needed to build against it.
         ADD_CUSTOM_COMMAND(
             TARGET ${PY3EXT_PROJECT_NAME} POST_BUILD
-            COMMAND ditto "${Python3_ROOT_DIR}" "${EXTERNAL_RESOURCES_DIR}/Python.framework"
+            COMMAND rsync -a --delete --exclude=/Headers --exclude=/Versions/${PY_FW_VER}/Headers
+                --exclude=/Versions/${PY_FW_VER}/include "${Python3_ROOT_DIR}/" "${EXTERNAL_RESOURCES_DIR}/Python.framework/"
             COMMAND strip -x "${EXTERNAL_RESOURCES_DIR}/Python.framework/Versions/Current/Python"
         )
     endif()
