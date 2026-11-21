@@ -556,6 +556,23 @@ class PythonConfig311(Config):
     def static_mid(self):
         """static build variant mid-size"""
         self.disable_static("_decimal")
+        if PLATFORM == "Darwin":
+            self.enable_static("_ctypes")
+            # the sources and flags configure uses with the SDK's libffi
+            sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
+            self.cfg["extensions"]["_ctypes"] = [
+                "_ctypes/_ctypes.c",
+                "_ctypes/callbacks.c",
+                "_ctypes/callproc.c",
+                "_ctypes/stgdict.c",
+                "_ctypes/cfield.c",
+                "_ctypes/malloc_closure.c",
+                f"-I{sdk}/usr/include/ffi",
+                "-DUSING_APPLE_OS_LIBFFI",  # no "=": makesetup reads such a line as a variable
+                "-DUSING_MALLOC_CLOSURE_DOT_C",
+                "-lffi",
+                "-ldl",
+            ]
         if PLATFORM == "Linux":
             self.cfg["extensions"]["_ssl"] = [
                 "_ssl.c",
@@ -616,24 +633,8 @@ class PythonConfig311(Config):
         )
 
     def framework_mid(self):
-        """framework build variant mid-size: as static_mid, plus _ctypes; all built in"""
+        """framework build variant mid-size: as static_mid, all built into the framework"""
         self.static_mid()
-        self.enable_static("_ctypes")
-        if PLATFORM == "Darwin":  # the sources and flags configure uses with the SDK's libffi
-            sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
-            self.cfg["extensions"]["_ctypes"] = [
-                "_ctypes/_ctypes.c",
-                "_ctypes/callbacks.c",
-                "_ctypes/callproc.c",
-                "_ctypes/stgdict.c",
-                "_ctypes/cfield.c",
-                "_ctypes/malloc_closure.c",
-                f"-I{sdk}/usr/include/ffi",
-                "-DUSING_APPLE_OS_LIBFFI",  # no "=": makesetup reads such a line as a variable
-                "-DUSING_MALLOC_CLOSURE_DOT_C",
-                "-lffi",
-                "-ldl",
-            ]
 
 
 class PythonConfig312(PythonConfig311):

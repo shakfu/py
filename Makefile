@@ -19,9 +19,13 @@ TARGETS ?= py
 ifdef MACOSX_DEPLOYMENT_TARGET
 export MACOSX_DEPLOYMENT_TARGET
 endif
+# framework-pkg: strip-support moves the C headers here, framework-pkg moves them back
+SUPPORT_FW := support/Python.framework
+SUPPORT_HEADERS := build/support-headers
+CODESIGN_IDENTITY ?= -
 
 
-.PHONY: all build api stub clean setup update-submodules link test local $(VARIANTS)
+.PHONY: all build api stub clean setup update-submodules link test local strip-support $(VARIANTS)
 
 all: build
 
@@ -42,10 +46,28 @@ stub:
 
 $(VARIANTS):
 	@$(PYTHON) $(SRCDIR)/scripts/buildpy.py -t $@
+	@# CMake needs the headers strip-support removed; a rebuilt framework has its own
+	@if [ $@ = framework-pkg ] && [ -d $(SUPPORT_HEADERS) ]; then \
+		if [ ! -e $(SUPPORT_FW)/Headers ]; then ditto $(SUPPORT_HEADERS) $(SUPPORT_FW); fi; \
+		rm -rf $(SUPPORT_HEADERS); \
+	fi
 	@# start from an empty bundle: another variant's Python would stay in it
 	@rm -rf $(TARGETS:%=externals/%.mxo)
 	@cmake -S . -B build --fresh -DBUILD_VARIANT=$@ && \
 		cmake --build build --config Release --target $(TARGETS)
+
+# Before distributing a framework-pkg package: the C headers (2.3 MB) are only
+# needed to build against support/Python.framework.
+strip-support:
+	@test -d $(SUPPORT_FW) || { echo "$(SUPPORT_FW) not found: run make framework-pkg"; exit 1; }
+	@cd $(SUPPORT_FW) && for p in Headers Versions/*/Headers Versions/*/include; do \
+		if [ -e "$$p" ] || [ -L "$$p" ]; then \
+			mkdir -p "$(ROOTDIR)/$(SUPPORT_HEADERS)/$$(dirname $$p)" && \
+			mv "$$p" "$(ROOTDIR)/$(SUPPORT_HEADERS)/$$p"; \
+		fi; \
+	done
+	@codesign -s $(CODESIGN_IDENTITY) -f $(SUPPORT_FW)
+	@du -sh $(SUPPORT_FW)
 
 local:
 	@rm -rf $(TARGETS:%=externals/%.mxo)

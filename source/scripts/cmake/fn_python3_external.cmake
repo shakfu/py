@@ -213,6 +213,7 @@ function(python3_external)
         $<$<PLATFORM_ID:Darwin>:${DEPS_DIR}/xz/lib/liblzma.a>
         $<$<PLATFORM_ID:Darwin>:-lz>
         $<$<PLATFORM_ID:Darwin>:-lsqlite3>
+        $<$<PLATFORM_ID:Darwin>:-lffi> # built-in _ctypes
     )
     if(BUILD_STATIC_EXT AND APPLE)
         # -hidden-l is not a file CMake tracks: relink when OpenSSL is rebuilt.

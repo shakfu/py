@@ -11,23 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `make static-ext`, `shared-ext`, `framework-ext` and `framework-pkg`, which build Python with `buildpy.py` and then a self-contained `py.mxo` against it, and `make local` for the local build. Each deletes the `.mxo` first, since another variant's Python would stay in the bundle, and reconfigures with `--fresh`, because the Python found earlier stays cached otherwise. See `README.md`.
 
+- Added `make strip-support`, which moves the C headers out of `support/Python.framework` before a `framework-pkg` package is distributed (13.8 MB to 11 MB). `make framework-pkg` moves them back, because CMake reads them from there.
+
 - Added `api.pyi`, a type stub for the built-in `api` module, so language servers can complete it; `api` is compiled into the external and has no source they can read. The build copies it to `py.mxo/Contents/Resources/stubs/`. `scripts/gen_api_stub.py` (`make stub`) generates it from `api.pyx` with Cython's parser, over a hand-written stub that would drift from 899 functions; the `py_api_stub` test fails when it is stale.
 
 - Added `py_prelude_legacy.py`, which uses `eval` so inline expressions such as `pipe 10+1 f` work. It is now the default prelude. Building with `-DRESTRICTED_PYTHON=ON` selects `py_prelude.py`, which resolves names without `eval`. Both over a single prelude because expressions need `eval` and name lookup alone cannot provide them. `RESTRICTED_PYTHON` is not a security boundary: `eval` and `shell` stay callable.
 
 - Added Python 3.15 to `buildpy.py`. On 3.15 the hand-compiled `pyexpat` drops `-DXML_DEV_URANDOM`, which fails on the new `random_dev_urandom.h` header. Static builds still compile expat into `libpython`, because the externals do not link `libexpat.a`. `_math_integer` is added so `math.integer` works.
 
+### Changed
+
+- Changed every `buildpy.py` `*_mid` configuration to one module set: `_ssl`, `_hashlib`, `_ctypes`, `_bz2`, `_lzma`, `_sqlite3`, `_scproxy`, `zlib` and `binascii` are built into Python, and `_decimal` is left out. Before, `shared-ext` and the framework variants had no `ssl` or `hashlib`, `static-ext` and `shared-ext` had no `ctypes`, and the framework variants loaded seven of these from `lib-dynload`. Built in, one OpenSSL copy serves both modules. `framework-ext` also leaves the C headers out of the bundle: 14.0 MB, down from 17.0 MB. Built-in `_ctypes` uses configure's flags for the SDK's libffi, written as `-DNAME`, because `makesetup` reads any `Setup` line containing `=` as a Make variable.
+
+- Changed success bangs: each message now bangs once. Calls previously banged up to three times, and also banged success after failed output. `sched` also accepts a delay of 0.
+
+- Changed `api` calls to act on the calling `py` object by its module name, over the newest instance. Code in a separately imported module still resolves to the newest instance.
+
+- Changed `Matrix` buffer format to `B` for char and `i` for long: `l` is 8 bytes on 64-bit platforms and cells are 4. Multi-plane matrices now export planes as a final dimension.
+
+- Raised the `eval` input limit from 1024 characters to `PY_MAX_CODE_LENGTH` (65536), the `exec` limit, so long expressions from `py_code` are accepted.
+
 ### Fixed
 
-- `framework-ext` and `framework-pkg` now build `_ctypes`, `_bz2`, `_lzma`, `_sqlite3`, `_scproxy`, `zlib` and `binascii` into the framework instead of `lib-dynload`, and `framework-ext` leaves the C headers out of the bundle: 14.0 MB, down from 17.0 MB. Built-in `_ctypes` uses configure's flags for the SDK's libffi, written as `-DNAME` because `makesetup` reads any `Setup` line containing `=` as a Make variable. `LIBS` now also has `-framework SystemConfiguration`, which built-in `_scproxy` needs and the `shared-ext` dylib lacked.
-
-- Fixed `shared-ext`, `framework-ext` and `framework-pkg` Pythons lacking `ssl` and `hashlib`: their `*_mid` configurations left out `_ssl` and `_hashlib`, unlike `static_mid`. They now build both into `libpython` or the framework, which holds one OpenSSL copy instead of one per extension module. CPython links neither with the libraries of built-in modules, so `_ssl` failed with `symbol not found '_X509_OBJECT_free'`; `buildpy.py` now passes OpenSSL, bzip2 and xz in `LIBS` with `-hidden-l`, which also fixes the built-in `_bz2` and `_lzma` of `shared_mid` and keeps OpenSSL from clashing with another copy in Max. `static-ext` links OpenSSL the same way, so `py.mxo` no longer exports it (1937 symbols, down from 7503).
+- Fixed `libpython3.13.dylib` and `Python.framework` lacking the libraries of their built-in modules: CPython links neither with them, so built-in `_ssl` failed with `symbol not found '_X509_OBJECT_free'`, and `_bz2`, `_lzma` and `_scproxy` of `shared-ext` resolved only if the host had loaded those libraries. `buildpy.py` now passes OpenSSL, bzip2 and xz in `LIBS` with `-hidden-l`, plus libffi and SystemConfiguration. Hidden, OpenSSL cannot clash with another copy in Max; `static-ext` links it the same way, so `py.mxo` exports 1937 symbols, down from 7503.
 
 - Fixed `py.mxo` built against a `buildpy.py` Python targeting macOS 11.0 while `libpython` targeted 12.6, so it needed 12.6 regardless. The deployment target is now read from the bundled Python's `sysconfig`, over a second hard-coded value that can drift, and the `buildpy.py` default is 11.0.
 
-- Fixed `buildpy.py` never rebuilding a missing OpenSSL, bzip2 or xz: the check tested that each library list was non-empty, not that the files exist. The externals now link those libraries by path instead of `-lssl` and similar, so CMake relinks when they are rebuilt.
+- Fixed `buildpy.py` never rebuilding a missing OpenSSL, bzip2 or xz: the check tested that each library list was non-empty, not that the files exist. The externals now link those libraries by path or with `LINK_DEPENDS`, so CMake relinks when they are rebuilt.
 
-- Fixed reconfiguring a `shared-ext`, `static-ext` or `framework-ext` build invalidating the signature of `py.mxo`. The bundled `lib/` or `Python.framework` was copied at configure time, but trimming it and code signing only run on a relink, so for example `libpython3.13.a` stayed in the signed bundle. Both are now copied after the build; the framework with `ditto`, which keeps its symlinks. `framework-pkg` now signs `support/Python.framework`, which lies outside the bundle the SDK signs.
+- Fixed reconfiguring a `shared-ext`, `static-ext` or `framework-ext` build invalidating the signature of `py.mxo`. The bundled `lib/` or `Python.framework` was copied at configure time, but trimming it and code signing only run on a relink, so for example `libpython3.13.a` stayed in the signed bundle. Both are now copied after the build, the framework with `rsync -a`, which keeps its symlinks. `framework-pkg` now also signs `support/Python.framework`, which lies outside the bundle the SDK signs.
 
 - Fixed `buildpy.py` building Python against host libraries found by `pkg-config`, such as Homebrew's. A `static-ext` build compiled `_blake2` against Homebrew `libb2`, so linking `py` failed with undefined `blake2b_*` symbols; `xz` and OpenSSL were also checked against Homebrew headers, not the bundled versions. `configure` now sees only the `pkg-config` files of the dependencies `buildpy.py` builds.
 
@@ -35,19 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed `eval` rejecting valid expressions that contain `=`, `import `, `from `, `def ` or `class ` as text, such as `f(a=1)`, `x == 1` or `'from here'`. The check matched substrings regardless of `security_mode`. It was removed because `eval` already compiles with `Py_eval_input`, which rejects every statement with a `SyntaxError`.
 
-- Raised the `eval` input limit from 1024 characters to `PY_MAX_CODE_LENGTH` (65536), the `exec` limit, so long expressions from `py_code` are accepted.
-
 - Fixed dotted names in `py_prelude.py`: `call math.sqrt 16` returned `None` and `fold operator.add 1 2 3` returned `[]`, because the name stayed a string and no function was found. Private attributes are rejected.
 
 - Fixed memory-safety defects in `py.c`: use-after-free when logging every Python error, stack overflows from messages of 1024+ atoms and from sequences whose `__len__` understates `__iter__`, a double decref when `product` fails, and unterminated editor text from `read`.
 
 - Fixed memory-safety defects in `api.pyx`: format-string use of `post`, `error` and the logging methods, `strcpy` overflow on non-ASCII text, unchecked `Atom` indexes, heap corruption in `Path.sysfile_write`, `Matrix.set_long_data` overrun, and double frees of objects stored in `Dictionary`, `Hashtab` and `List`. A failed `Buffer` lock now raises and is no longer unlocked.
-
-- Changed success bangs: each message now bangs once. Calls previously banged up to three times, and also banged success after failed output. `sched` also accepts a delay of 0.
-
-- Changed `api` calls to act on the calling `py` object by its module name, over the newest instance. Code in a separately imported module still resolves to the newest instance.
-
-- Changed `Matrix` buffer format to `B` for char and `i` for long: `l` is 8 bytes on 64-bit platforms and cells are 4. Multi-plane matrices now export planes as a final dimension.
 
 #### Critical Bugs
 - **Multichannel buffer support (GitHub issue #19)**: Fixed `np.asarray(buf)` returning incorrect number of samples for multichannel buffers. The Buffer class now properly handles n-channel buffers:

@@ -29,13 +29,15 @@ These targets build a self-contained `py.mxo` that carries its own Python:
 
 Each target runs `source/scripts/buildpy.py -t <variant>`, which downloads and builds Python with OpenSSL, bzip2 and xz into `build/install`, then deletes and rebuilds `externals/py.mxo` against it. Python is built once; later runs reuse it. All four variants have been tested in Max 9 on macOS (Apple silicon) with `py.maxhelp`.
 
-All variants use buildpy's `*_mid` configurations: `_decimal` is left out, and `_ssl`, `_hashlib`, `_bz2`, `_lzma`, `_sqlite3`, `_scproxy`, `zlib` and `binascii` are built into Python, with OpenSSL, bzip2 and xz linked statically and their symbols hidden. The framework variants also build in `_ctypes`; `static-ext` and `shared-ext` have no `ctypes`.
+All variants use buildpy's `*_mid` configurations: `_decimal` is left out, and `_ssl`, `_hashlib`, `_bz2`, `_lzma`, `_sqlite3`, `_scproxy`, `_ctypes`, `zlib` and `binascii` are built into Python, with OpenSSL, bzip2 and xz linked statically and their symbols hidden.
 
 Options:
 
 - `MACOSX_DEPLOYMENT_TARGET=12.6`: minimum macOS for the bundled Python and its dependencies, default 11.0. `py.mxo` always uses the value the bundled Python was built with. To change it after Python is built, delete `build/install` first, since the dependencies are built with it too.
 - `TARGETS="py zedit"`: the CMake targets to build, default `py`.
 - `PYTHON=python3.13`: the interpreter that runs `buildpy.py`.
+
+Before distributing a `framework-pkg` package, `make strip-support` moves the C headers (2.3 MB) out of `support/Python.framework` into `build/support-headers` and re-signs it; `make framework-pkg` moves them back, since CMake needs them.
 
 `make build` deletes `build/`, including the Python under `build/install`; use the targets above instead.
 
