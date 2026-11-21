@@ -415,12 +415,6 @@ void py_init(t_py* x)
         object_free(home_path);
 #endif
 
-#if defined(__APPLE__) && defined(PY_SHARED_PKG)
-        t_string* home_path = py_get_path_to_package(py_class, "/support/python" PY_VER);
-        python_home = Py_DecodeLocale(string_getptr(home_path), NULL);
-        object_free(home_path);
-#endif
-
 #if PY_WITH_API
         /* Add the cythonized 'api' built-in module, before Py_Initialize */
         if (PyImport_AppendInittab("api", PyInit_api) == -1) {

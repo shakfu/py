@@ -109,6 +109,20 @@ function(python3_external)
 
     find_package (Python3 COMPONENTS Interpreter Development REQUIRED)
 
+    # A buildpy Python sets the minimum macOS: target the same, not a second hard-coded value.
+    if(APPLE AND (PY3EXT_BUILD_VARIANT IN_LIST self_contained OR BUILD_FRAMEWORK_PKG))
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE} -c
+                "import sysconfig; print(sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET') or '')"
+            OUTPUT_VARIABLE PY_MACOS_TARGET
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(PY_MACOS_TARGET)
+            message(STATUS "CMAKE_OSX_DEPLOYMENT_TARGET: ${PY_MACOS_TARGET} (from ${Python3_EXECUTABLE})")
+            set(CMAKE_OSX_DEPLOYMENT_TARGET ${PY_MACOS_TARGET} PARENT_SCOPE)
+        endif()
+    endif()
+
     message(STATUS "Python3_ROOT_DIR: ${Python3_ROOT_DIR}")
     message(STATUS "Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
 
@@ -158,6 +172,7 @@ function(python3_external)
         ${PY3EXT_COMPILE_DEFINITIONS}
         $<$<CONFIG:Release>:NDEBUG>
         $<$<BOOL:${BUILD_STATIC_EXT}>:-DBUILD_STATIC> # help static find pyhome
+        $<$<OR:$<BOOL:${BUILD_SHARED_EXT}>,$<BOOL:${BUILD_STATIC_EXT}>>:PY_STATIC_EXT> # py.c: home is Contents/Resources
         $<$<BOOL:${PY3EXT_INCLUDE_COMMONSYMS}>:-DINCLUDE_COMMONSYMS>
         $<$<BOOL:${BUILD_WINDOWS_PKG}>:-DPY_WINDOWS_PKG>
         # $<IN_LIST:${PY3EXT_BUILD_VARIANT},${self_contained}:-DSELFCONTAINED_EXTERNAL> # special case
@@ -191,13 +206,19 @@ function(python3_external)
 
     set(STATIC_LINK_DEPS
         "$<$<PLATFORM_ID:Darwin>:-framework SystemConfiguration>"
-        $<$<PLATFORM_ID:Darwin>:-lssl>
-        $<$<PLATFORM_ID:Darwin>:-lbz2>
-        $<$<PLATFORM_ID:Darwin>:-llzma>
+        # OpenSSL hidden: py.mxo must export Python's C API, not a second OpenSSL
+        # that could clash with another copy in Max.
+        "$<$<PLATFORM_ID:Darwin>:-L${DEPS_DIR}/openssl/lib;-Wl,-hidden-lssl;-Wl,-hidden-lcrypto>"
+        $<$<PLATFORM_ID:Darwin>:${DEPS_DIR}/bzip2/lib/libbz2.a>
+        $<$<PLATFORM_ID:Darwin>:${DEPS_DIR}/xz/lib/liblzma.a>
         $<$<PLATFORM_ID:Darwin>:-lz>
-        $<$<PLATFORM_ID:Darwin>:-lcrypto>
         $<$<PLATFORM_ID:Darwin>:-lsqlite3>
     )
+    if(BUILD_STATIC_EXT AND APPLE)
+        # -hidden-l is not a file CMake tracks: relink when OpenSSL is rebuilt.
+        set_property(TARGET ${PY3EXT_PROJECT_NAME} APPEND PROPERTY LINK_DEPENDS
+            ${DEPS_DIR}/openssl/lib/libssl.a ${DEPS_DIR}/openssl/lib/libcrypto.a)
+    endif()
 
     target_link_options(
         ${PY3EXT_PROJECT_NAME}
@@ -216,9 +237,12 @@ function(python3_external)
     )
 
     if(BUILD_SHARED_EXT OR BUILD_STATIC_EXT)
-        file(
-            COPY "${Python3_ROOT_DIR}/lib" 
-            DESTINATION "${EXTERNAL_RESOURCES_DIR}"
+        # After the build, not at configure time: the trimming below and the
+        # codesign step only run on a relink, so a configure-time copy into an
+        # already signed bundle invalidated its signature.
+        ADD_CUSTOM_COMMAND(
+            TARGET ${PY3EXT_PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${Python3_ROOT_DIR}/lib" "${EXTERNAL_RESOURCES_DIR}/lib"
         )
     endif()
 
@@ -238,12 +262,10 @@ function(python3_external)
     endif()
 
     if(BUILD_FRAMEWORK_EXT)
-        file(
-            COPY "${Python3_ROOT_DIR}"
-            DESTINATION "${EXTERNAL_RESOURCES_DIR}"
-        )
+        # After the build, as for lib/ above; ditto keeps the framework's symlinks.
         ADD_CUSTOM_COMMAND(
             TARGET ${PY3EXT_PROJECT_NAME} POST_BUILD
+            COMMAND ditto "${Python3_ROOT_DIR}" "${EXTERNAL_RESOURCES_DIR}/Python.framework"
             COMMAND strip -x "${EXTERNAL_RESOURCES_DIR}/Python.framework/Versions/Current/Python"
         )
     endif()
@@ -252,6 +274,9 @@ function(python3_external)
         ADD_CUSTOM_COMMAND(
             TARGET ${PY3EXT_PROJECT_NAME} POST_BUILD
             COMMAND strip -x "${SUPPORT_DIR}/Python.framework/Versions/Current/Python"
+            # outside the bundle, so the SDK's codesign --deep never seals it
+            COMMAND codesign -s "$<IF:$<BOOL:${MAX_SDK_CODESIGN_IDENTITY}>,${MAX_SDK_CODESIGN_IDENTITY},->" -f
+                "${SUPPORT_DIR}/Python.framework"
         )
     endif()
 

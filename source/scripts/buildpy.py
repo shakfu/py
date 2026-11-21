@@ -90,7 +90,7 @@ COLOR = getenv("COLOR", default=True)
 # platform-specific config
 
 if PLATFORM == "Darwin":
-    MACOSX_DEPLOYMENT_TARGET = setenv("MACOSX_DEPLOYMENT_TARGET", "12.6")
+    MACOSX_DEPLOYMENT_TARGET = setenv("MACOSX_DEPLOYMENT_TARGET", "11.0")
     BUILD_TYPES = [
         "local",
         "shared-ext",
@@ -599,8 +599,8 @@ class PythonConfig311(Config):
         self.move_static_to_shared("_decimal", "_ssl", "_hashlib")
 
     def shared_mid(self):
-        """shared build variant mid-size"""
-        self.disable_static("_decimal", "_ssl", "_hashlib")
+        """shared build variant mid-size: as static_mid, _ssl and _hashlib built into libpython"""
+        self.static_mid()
 
     def framework_max(self):
         """framework build variant max-size"""
@@ -618,7 +618,9 @@ class PythonConfig311(Config):
     def framework_mid(self):
         """framework build variant mid-size"""
         self.framework_max()
-        self.disable_shared("_decimal", "_ssl", "_hashlib")
+        # as static_mid: _ssl and _hashlib built into the framework, one OpenSSL copy
+        self.move_shared_to_static("_ssl", "_hashlib")
+        self.disable_shared("_decimal")
 
 
 class PythonConfig312(PythonConfig311):
@@ -1578,7 +1580,20 @@ class PythonBuilder(Builder):
 
         config.write(self.config, to=self.src_dir / "Modules" / "Setup.local")
         config_opts = " ".join(self.config_options)
-        self.cmd(f"./configure --prefix={prefix} {config_opts}", cwd=self.src_dir)
+        # pkg-config sees only the dependencies built here, not the host's (e.g.
+        # Homebrew libb2, which leaves libpython needing -lb2 the externals lack).
+        pc_dirs = ":".join(str(dep().prefix / "lib" / "pkgconfig") for dep in self.depends_on)
+        pc_env = f"PKG_CONFIG_PATH= PKG_CONFIG_LIBDIR='{pc_dirs}'"
+        if PLATFORM == "Darwin" and self.build_type in ("shared", "framework"):
+            # libpython.dylib and the framework link $(LIBS) but not the libraries
+            # of modules built into them (_ssl, _hashlib, _bz2, _lzma), whose symbols
+            # would be missing at import. Hidden, so they cannot clash in the host.
+            d = self.project.install
+            pc_env += (
+                f" LIBS='-L{d}/openssl/lib -Wl,-hidden-lssl -Wl,-hidden-lcrypto"
+                f" -L{d}/bzip2/lib -Wl,-hidden-lbz2 -L{d}/xz/lib -Wl,-hidden-llzma -lz -lsqlite3'"
+            )
+        self.cmd(f"{pc_env} ./configure --prefix={prefix} {config_opts}", cwd=self.src_dir)
 
     def build(self):
         """main build process"""
@@ -1709,7 +1724,7 @@ class PythonBuilder(Builder):
 
     def can_run(self) -> bool:
         """check if a run is merited"""
-        if not all(dep().lib_products for dep in self.depends_on):
+        if not all(dep().lib_products_exist() for dep in self.depends_on):
             return True  # dependencies not built
 
         if self.build_type == "static":

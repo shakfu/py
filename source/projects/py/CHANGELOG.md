@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `make static-ext`, `shared-ext`, `framework-ext` and `framework-pkg`, which build Python with `buildpy.py` and then a self-contained `py.mxo` against it, and `make local` for the local build. Each deletes the `.mxo` first, since another variant's Python would stay in the bundle, and reconfigures with `--fresh`, because the Python found earlier stays cached otherwise. See `README.md`.
+
 - Added `api.pyi`, a type stub for the built-in `api` module, so language servers can complete it; `api` is compiled into the external and has no source they can read. The build copies it to `py.mxo/Contents/Resources/stubs/`. `scripts/gen_api_stub.py` (`make stub`) generates it from `api.pyx` with Cython's parser, over a hand-written stub that would drift from 899 functions; the `py_api_stub` test fails when it is stale.
 
 - Added `py_prelude_legacy.py`, which uses `eval` so inline expressions such as `pipe 10+1 f` work. It is now the default prelude. Building with `-DRESTRICTED_PYTHON=ON` selects `py_prelude.py`, which resolves names without `eval`. Both over a single prelude because expressions need `eval` and name lookup alone cannot provide them. `RESTRICTED_PYTHON` is not a security boundary: `eval` and `shell` stay callable.
@@ -16,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Python 3.15 to `buildpy.py`. On 3.15 the hand-compiled `pyexpat` drops `-DXML_DEV_URANDOM`, which fails on the new `random_dev_urandom.h` header. Static builds still compile expat into `libpython`, because the externals do not link `libexpat.a`. `_math_integer` is added so `math.integer` works.
 
 ### Fixed
+
+- Fixed `shared-ext`, `framework-ext` and `framework-pkg` Pythons lacking `ssl` and `hashlib`: their `*_mid` configurations left out `_ssl` and `_hashlib`, unlike `static_mid`. They now build both into `libpython` or the framework, which holds one OpenSSL copy instead of one per extension module. CPython links neither with the libraries of built-in modules, so `_ssl` failed with `symbol not found '_X509_OBJECT_free'`; `buildpy.py` now passes OpenSSL, bzip2 and xz in `LIBS` with `-hidden-l`, which also fixes the built-in `_bz2` and `_lzma` of `shared_mid` and keeps OpenSSL from clashing with another copy in Max. `static-ext` links OpenSSL the same way, so `py.mxo` no longer exports it (1937 symbols, down from 7503).
+
+- Fixed `py.mxo` built against a `buildpy.py` Python targeting macOS 11.0 while `libpython` targeted 12.6, so it needed 12.6 regardless. The deployment target is now read from the bundled Python's `sysconfig`, over a second hard-coded value that can drift, and the `buildpy.py` default is 11.0.
+
+- Fixed `buildpy.py` never rebuilding a missing OpenSSL, bzip2 or xz: the check tested that each library list was non-empty, not that the files exist. The externals now link those libraries by path instead of `-lssl` and similar, so CMake relinks when they are rebuilt.
+
+- Fixed reconfiguring a `shared-ext`, `static-ext` or `framework-ext` build invalidating the signature of `py.mxo`. The bundled `lib/` or `Python.framework` was copied at configure time, but trimming it and code signing only run on a relink, so for example `libpython3.13.a` stayed in the signed bundle. Both are now copied after the build; the framework with `ditto`, which keeps its symlinks. `framework-pkg` now signs `support/Python.framework`, which lies outside the bundle the SDK signs.
+
+- Fixed `buildpy.py` building Python against host libraries found by `pkg-config`, such as Homebrew's. A `static-ext` build compiled `_blake2` against Homebrew `libb2`, so linking `py` failed with undefined `blake2b_*` symbols; `xz` and OpenSSL were also checked against Homebrew headers, not the bundled versions. `configure` now sees only the `pkg-config` files of the dependencies `buildpy.py` builds.
+
+- Fixed `shared-ext` and `static-ext` builds not setting the Python home to `py.mxo/Contents/Resources`. `py.c` tests `PY_STATIC_EXT`, which the py-js Xcode targets defined but the CMake build never did. Removed the `PY_SHARED_PKG` home path, whose py-js `shared-pkg` variant has no CMake equivalent.
 
 - Fixed `eval` rejecting valid expressions that contain `=`, `import `, `from `, `def ` or `class ` as text, such as `f(a=1)`, `x == 1` or `'from here'`. The check matched substrings regardless of `security_mode`. It was removed because `eval` already compiles with `Py_eval_input`, which rejects every statement with a `SyntaxError`.
 

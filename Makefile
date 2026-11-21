@@ -10,8 +10,18 @@ CYTHON_OPTIONS := --timestamps -E INCLUDE_NUMPY=$(ENABLE_NUMPY) -X emit_code_com
 # the interpreter Cython is installed in: gen_api_stub.py imports Cython
 CYTHON_PYTHON = $(shell head -1 "$$(command -v cython)" | cut -c3-)
 
+# Relocatable builds: buildpy.py builds Python into build/install (or support/),
+# then py is configured against it. See README.md.
+VARIANTS := shared-ext static-ext framework-ext framework-pkg
+PYTHON ?= python3
+TARGETS ?= py
+# minimum macOS for the bundled Python; py.mxo follows it (default: buildpy.py's)
+ifdef MACOSX_DEPLOYMENT_TARGET
+export MACOSX_DEPLOYMENT_TARGET
+endif
 
-.phony: all build api stub clean setup update-submodules link test
+
+.PHONY: all build api stub clean setup update-submodules link test local $(VARIANTS)
 
 all: build
 
@@ -29,6 +39,18 @@ api: source/projects/py/api.c stub
 
 stub:
 	@$(CYTHON_PYTHON) $(PYDIR)/scripts/gen_api_stub.py
+
+$(VARIANTS):
+	@$(PYTHON) $(SRCDIR)/scripts/buildpy.py -t $@
+	@# start from an empty bundle: another variant's Python would stay in it
+	@rm -rf $(TARGETS:%=externals/%.mxo)
+	@cmake -S . -B build --fresh -DBUILD_VARIANT=$@ && \
+		cmake --build build --config Release --target $(TARGETS)
+
+local:
+	@rm -rf $(TARGETS:%=externals/%.mxo)
+	@cmake -S . -B build --fresh -DBUILD_VARIANT=local && \
+		cmake --build build --config Release --target $(TARGETS)
 
 test:
 	@cmake -S . -B build && \
