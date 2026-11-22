@@ -28,6 +28,9 @@ static t_systhread_mutex py_global_registry_mutex = NULL; // mutex for registry 
 static uintptr_t py_global_obj_ref = 0;
 static t_systhread_mutex py_global_obj_ref_mutex = NULL; // mutex for obj ref access
 
+// thread state of the initializing thread, detached so other threads can take the GIL
+static PyThreadState* py_main_tstate = NULL;
+
 /*--------------------------------------------------------------------------*/
 /* Datastructures */
 
@@ -509,7 +512,11 @@ void py_init(t_py* x)
             py_error(x, "failed to initialize Python interpreter");
             return;
         }
+        // held between messages, the GIL starves Python threads and deadlocks the scheduler
+        py_main_tstate = PyEval_SaveThread();
     }
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
 
     // a taken @name falls back here; the name setter then reports it once
     if (!py_name_available(x->obj.name)) {
@@ -520,6 +527,7 @@ void py_init(t_py* x)
     PyObject* main_mod = PyImport_AddModule(x->obj.name->s_name); // borrowed
     if (main_mod == NULL) {
         py_handle_error(x, "could not create module %s", x->obj.name->s_name);
+        PyGILState_Release(gstate);
         return;
     }
     x->python.globals = PyModule_GetDict(main_mod); // borrowed reference
@@ -527,6 +535,7 @@ void py_init(t_py* x)
     x->python.cache = psc_create_instance(NULL);
     x->python.cache->config.debug_mode = 0;
     psc_init(x->python.cache); // init cache
+    PyGILState_Release(gstate);
 
     // register the object
     object_register(CLASS_BOX, x->obj.name, x);
@@ -602,11 +611,11 @@ void py_free(t_py* x)
     if (py_module_release(x->obj.name) != 0) {
         PyErr_Clear();
     }
-    PyGILState_Release(gstate);
 
-    // destroy python cache
+    // destroy python cache: its entries hold Python references
     psc_destroy_instance(x->python.cache);
     x->python.cache = NULL;
+    PyGILState_Release(gstate);
 
     // decrement global object counter (atomic)
     // atomic_fetch_sub returns the value BEFORE the decrement
@@ -636,10 +645,15 @@ void py_free(t_py* x)
         }
 
         // post("last py obj freed -> finalizing py mem / interpreter.");
-        if(Py_FinalizeEx()) { // returns 0 if successful, -1 if there were errors
-            error("py: failed to finalize Python interpreter");
-        } else {
-            post("done.");
+        // finalize only an interpreter py created; Py_FinalizeEx needs the GIL
+        if (py_main_tstate) {
+            PyEval_RestoreThread(py_main_tstate);
+            py_main_tstate = NULL;
+            if(Py_FinalizeEx()) { // returns 0 if successful, -1 if there were errors
+                error("py: failed to finalize Python interpreter");
+            } else {
+                post("done.");
+            }
         }
         // Py_Finalize(); // Py_FinalizeEx() without returned value
     }
@@ -720,25 +734,32 @@ finally:
  */
 t_max_err py_pythonpath_add(t_py* x, t_symbol* path)
 {
+    t_max_err err = MAX_ERR_GENERIC;
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
     PyObject* sys_path = PySys_GetObject((char*)"path"); // borrowed
     if (!sys_path) {
         py_error(x, "failed to obtain sys.path");
-        return MAX_ERR_GENERIC;
+        goto finally;
     }
 
     PyObject* py_path = PyUnicode_FromString(path->s_name);
     if (!py_path) {
         py_error(x, "failed to set Python path");
-        return MAX_ERR_GENERIC;
+        goto finally;
     }
     int res = PyList_Append(sys_path, py_path);
     Py_DECREF(py_path); // Release our reference to prevent memory leak
     if (res != 0) {
         py_handle_error(x, "failed to add to pythonpath: %s", path->s_name);
-        return MAX_ERR_GENERIC;
+        goto finally;
     }
     py_info(x, "added to pythonpath: %s", path->s_name);
-    return MAX_ERR_NONE;
+    err = MAX_ERR_NONE;
+
+finally:
+    PyGILState_Release(gstate);
+    return err;
 }
 
 /**
@@ -2408,7 +2429,9 @@ t_max_err py_clear_cache(t_py* x)
         return MAX_ERR_GENERIC;
     }
 
+    PyGILState_STATE gstate = PyGILState_Ensure(); // entries hold Python references
     psc_result_t result = psc_reset(x->python.cache);
+    PyGILState_Release(gstate);
 
     if (result == PSC_SUCCESS) {
         post("cache cleared successfully");
