@@ -1,0 +1,478 @@
+// SPDX-License-Identifier: MIT
+/* py_repl_input.cpp -- keyboard, mouse and context menu (py_repl-spec 3.4). */
+
+#include "py_repl.h"
+
+#include "ext_systime.h"
+#include "platform/clipboard.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+
+using namespace pyc;
+
+namespace {
+
+enum class Popup { Close, Keep, Refilter };
+
+bool is_word(char c) { return std::isalnum((unsigned char)c) || c == '_'; }
+
+/* Visual-row motion inside the input, keeping the goal cell. */
+void vertical(t_py_repl *x, int drows, bool extend) {
+	State &st = *x->st;
+	Layout &L = st.in_layout;
+	Editor &ed = st.in_ed;
+	if (st.goal < 0)
+		st.goal = L.cell_in_row(ed.caret());
+	const int t = std::max(0, std::min(L.row_of(ed.caret()) + drows, L.row_count() - 1));
+	ed.set_caret(L.offset_at(t, st.goal), extend);
+}
+
+/* Shared tail of every key and menu path. `browsed`: the input was replaced from history. */
+void finish(t_py_repl *x, int rev0, Popup popup, bool keep_goal, bool browsed) {
+	State &st = *x->st;
+	if (!keep_goal)
+		st.goal = -1;
+	switch (popup) {
+	case Popup::Close:
+		st.comp.close();
+		break;
+	case Popup::Refilter:
+		if (st.comp.is_open())
+			st.comp.update(st.in_ed.text(), st.in_ed.caret());
+		break;
+	case Popup::Keep:
+		break;
+	}
+	if (st.in_ed.revision() != rev0 && !browsed)
+		st.hist.reset(); /* an edit ends browsing */
+	reveal_caret(x);
+	redraw(x);
+}
+
+bool reindent_char(uint32_t c) { return c == ')' || c == ']' || c == '}' || c == ':'; }
+
+void type(t_py_repl *x, uint32_t cp, Popup *popup) {
+	State &st = *x->st;
+	Editor &ed = st.in_ed;
+	ed.type_char(cp, x->autoclose != 0);
+	if (reindent_char(cp)) {
+		st.in_syntax.update(ed.text(), ed.revision());
+		const int n = st.in_syntax.reindent_at(ed.caret(), (int)x->tabwidth);
+		if (n >= 0)
+			ed.set_line_indent(ed.line_of(ed.caret()), n);
+	}
+	if (cp < 128 && (is_word((char)cp) || cp == '.'))
+		*popup = Popup::Refilter;
+}
+
+void newline(t_py_repl *x) {
+	State &st = *x->st;
+	st.in_syntax.update(st.in_ed.text(), st.in_ed.revision());
+	st.in_ed.newline(st.in_syntax.indent_at(st.in_ed.sel_start(), (int)x->tabwidth));
+}
+
+/* Keys the transcript handles while it has focus; false: move to the input. */
+bool transcript_key(t_py_repl *x, long keycode, bool cmd) {
+	State &st = *x->st;
+	if (cmd && std::tolower((int)keycode) == 'c') {
+		copy(x, false);
+		return true;
+	}
+	if (cmd && std::tolower((int)keycode) == 'a') {
+		st.tr_ed.select_all();
+		return true;
+	}
+	return false;
+}
+
+} // namespace
+
+long pyc::key(t_py_repl *x, t_object *patcherview, long keycode, long modifiers, long textcharacter) {
+	if (!x->st)
+		return 0;
+	State &st = *x->st;
+	Editor &ed = st.in_ed;
+	CompletionSession &cs = st.comp;
+	const bool cmd = modifiers & eCommandKey, shift = modifiers & eShiftKey, alt = modifiers & eAltKey;
+	view_size(x, patcherview);
+	sync_layout(x);
+	const int rev0 = ed.revision();
+
+	if (modifiers & eControlKey) {
+		const int k = std::tolower((int)keycode);
+		if (k == 'c' || textcharacter == 3) {
+			interrupt_input(x);
+			finish(x, rev0, Popup::Close, false, true);
+			return 1;
+		}
+		if (k == 'l' || textcharacter == 12) {
+			clear_transcript(x);
+			return 1;
+		}
+		return 0; /* Max shortcuts */
+	}
+	if (cmd && std::tolower((int)keycode) == 'k') {
+		clear_transcript(x);
+		return 1;
+	}
+	if (keycode == JKEY_PAGEUP || keycode == JKEY_PAGEDOWN) {
+		const Scroll &S = st.stack.scroll();
+		st.stack.scroll().scroll_by((keycode == JKEY_PAGEUP ? -1 : 1) * S.page_rows() * st.m.lh);
+		redraw(x);
+		return 1;
+	}
+	if (st.focus == PartTranscript) {
+		if (keycode == JKEY_ESC)
+			return 0;
+		if (transcript_key(x, keycode, cmd)) {
+			redraw(x);
+			return 1;
+		}
+		if (cmd)
+			return 0;
+		st.focus = PartInput; /* typing goes to the input */
+		ed.set_caret(ed.length());
+	}
+	if (!x->completion)
+		cs.close();
+	const bool popup = cs.is_open();
+	const int tw = (int)x->tabwidth;
+	Popup pmode = Popup::Close;
+	bool keep_goal = false, browsed = false;
+
+	switch (keycode) {
+	case JKEY_RETURN:
+		if (popup && !cmd && !shift)
+			complete_accept(x);
+		else if (shift)
+			newline(x);
+		else if (return_action(ed, cmd ? Completeness::Unknown : completeness(x, ed.text()), cmd) ==
+				 ReturnAction::Submit)
+			submit_input(x);
+		else
+			newline(x);
+		break;
+	case JKEY_TAB:
+		if (cmd)
+			return 0;
+		if (popup) {
+			if (shift) {
+				cs.select_prev();
+				pmode = Popup::Keep;
+			} else
+				complete_accept(x);
+		} else if (shift) {
+			ed.outdent(tw);
+		} else {
+			const int c = ed.caret();
+			const char prev = c > 0 ? ed.text()[(size_t)c - 1] : ' ';
+			if (!ed.has_selection() && x->completion && (is_word(prev) || prev == '.') && complete_open(x))
+				pmode = Popup::Keep;
+			else
+				ed.indent(tw);
+		}
+		break;
+	case JKEY_ESC:
+		if (!popup)
+			return 0;
+		break;
+	case JKEY_UPARROW:
+	case JKEY_DOWNARROW: {
+		const bool up = keycode == JKEY_UPARROW;
+		const int row = st.in_layout.row_of(ed.caret());
+		if (popup && !shift && !cmd && !alt) {
+			if (up)
+				cs.select_prev();
+			else
+				cs.select_next();
+			pmode = Popup::Keep;
+		} else if (cmd || alt) {
+			ed.move(up ? Move::DocStart : Move::DocEnd, shift);
+		} else if (!shift && (up ? row == 0 : row == st.in_layout.row_count() - 1)) {
+			history_step(x, up);
+			browsed = true;
+		} else {
+			vertical(x, up ? -1 : 1, shift);
+			keep_goal = true;
+		}
+		break;
+	}
+	case JKEY_LEFTARROW:
+		ed.move(cmd ? Move::LineStart : alt ? Move::WordLeft : Move::Left, shift);
+		break;
+	case JKEY_RIGHTARROW:
+		ed.move(cmd ? Move::LineEnd : alt ? Move::WordRight : Move::Right, shift);
+		break;
+	case JKEY_HOME:
+		ed.move(Move::LineStart, shift);
+		break;
+	case JKEY_END:
+		ed.move(Move::LineEnd, shift);
+		break;
+	case JKEY_BACKSPACE:
+		if (cmd)
+			return 0;
+		ed.backspace(x->autoclose != 0, alt, tw);
+		pmode = Popup::Refilter;
+		break;
+	case JKEY_DELETE:
+		if (cmd)
+			return 0;
+		ed.delete_forward(alt);
+		break;
+	default:
+		if (cmd) {
+			switch (std::tolower((int)keycode)) {
+			case 'a':
+				ed.select_all();
+				break;
+			case 'c':
+				copy(x, false);
+				break;
+			case 'x':
+				copy(x, true);
+				break;
+			case 'v':
+				paste(x);
+				break;
+			case 'z':
+				if (shift)
+					ed.redo();
+				else
+					ed.undo();
+				break;
+			default:
+				return 0;
+			}
+		} else {
+			const uint32_t cp = keycode == JKEY_SPACEBAR ? ' ' : (uint32_t)textcharacter;
+			if (cp < 32 || cp == 127 || (cp >= 0xD800 && cp <= 0xDFFF) || (cp >= 0xF700 && cp <= 0xF8FF) || cp > 0x10FFFF)
+				return 0; /* control, surrogate or AppKit function-key code */
+			type(x, cp, &pmode);
+		}
+		break;
+	}
+	finish(x, rev0, pmode, keep_goal, browsed);
+	return 1;
+}
+
+/* ---- context menu ---- */
+
+namespace {
+
+enum MenuId { MCopy = 1, MPaste, MSelectAll, MClearTranscript, MClearHistory };
+
+t_pt screen_point(t_py_repl *x, t_object *pv, t_pt pt) {
+	t_rect r;
+	jbox_get_rect_for_view((t_object *)x, pv, &r);
+	long sx0 = 0, sy0 = 0, sx1 = 0, sy1 = 0;
+	patcherview_canvas_to_screen(pv, r.x, r.y, &sx0, &sy0);
+	patcherview_canvas_to_screen(pv, r.x + r.width, r.y + r.height, &sx1, &sy1);
+	const double kx = r.width > 0 ? (sx1 - sx0) / r.width : 1;
+	const double ky = r.height > 0 ? (sy1 - sy0) / r.height : 1;
+	t_pt s;
+	s.x = sx0 + pt.x * kx;
+	s.y = sy0 + pt.y * ky;
+	return s;
+}
+
+void context_menu(t_py_repl *x, t_object *pv, t_pt pt) {
+	State &st = *x->st;
+	const Editor &ed = part_editor(x, st.focus);
+	t_jpopupmenu *m = jpopupmenu_create();
+	jpopupmenu_additem(m, MCopy, "Copy", nullptr, 0, !ed.has_selection(), nullptr);
+	jpopupmenu_additem(m, MPaste, "Paste", nullptr, 0, clipboard_text().empty(), nullptr);
+	jpopupmenu_additem(m, MSelectAll, "Select All", nullptr, 0, ed.length() == 0, nullptr);
+	jpopupmenu_addseparator(m);
+	jpopupmenu_additem(m, MClearTranscript, "Clear Transcript", nullptr, 0, st.tr.text().empty(), nullptr);
+	jpopupmenu_additem(m, MClearHistory, "Clear History", nullptr, 0, st.hist.size() == 0, nullptr);
+	const long id = st.id;
+	const int choice = jpopupmenu_popup(m, screen_point(x, pv, pt), 0);
+	jpopupmenu_destroy(m);
+	if (find_box(id) != x)
+		return; /* freed while the menu was up */
+	const int rev0 = st.in_ed.revision();
+	switch (choice) {
+	case MCopy:
+		copy(x, false);
+		break;
+	case MPaste:
+		st.focus = PartInput;
+		paste(x);
+		break;
+	case MSelectAll:
+		part_editor(x, st.focus).select_all();
+		break;
+	case MClearTranscript:
+		clear_transcript(x);
+		break;
+	case MClearHistory:
+		st.hist.clear();
+		break;
+	default:
+		return;
+	}
+	finish(x, rev0, Popup::Close, false, false);
+}
+
+/* Offset under a box-local point, in `part`; a point in the other part clamps to
+ * the nearest end of this one, so a drag stays in the part it started in. */
+int hit_part(t_py_repl *x, const Geom &g, int part, double px, double py, bool floor_cell) {
+	State &st = *x->st;
+	const Place p = st.stack.place(st.stack.scroll().row_at_y(py - g.view_y));
+	const Editor &ed = part_editor(x, part);
+	if (p.part != part)
+		return part == PartTranscript ? ed.length() : 0;
+	const double f = (px - g.text_x) / st.m.cw;
+	const int cell = std::max(0, (int)std::floor(floor_cell ? f : f + 0.5));
+	return part_layout(x, part).offset_at(p.row, cell);
+}
+
+void drag_select(t_py_repl *x, const Geom &g) {
+	State &st = *x->st;
+	const double y = std::max(g.view_y, std::min(st.mouse_y, g.view_y + g.view_h - 1));
+	part_editor(x, st.sel_part).set_caret(hit_part(x, g, st.sel_part, st.mouse_x, y, false), true);
+}
+
+} // namespace
+
+/* ---- mouse ---- */
+
+void pyc::mousedown(t_py_repl *x, t_object *patcherview, t_pt pt, long modifiers) {
+	if (!x->st)
+		return;
+	State &st = *x->st;
+	view_size(x, patcherview);
+	const Geom g = sync_layout(x);
+	st.comp.close();
+	if (modifiers & (eRightButton | ePopupMenu)) {
+		redraw(x);
+		context_menu(x, patcherview, pt);
+		return;
+	}
+	if (pt.y < g.title_h) {
+		redraw(x);
+		return;
+	}
+	const Thumb t = st.stack.scroll().thumb(g.view_h);
+	if (t.visible && pt.x >= g.sb_x) {
+		const double ty = pt.y - g.view_y;
+		if (ty >= t.y && ty < t.y + t.h)
+			st.thumb_grab = ty - t.y;
+		else {
+			st.thumb_grab = t.h / 2;
+			st.stack.scroll().drag_thumb(ty - t.h / 2, g.view_h);
+		}
+		st.thumb_drag = true;
+		redraw(x);
+		return;
+	}
+	const unsigned now = systime_ms();
+	if (st.clicks > 0 && now - st.click_t <= 400 && std::fabs(pt.x - st.click_x) <= 4 &&
+		std::fabs(pt.y - st.click_y) <= 4)
+		st.clicks = st.clicks % 3 + 1;
+	else
+		st.clicks = 1;
+	st.click_t = now;
+	st.click_x = pt.x;
+	st.click_y = pt.y;
+
+	const int part = st.stack.place(st.stack.scroll().row_at_y(pt.y - g.view_y)).part;
+	if (part != st.focus) /* the other part's selection would look active */
+		part_editor(x, st.focus).set_caret(part_editor(x, st.focus).caret());
+	st.focus = st.sel_part = part;
+	Editor &ed = part_editor(x, part);
+	if (st.clicks == 2)
+		ed.select_word_at(hit_part(x, g, part, pt.x, pt.y, true));
+	else if (st.clicks == 3)
+		ed.select_line_at(hit_part(x, g, part, pt.x, pt.y, true));
+	else
+		ed.set_caret(hit_part(x, g, part, pt.x, pt.y, false), (modifiers & eShiftKey) != 0);
+	st.selecting = true;
+	st.mouse_x = pt.x;
+	st.mouse_y = pt.y;
+	st.goal = -1;
+	redraw(x);
+}
+
+void pyc::mousedrag(t_py_repl *x, t_object *patcherview, t_pt pt, long modifiers) {
+	if (!x->st)
+		return;
+	State &st = *x->st;
+	view_size(x, patcherview);
+	const Geom g = sync_layout(x);
+	st.mouse_x = pt.x;
+	st.mouse_y = pt.y;
+	if (st.thumb_drag) {
+		st.stack.scroll().drag_thumb(pt.y - g.view_y - st.thumb_grab, g.view_h);
+		redraw(x);
+		return;
+	}
+	if (!st.selecting)
+		return;
+	drag_select(x, g);
+	const bool outside = pt.y < g.view_y || pt.y >= g.view_y + g.view_h;
+	if (outside && !st.autoscroll) {
+		st.autoscroll = true;
+		clock_fdelay(st.scroll_clock, 30);
+	}
+	redraw(x);
+}
+
+void pyc::scroll_tick(t_py_repl *x) {
+	State &st = *x->st;
+	st.autoscroll = false;
+	if (!st.selecting)
+		return;
+	const Geom g = sync_layout(x);
+	const double top = g.view_y, bottom = g.view_y + g.view_h;
+	const double d = st.mouse_y < top ? st.mouse_y - top : st.mouse_y > bottom ? st.mouse_y - bottom : 0;
+	if (d == 0)
+		return;
+	st.stack.scroll().scroll_by(d * 0.5); /* px per 30 ms tick, proportional to the distance */
+	drag_select(x, g);
+	st.autoscroll = true;
+	clock_fdelay(st.scroll_clock, 30);
+	redraw(x);
+}
+
+void pyc::mouseup(t_py_repl *x, t_object *patcherview, t_pt pt, long modifiers) {
+	if (!x->st)
+		return;
+	State &st = *x->st;
+	st.selecting = false;
+	st.thumb_drag = false;
+	st.autoscroll = false;
+	clock_unset(st.scroll_clock);
+	redraw(x);
+}
+
+void pyc::mouseenter(t_py_repl *x, t_object *patcherview, t_pt pt, long modifiers) {
+	jmouse_setcursor(patcherview, (t_object *)x, JMOUSE_CURSOR_IBEAM);
+}
+
+void pyc::mousemove(t_py_repl *x, t_object *patcherview, t_pt pt, long modifiers) {
+	if (!x->st)
+		return;
+	view_size(x, patcherview);
+	const Geom g = geometry(x, x->st->box_w, x->st->box_h);
+	const bool text = pt.y >= g.title_h && pt.x < g.sb_x;
+	jmouse_setcursor(patcherview, (t_object *)x, text ? JMOUSE_CURSOR_IBEAM : JMOUSE_CURSOR_ARROW);
+}
+
+void pyc::mouseleave(t_py_repl *x, t_object *patcherview, t_pt pt, long modifiers) {
+	jmouse_setcursor(patcherview, (t_object *)x, JMOUSE_CURSOR_ARROW);
+}
+
+void pyc::mousewheel(t_py_repl *x, t_object *patcherview, t_pt pt, long modifiers, double dx, double dy) {
+	if (!x->st)
+		return;
+	State &st = *x->st;
+	view_size(x, patcherview);
+	sync_layout(x);
+	st.comp.close();
+	st.stack.scroll().scroll_by(-dy * st.m.lh * x->scrollspeed);
+	redraw(x);
+}

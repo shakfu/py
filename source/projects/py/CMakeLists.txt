@@ -83,4 +83,16 @@ if(CYTHON_PROGRAM)
 	set_tests_properties(py_api_stub PROPERTIES SKIP_RETURN_CODE 77)
 endif()
 
+# py_repl_support.py and its embedded header; plain Python, no pytest needed
+find_program(PY_TEST_PYTHON python3)
+if(PY_TEST_PYTHON)
+	add_test(NAME py_repl_support
+		COMMAND ${PY_TEST_PYTHON} -B ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_py_repl_support.py)
+endif()
+
+# py.c's A_CANT repl methods against embedded CPython; skipped (77) without python3-config
+add_test(NAME py_repl_harness
+	COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/repl_harness/run.sh ${CMAKE_CURRENT_BINARY_DIR}/repl_harness)
+set_tests_properties(py_repl_harness PROPERTIES SKIP_RETURN_CODE 77)
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../max-sdk-base/script/max-posttarget.cmake)

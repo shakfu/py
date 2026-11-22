@@ -76,7 +76,7 @@ local:
 
 test:
 	@cmake -S . -B build && \
-		cmake --build build --config Release --target py_code_tests py_code_lsp_integration && \
+		cmake --build build --config Release --target py_code_tests py_code_lsp_integration py_repl_tests && \
 		cd build && ctest -C Release --output-on-failure
 
 clean:

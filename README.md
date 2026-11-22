@@ -1,6 +1,12 @@
 # py: a python3 external for max/msp
 
-This project includes only the `py` external which is developed in the [py-js](https://github.com/shakfu/py-js.git) project.
+This project develops the `py` external of the [py-js](https://github.com/shakfu/py-js.git) project, with two companions:
+
+| External | What it does | Help | Reference |
+|-|-|-|-|
+| `py` | Python 3 interpreter for Max, with the `api` module for Max's C API | `help/py.maxhelp` | `docs/py.maxref.xml` |
+| `py_code` | Python editor box that sends `eval` and `exec` messages to `py` | `help/py_code.maxhelp` | `docs/py_code.maxref.xml` |
+| `py_repl` | Python console box that runs code in a `py` object's namespace | `help/py_repl.maxhelp` | `docs/py_repl.maxref.xml` |
 
 This is just a brief experiment to develop it individually, and does not contain anything except the minimal requirements to do. If you are interested in this external or the topic of python3 externals for Max/MSP in general, you should visit the [py-js](https://github.com/shakfu/py-js.git) project for pre-compiled binaries and extensive documentation and examples.
 
@@ -15,6 +21,8 @@ make local
 ```
 
 Builds `externals/py.mxo` against the Python CMake finds, for example Homebrew's. The external links that Python from its install location, so it only works on machines with the same Python installed.
+
+`make local TARGETS="py py_code py_repl"` also builds the editor and the console. Neither links Python. `py_repl` calls `py` directly and checks its interface version, so build both from the same source.
 
 ### Relocatable builds
 
@@ -43,6 +51,8 @@ Before distributing a `framework-pkg` package, `make strip-support` moves the C 
 
 ### Other targets
 
-- `make test`: builds and runs the tests (`py_code` and the `api.pyi` check).
+- `make test`: builds and runs the headless tests: `py_code`, `py_repl`, `py`'s REPL support module and C interface, and the `api.pyi` check. Tests that need Max are patchers under `patchers/tests/`.
 - `make stub`: regenerates `source/projects/py/api.pyi` from `api.pyx`. Needs Cython.
-- `make api`: regenerates `api.c` with Cython, then the stub.
+- `make api`: regenerates `api.c` with Cython, then the stub. Use the Cython version named on the first line of `api.c`: another version rewrites most of the file.
+
+After editing `py_prelude.py`, `py_prelude_legacy.py` or `py_repl_support.py`, run `python3 scripts/py2c.py` in `source/projects/py` to regenerate the embedded headers. `make test` fails while `py_repl_support.h` is out of date.

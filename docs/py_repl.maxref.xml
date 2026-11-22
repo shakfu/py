@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<?xml-stylesheet href="./_c74_ref.xsl" type="text/xsl"?>
+
+<c74object name="py_repl" module="max" category="Python">
+	<digest>Python console for py</digest>
+	<description>
+		An interactive Python console that runs code in the namespace of the <o>py</o> object named by <at>py</at>. Each submitted input runs at once and its output, results and tracebacks appear in the transcript above the input. The input has syntax highlighting, auto-indent, bracket matching, undo, history and completion from the names the namespace holds at runtime. History and the unsent input are saved with the patch.
+	</description>
+
+	<!--METADATA-->
+	<metadatalist>
+		<metadata name="author">shakfu</metadata>
+		<metadata name="tag">Python</metadata>
+		<metadata name="tag">User Interface</metadata>
+		<metadata name="tag">live coding</metadata>
+	</metadatalist>
+
+	<!--INLETS-->
+	<inletlist>
+		<inlet id="0" type="message">
+			<digest>Messages and attributes</digest>
+			<description>Receives <m>run</m>, <m>clear</m>, <m>history</m>, <m>themes</m> and attribute messages.</description>
+		</inlet>
+	</inletlist>
+
+	<!--OUTLETS-->
+	<outletlist />
+
+	<!--ARGUMENTS-->
+	<objarglist />
+
+	<!--MESSAGES-->
+	<methodlist>
+		<method name="(keyboard)">
+			<arglist />
+			<digest>Edit and run</digest>
+			<description>
+				Click the box to give it the focus, then:
+				<br />Return: run the input when it is complete code and the caret is at its end; else a new line. A block (def, for, if, ...) ends with a blank line, as in the Python console.
+				<br />Shift+Return: new line. Cmd+Return: run the input as it is.
+				<br />Up/Down on the first or last input row: previous or next history entry. Down past the newest entry restores the unsent input. Elsewhere, Up/Down move by visual row.
+				<br />Tab after a name or a dot: open the completion popup with the names the namespace holds now (<m>math.fl</m> lists <m>floor</m>), then names typed earlier in the console. In the popup: Up/Down select, Tab or Return accept, typing filters, Shift+Tab selects the previous item, Esc closes.
+				<br />Tab elsewhere: indent. Shift+Tab: outdent.
+				<br />Ctrl+C while code runs: stop it with KeyboardInterrupt. Ctrl+C otherwise: discard the input.
+				<br />Cmd+K or Ctrl+L: clear the transcript. PageUp/PageDown: scroll.
+				<br />Cmd+Z, Cmd+Shift+Z: undo, redo in the input. Cmd+X, Cmd+C, Cmd+V, Cmd+A: cut, copy, paste, select all.
+				<br />With the transcript selected (after a click in it), Cmd+C copies and Cmd+A selects the transcript; any other key moves to the end of the input and types there.
+			</description>
+		</method>
+		<method name="(mouse)">
+			<arglist />
+			<digest>Select, scroll, context menu</digest>
+			<description>Click and drag to select in the transcript or in the input; a drag stays in the part it started in. Double-click selects a word, triple-click a line. The wheel or trackpad scrolls (see <at>scrollspeed</at>). Right-click opens a menu: Copy, Paste, Select All, Clear Transcript and Clear History.</description>
+		</method>
+		<method name="run">
+			<arglist><arg name="code" type="list" optional="0" /></arglist>
+			<digest>Run code as if typed</digest>
+			<description>Runs the code as a submitted input: it is echoed in the transcript and added to the history. A single symbol is used as is; other arguments, such as <m>run 1 + 2</m>, are joined with spaces. Max splits a message at commas, so quote code that contains them: <m>run "max(1, 2)"</m>.</description>
+		</method>
+		<method name="clear">
+			<arglist />
+			<digest>Clear the transcript</digest>
+			<description>Removes the past input and output. The history is kept.</description>
+		</method>
+		<method name="history">
+			<arglist><arg name="clear" type="symbol" optional="1" /></arglist>
+			<digest>Clear or count the history</digest>
+			<description><m>history clear</m> forgets every entry, including those saved with the patch. <m>history</m> alone posts the number of entries.</description>
+		</method>
+		<method name="theme">
+			<arglist><arg name="name" type="symbol" optional="0" /></arglist>
+			<digest>Apply a color preset</digest>
+			<description>Same as setting <at>theme</at>.</description>
+		</method>
+		<method name="themes">
+			<arglist />
+			<digest>List the presets</digest>
+			<description>Posts the preset names and the one in use to the Max console.</description>
+		</method>
+	</methodlist>
+
+	<!--ATTRIBUTES-->
+	<attributelist>
+		<attribute name="py" get="1" set="1" type="symbol" size="1">
+			<digest>Name of the py object to run code in</digest>
+			<description>The <at>name</at> of a <o>py</o> object. Default <m>__main__</m>, the first <o>py</o> created. It is looked up on every use, so the <o>py</o> object can be created, deleted or recreated at any time. The title strip shows <m>not found</m> when no <o>py</o> has the name, and <m>abi mismatch</m> when the <o>py</o> external is older than <o>py_repl</o>.</description>
+		</attribute>
+		<attribute name="theme" get="1" set="1" type="symbol" size="1">
+			<digest>Color preset</digest>
+			<description>Copies a preset over the color attributes and <at>promptcolor</at>: onedark (default), catppuccin, dracula, nord, gruvbox, monokai, solarized, the presets of <o>py_code</o>. Names ignore case, spaces, - and _. A color attribute saved with the box overrides the preset.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="enum" /></attributelist>
+		</attribute>
+		<attribute name="fontsize" get="1" set="1" type="float" size="1">
+			<digest>Font size</digest>
+			<description>Menlo, in points, clamped to 6-48. Default 12.</description>
+		</attribute>
+		<attribute name="tabwidth" get="1" set="1" type="int" size="1">
+			<digest>Indent width</digest>
+			<description>Spaces per indent level, for Tab, Shift+Tab and auto-indent, clamped to 1-16. Default 4.</description>
+		</attribute>
+		<attribute name="autoclose" get="1" set="1" type="int" size="1">
+			<digest>Close brackets and quotes</digest>
+			<description>Typing an opening bracket or quote inserts its partner. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="completion" get="1" set="1" type="int" size="1">
+			<digest>Completion popup</digest>
+			<description>Tab after a name or a dot opens the completion popup. Off, Tab always indents. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="wrap" get="1" set="1" type="int" size="1">
+			<digest>Wrap long lines</digest>
+			<description>Wraps lines at the box width. Off, long lines are cut at the right edge. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="titlebar" get="1" set="1" type="int" size="1">
+			<digest>Show the title strip</digest>
+			<description>The strip shows the history position while browsing and the <at>py</at> name with its link state. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="savehistory" get="1" set="1" type="int" size="1">
+			<digest>Save the history with the patch</digest>
+			<description>Saves the last 200 entries, restored when the patch opens. Default 1.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="onoff" /></attributelist>
+		</attribute>
+		<attribute name="maxlines" get="1" set="1" type="int" size="1">
+			<digest>Transcript length</digest>
+			<description>Lines kept in the transcript, clamped to 100-1000000; older lines are dropped in batches once it grows a quarter past the limit. Default 10000.</description>
+		</attribute>
+		<attribute name="scrollspeed" get="1" set="1" type="float" size="1">
+			<digest>Scroll speed</digest>
+			<description>Multiplies the scroll delta, clamped to 0.05-50. Default 3.</description>
+		</attribute>
+		<attribute name="promptcolor" get="1" set="1" type="float" size="4">
+			<digest>Prompt color (&gt;&gt;&gt; and ...)</digest>
+			<description>RGBA. Default and <at>theme</at> changes: the theme's comment color.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="bgcolor" get="1" set="1" type="float" size="4">
+			<digest>Background color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="textcolor" get="1" set="1" type="float" size="4">
+			<digest>Text color (output, results and untagged code)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="selcolor" get="1" set="1" type="float" size="4">
+			<digest>Selection color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="caretcolor" get="1" set="1" type="float" size="4">
+			<digest>Caret and focus ring color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="curlinecolor" get="1" set="1" type="float" size="4">
+			<digest>Unused</digest>
+			<description>Kept so themes and copied attributes match <o>py_code</o>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="keywordcolor" get="1" set="1" type="float" size="4">
+			<digest>Keyword color (def, if, return, ...)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="builtincolor" get="1" set="1" type="float" size="4">
+			<digest>Builtin color (print, len, None, True, False)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="functioncolor" get="1" set="1" type="float" size="4">
+			<digest>Function name color (definitions and calls)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="classcolor" get="1" set="1" type="float" size="4">
+			<digest>Class color (Capitalized names, type annotations)</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="decoratorcolor" get="1" set="1" type="float" size="4">
+			<digest>Decorator color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="stringcolor" get="1" set="1" type="float" size="4">
+			<digest>String color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="escapecolor" get="1" set="1" type="float" size="4">
+			<digest>Escape sequence and f-string brace color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="numbercolor" get="1" set="1" type="float" size="4">
+			<digest>Number and ALL_CAPS constant color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="selfcolor" get="1" set="1" type="float" size="4">
+			<digest>self and cls color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="commentcolor" get="1" set="1" type="float" size="4">
+			<digest>Comment and notice color</digest>
+			<description>Comments in code, and notices such as <m>KeyboardInterrupt</m> after Ctrl+C or <m>not found</m>. RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="bracketcolor" get="1" set="1" type="float" size="4">
+			<digest>Bracket color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="operatorcolor" get="1" set="1" type="float" size="4">
+			<digest>Operator color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="matchcolor" get="1" set="1" type="float" size="4">
+			<digest>Matching bracket highlight in the input</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="blinkcolor" get="1" set="1" type="float" size="4">
+			<digest>Unused</digest>
+			<description>Kept so themes and copied attributes match <o>py_code</o>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="barcolor" get="1" set="1" type="float" size="4">
+			<digest>Completion popup background</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="barhighlight" get="1" set="1" type="float" size="4">
+			<digest>Unused</digest>
+			<description>Kept so themes and copied attributes match <o>py_code</o>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="errorcolor" get="1" set="1" type="float" size="4">
+			<digest>stderr and traceback color</digest>
+			<description>RGBA. Default from <at>theme</at>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+		<attribute name="warningcolor" get="1" set="1" type="float" size="4">
+			<digest>Unused</digest>
+			<description>Kept so themes and copied attributes match <o>py_code</o>.</description>
+			<attributelist><attribute name="style" get="1" set="1" type="symbol" size="1" value="rgba" /></attributelist>
+		</attribute>
+	</attributelist>
+
+	<!--SEEALSO-->
+	<seealsolist>
+		<seealso name="py" />
+		<seealso name="py_code" />
+	</seealsolist>
+
+	<discussion>
+		<o>py_repl</o> calls the linked <o>py</o> object directly, not through patch cords, and has no outlets. Code runs on Max's main thread, so <o>py</o>'s <m>api</m> module can be used freely, but the patch UI (drawing, mouse, keys) waits until a run ends, and output appears then. Audio and, with Overdrive on, scheduled events keep running. Keys typed during a run are kept. Ctrl+C stops a run between Python bytecodes: <m>time.sleep</m> and long calls into C code, such as numpy or file reads, finish first. It acts only while Max is the frontmost app. The interrupt reaches whatever Python code the main thread runs, so if the code triggered another <o>py</o> object through its outlet, that object's call is the one stopped. The <o>py</o> object's <at>security_mode</at> applies to code run here.
+	</discussion>
+</c74object>

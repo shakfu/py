@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "core/scroll.h"
+
 #include <vector>
 
 namespace pyc {
@@ -20,15 +22,9 @@ struct Row {
 	int cell_end;
 };
 
-struct Thumb {
-	bool visible = false;
-	double y = 0; /* top, relative to the track */
-	double h = 0;
-};
-
 class Layout {
   public:
-	static constexpr double kThumbMin = 24;
+	static constexpr double kThumbMin = Scroll::kThumbMin;
 
 	/* Rebuilds the rows when the editor, its revision or `cols` changed.
 	 * `cols <= 0`: no wrap. Does not clamp the scroll; call clamp(). */
@@ -40,24 +36,22 @@ class Layout {
 	int offset_at(int row, int cell) const; /* `cell` is row-relative, clamped */
 	int cell_in_row(int offset) const;      /* row-relative cell of `offset` */
 
-	/* Scroll. */
-	void set_view(double view_h, double line_h, double pad);
-	double scroll_y() const { return mScrollY; }
-	void set_scroll(double y) { mScrollY = y; } /* unclamped (restores) */
-	double content_h() const;
-	double max_scroll() const;
-	void clamp();
-	void scroll_by(double dy);
-	void ensure_row_visible(int r); /* keeps `pad` around the row */
-	int first_visible_row() const;
-	int last_visible_row() const;
-	double row_y(int r) const;
-	int row_at_y(double y) const;
-	int page_rows() const;
-
-	/* Scroll bar. */
-	Thumb thumb(double track_h) const;
-	void drag_thumb(double y, double track_h);
+	/* Scroll and scroll bar over the rows: see scroll.h. */
+	void set_view(double view_h, double line_h, double pad) { mScroll.set_view(view_h, line_h, pad); }
+	double scroll_y() const { return mScroll.scroll_y(); }
+	void set_scroll(double y) { mScroll.set_scroll(y); } /* unclamped (restores) */
+	double content_h() const { return mScroll.content_h(); }
+	double max_scroll() const { return mScroll.max_scroll(); }
+	void clamp() { mScroll.clamp(); }
+	void scroll_by(double dy) { mScroll.scroll_by(dy); }
+	void ensure_row_visible(int r) { mScroll.ensure_row_visible(r); } /* keeps `pad` around the row */
+	int first_visible_row() const { return mScroll.first_visible_row(); }
+	int last_visible_row() const { return mScroll.last_visible_row(); }
+	double row_y(int r) const { return mScroll.row_y(r); }
+	int row_at_y(double y) const { return mScroll.row_at_y(y); }
+	int page_rows() const { return mScroll.page_rows(); }
+	Thumb thumb(double track_h) const { return mScroll.thumb(track_h); }
+	void drag_thumb(double y, double track_h) { mScroll.drag_thumb(y, track_h); }
 
   private:
 	struct RowData {
@@ -73,7 +67,7 @@ class Layout {
 	int mCols = -1;
 	std::vector<RowData> mRows;
 
-	double mViewH = 0, mLineH = 0, mPad = 0, mScrollY = 0;
+	Scroll mScroll; /* its row count follows mRows */
 };
 
 } // namespace pyc

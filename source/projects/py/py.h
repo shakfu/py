@@ -225,6 +225,16 @@ void py_okclose(t_py* x, char *s, short *result);
 // dict
 void py_appendtodict(t_py* x, t_dictionary* dict);
 
+/*--------------------------------------------------------------------------*/
+/* py_repl interface (A_CANT, see py_repl_abi.h) */
+
+struct py_repl_sink;
+void* py_repl_abi(t_py* x);
+void* py_repl_run(t_py* x, const char* code, struct py_repl_sink* sink);
+void* py_repl_complete(t_py* x, const char* code);
+void* py_repl_names(t_py* x, const char* text, struct py_repl_sink* sink);
+void* py_repl_interrupt(t_py* x);
+
 
 /*--------------------------------------------------------------------------*/
 /* Python Compatibility Section */

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `core/scroll.{h,cpp}`: `Layout`'s scroll and scroll bar as `pyc::Scroll`, which `Layout` forwards to. `py_repl` scrolls two `Layout`s with one `Scroll`, so the scroll math exists once.
+
 - Added a Language Server Protocol client. `@lsp` names the server command (default `auto`: the first of `pylsp`, `basedpyright-langserver`, `pyright-langserver`, `jedi-language-server`, `ty` found on the login-shell `PATH`); empty turns it off. Boxes with the same command and root share one server process. The server starts through the login shell because Max launched from the Dock has a minimal `PATH`.
 
 - Added a completion popup: Tab after a name or `.`, or typing `.` while the server is ready, lists candidates from the server, else from the document's names and Python keywords and builtins. Up/Down select, Tab or Return accept, typing filters, Esc closes.

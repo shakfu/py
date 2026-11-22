@@ -15,6 +15,10 @@
 /* max/msp api */
 #include "api.h"
 
+/* interface for py_repl, and its embedded python support module */
+#include "py_repl_abi.h"
+#include "py_repl_support.h"
+
 /*--------------------------------------------------------------------------*/
 /* Globals */
 
@@ -30,6 +34,9 @@ static t_systhread_mutex py_global_obj_ref_mutex = NULL; // mutex for obj ref ac
 
 // thread state of the initializing thread, detached so other threads can take the GIL
 static PyThreadState* py_main_tstate = NULL;
+
+// active repl_run calls, on any object: a queued interrupt is dropped at 0
+static atomic_int py_repl_depth = 0;
 
 /*--------------------------------------------------------------------------*/
 /* Datastructures */
@@ -52,6 +59,7 @@ struct t_py {
         long debug;              /*!< bool to switch per-object debug state */
         PyObject* globals;       /*!< per object 'globals' python namespace */
         psc_instance_t* cache;   /*!< python function / code object cache */
+        atomic_int repl_running; /*!< a repl_run is active on this object */
     } python;
 
     /* time-based ops */
@@ -175,6 +183,13 @@ void ext_main(void* module_ref)
 
     // datastructure helpers
     class_addmethod(c, (method)py_appendtodict, "appendtodictionary",  A_CANT, 0);
+
+    // py_repl interface: py_repl_abi.h
+    class_addmethod(c, (method)py_repl_abi,       "repl_abi",       A_CANT, 0);
+    class_addmethod(c, (method)py_repl_run,       "repl_run",       A_CANT, 0);
+    class_addmethod(c, (method)py_repl_complete,  "repl_complete",  A_CANT, 0);
+    class_addmethod(c, (method)py_repl_names,     "repl_names",     A_CANT, 0);
+    class_addmethod(c, (method)py_repl_interrupt, "repl_interrupt", A_CANT, 0);
 
     // class attributes
     //------------------------------------------------------------------------
@@ -392,6 +407,7 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
 
         // set default debug level
         x->python.debug = 0;
+        atomic_init(&x->python.repl_running, 0);
 
         // set default security settings from config
         x->security.security_mode = PY_DEFAULT_SECURITY_MODE;
@@ -3795,3 +3811,275 @@ void py_load(t_py* x, t_symbol* s)
     py_execfile(x, s);
 }
 
+
+/*--------------------------------------------------------------------------*/
+/* py_repl interface (py_repl_abi.h, docs/dev/py_repl-spec.md section 1) */
+
+#define PY_REPL_RET(v) ((void*)(intptr_t)(v))
+
+/* Emit a C string to a sink. */
+static void py_repl_say(py_repl_sink* sink, long kind, const char* text)
+{
+    sink->emit(sink->ctx, kind, text, (long)strlen(text));
+}
+
+/* True when the sink is usable: callers pass it across a bundle boundary. */
+static int py_repl_sink_ok(py_repl_sink* sink)
+{
+    return sink && sink->size >= (long)sizeof(py_repl_sink) && sink->emit;
+}
+
+/**
+ * @brief Return the _py_repl_support module, executing the embedded source on first use.
+ *
+ * Kept in sys.modules, so a new interpreter after Py_FinalizeEx rebuilds it. Needs the GIL.
+ *
+ * @return borrowed reference, or NULL with an exception set
+ */
+static PyObject* py_repl_module(void)
+{
+    PyObject* mod = PyDict_GetItemString(PyImport_GetModuleDict(), "_py_repl_support");
+    if (mod) {
+        return mod;
+    }
+    PyObject* code = Py_CompileString(PY_REPL_SUPPORT_MODULE, "<py_repl_support>", Py_file_input);
+    if (code == NULL) {
+        return NULL;
+    }
+    mod = PyImport_ExecCodeModule("_py_repl_support", code); // also stored in sys.modules
+    Py_DECREF(code);
+    Py_XDECREF(mod);
+    return mod;
+}
+
+/* The sink a Python emitter writes to; cleared when its run ends. */
+typedef struct {
+    py_repl_sink* sink;
+} py_repl_slot;
+
+static void py_repl_slot_free(PyObject* capsule)
+{
+    sysmem_freeptr(PyCapsule_GetPointer(capsule, "py_repl_slot"));
+}
+
+/* emit(kind, data: bytes): forward to the sink; dropped once the run has ended. */
+static PyObject* py_repl_emit(PyObject* self, PyObject* args)
+{
+    long kind = 0;
+    const char* data = NULL;
+    Py_ssize_t len = 0;
+    if (!PyArg_ParseTuple(args, "ly#", &kind, &data, &len)) {
+        return NULL;
+    }
+    py_repl_slot* slot = (py_repl_slot*)PyCapsule_GetPointer(self, "py_repl_slot");
+    if (slot == NULL) {
+        return NULL;
+    }
+    if (slot->sink) {
+        slot->sink->emit(slot->sink->ctx, kind, data, (long)len);
+    }
+    Py_RETURN_NONE;
+}
+
+static PyMethodDef py_repl_emit_def = {"emit", py_repl_emit, METH_VARARGS, NULL};
+
+/**
+ * @brief Return a Python callable that forwards to `sink`. Needs the GIL.
+ *
+ * User code can keep the redirected stream after the run, so the caller clears
+ * `*slot_out` when the run ends.
+ */
+static PyObject* py_repl_emitter(py_repl_sink* sink, py_repl_slot** slot_out)
+{
+    py_repl_slot* slot = (py_repl_slot*)sysmem_newptrclear(sizeof(py_repl_slot));
+    if (slot == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    PyObject* capsule = PyCapsule_New(slot, "py_repl_slot", py_repl_slot_free);
+    if (capsule == NULL) {
+        sysmem_freeptr(slot);
+        return NULL;
+    }
+    slot->sink = sink;
+    PyObject* fn = PyCFunction_New(&py_repl_emit_def, capsule);
+    Py_DECREF(capsule);
+    if (fn) {
+        *slot_out = slot;
+    }
+    return fn;
+}
+
+/* Pending call queued by repl_interrupt: raise KeyboardInterrupt only inside a run. */
+static int py_repl_raise(void* arg)
+{
+    if (atomic_load(&py_repl_depth) == 0) {
+        return 0;
+    }
+    PyErr_SetNone(PyExc_KeyboardInterrupt);
+    return -1;
+}
+
+/** @brief A_CANT repl_abi: the interface version, PY_REPL_ABI. */
+void* py_repl_abi(t_py* x)
+{
+    return PY_REPL_RET(PY_REPL_ABI);
+}
+
+/**
+ * @brief A_CANT repl_run: run `code` in this object's namespace on the calling thread.
+ *
+ * Output goes to `sink` as it is produced. Main thread only.
+ *
+ * @return PY_REPL_OK, _EXCEPTION, _INTERRUPTED, _BUSY or _REFUSED
+ */
+void* py_repl_run(t_py* x, const char* code, py_repl_sink* sink)
+{
+    if (!py_repl_sink_ok(sink) || code == NULL) {
+        return PY_REPL_RET(PY_REPL_REFUSED);
+    }
+    if (strlen(code) > PY_MAX_CODE_LENGTH) {
+        py_repl_say(sink, PY_REPL_ERR, "refused: code exceeds PY_MAX_CODE_LENGTH\n");
+        return PY_REPL_RET(PY_REPL_REFUSED);
+    }
+    if (py_validate_code(x, code) != MAX_ERR_NONE) {
+        py_repl_say(sink, PY_REPL_ERR, "refused by security_mode\n");
+        return PY_REPL_RET(PY_REPL_REFUSED);
+    }
+    int idle = 0;
+    if (!atomic_compare_exchange_strong(&x->python.repl_running, &idle, 1)) {
+        return PY_REPL_RET(PY_REPL_BUSY); // re-entered through an outlet
+    }
+    atomic_fetch_add(&py_repl_depth, 1);
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    long status = PY_REPL_EXCEPTION;
+    py_repl_slot* slot = NULL;
+    PyObject* emit = NULL;
+    PyObject* result = NULL;
+
+    // run() restores these too; an interrupt during its cleanup could skip that
+    const char* streams[] = {"stdout", "stderr", "displayhook"};
+    PyObject* saved[3];
+    for (int i = 0; i < 3; i++) {
+        saved[i] = PySys_GetObject(streams[i]); // borrowed
+        Py_XINCREF(saved[i]);
+    }
+
+    PyObject* mod = py_repl_module();
+    if (mod) {
+        emit = py_repl_emitter(sink, &slot);
+    }
+    if (emit) {
+        result = PyObject_CallMethod(mod, "run", "sOO", code, x->python.globals, emit);
+    }
+    if (result) {
+        status = PyLong_AsLong(result);
+        if (status == -1 && PyErr_Occurred()) {
+            PyErr_Clear();
+            status = PY_REPL_EXCEPTION;
+        }
+    } else if (PyErr_ExceptionMatches(PyExc_KeyboardInterrupt)) {
+        PyErr_Clear();
+        py_repl_say(sink, PY_REPL_TRACEBACK, "KeyboardInterrupt\n");
+        status = PY_REPL_INTERRUPTED;
+    } else {
+        py_handle_error(x, "repl_run failed");
+        py_repl_say(sink, PY_REPL_ERR, "internal error: see the Max console\n");
+    }
+
+    for (int i = 0; i < 3; i++) {
+        if (saved[i]) {
+            PySys_SetObject(streams[i], saved[i]);
+            Py_DECREF(saved[i]);
+        }
+    }
+    if (slot) {
+        slot->sink = NULL; // a kept sys.stdout now writes nowhere
+    }
+    Py_XDECREF(result);
+    Py_XDECREF(emit);
+
+    // still holding the GIL: a queued interrupt runs after this and is dropped
+    atomic_fetch_sub(&py_repl_depth, 1);
+    atomic_store(&x->python.repl_running, 0);
+    PyGILState_Release(gstate);
+    return PY_REPL_RET(status);
+}
+
+/**
+ * @brief A_CANT repl_complete: whether Return should submit `code`. Main thread only.
+ *
+ * @return PY_REPL_COMPLETE, _INCOMPLETE or _INVALID
+ */
+void* py_repl_complete(t_py* x, const char* code)
+{
+    if (code == NULL) {
+        return PY_REPL_RET(PY_REPL_INVALID);
+    }
+    long state = PY_REPL_INVALID;
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyObject* mod = py_repl_module();
+    PyObject* result = mod ? PyObject_CallMethod(mod, "is_complete", "s", code) : NULL;
+    if (result) {
+        state = PyLong_AsLong(result);
+        Py_DECREF(result);
+    }
+    if (PyErr_Occurred()) {
+        py_handle_error(x, "repl_complete failed");
+        state = PY_REPL_INVALID;
+    }
+    PyGILState_Release(gstate);
+    return PY_REPL_RET(state);
+}
+
+/**
+ * @brief A_CANT repl_names: emit completions of `text` as PY_REPL_NAME. Main thread only.
+ *
+ * @return the number of names emitted
+ */
+void* py_repl_names(t_py* x, const char* text, py_repl_sink* sink)
+{
+    if (!py_repl_sink_ok(sink) || text == NULL) {
+        return PY_REPL_RET(0);
+    }
+    long count = 0;
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyObject* mod = py_repl_module();
+    PyObject* result = mod ? PyObject_CallMethod(mod, "names", "sO", text, x->python.globals) : NULL;
+    if (result && PyList_Check(result)) {
+        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(result); i++) {
+            Py_ssize_t len = 0;
+            const char* name = PyUnicode_AsUTF8AndSize(PyList_GET_ITEM(result, i), &len);
+            if (name == NULL) {
+                PyErr_Clear();
+                continue;
+            }
+            sink->emit(sink->ctx, PY_REPL_NAME, name, (long)len);
+            count++;
+        }
+    }
+    Py_XDECREF(result);
+    if (PyErr_Occurred()) {
+        py_handle_error(x, "repl_names failed");
+    }
+    PyGILState_Release(gstate);
+    return PY_REPL_RET(count);
+}
+
+/**
+ * @brief A_CANT repl_interrupt: raise KeyboardInterrupt in the active run. Any thread.
+ *
+ * Needs no GIL: Py_AddPendingCall queues py_repl_raise for the main thread.
+ *
+ * @return 0 when queued, -1 when no run is active or the queue is full
+ */
+void* py_repl_interrupt(t_py* x)
+{
+    if (atomic_load(&py_repl_depth) == 0) {
+        return PY_REPL_RET(-1);
+    }
+    return PY_REPL_RET(Py_AddPendingCall(py_repl_raise, NULL) == 0 ? 0 : -1);
+}
+
+/* end py_repl interface: tests/repl_harness extracts the lines between the markers */

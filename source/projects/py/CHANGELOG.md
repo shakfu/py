@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the interface `py_repl` uses to run code in a `py` namespace: `A_CANT` methods `repl_abi`, `repl_run`, `repl_complete`, `repl_names` and `repl_interrupt`, declared in `py_repl_abi.h`. The REPL logic is `py_repl_support.py`, embedded as `py_repl_support.h` by `scripts/py2c.py` and loaded into a private module, so it is tested with plain Python (`make test`). `repl_interrupt` queues `KeyboardInterrupt` with `Py_AddPendingCall`, which needs no GIL, so a polling thread can stop a run on the busy main thread. `tests/repl_harness` checks the methods headless; `patchers/tests/test_py_repl/test_repl_abi.maxpat` checks them in Max through `ctypes`. Spec: `docs/dev/py_repl-spec.md`.
+
 - Added `make static-ext`, `shared-ext`, `framework-ext` and `framework-pkg`, which build Python with `buildpy.py` and then a self-contained `py.mxo` against it, and `make local` for the local build. Each deletes the `.mxo` first, since another variant's Python would stay in the bundle, and reconfigures with `--fresh`, because the Python found earlier stays cached otherwise. See `README.md`.
 
 - Added `make strip-support`, which moves the C headers out of `support/Python.framework` before a `framework-pkg` package is distributed (13.8 MB to 11 MB). `make framework-pkg` moves them back, because CMake reads them from there.
