@@ -4825,41 +4825,59 @@ cdef class Outlet:
         """Send a bang message."""
         if self.ptr is NULL:
             raise ValueError("Outlet is null")
-        mx.outlet_bang(self.ptr)
+        cdef void* o = self.ptr
+        with nogil: # downstream objects may wait on a thread that needs the GIL
+            mx.outlet_bang(o)
 
     def int(self, value: int):
         """Send an integer message."""
         if self.ptr is NULL:
             raise ValueError("Outlet is null")
-        mx.outlet_int(self.ptr, <long>value)
+        cdef void* o = self.ptr
+        cdef long n = value
+        with nogil:
+            mx.outlet_int(o, n)
 
     def float(self, value: float):
         """Send a float message."""
         if self.ptr is NULL:
             raise ValueError("Outlet is null")
-        mx.outlet_float(self.ptr, <double>value)
+        cdef void* o = self.ptr
+        cdef double f = value
+        with nogil:
+            mx.outlet_float(o, f)
 
     def symbol(self, sym: str):
         """Send a symbol message."""
         if self.ptr is NULL:
             raise ValueError("Outlet is null")
+        cdef void* o = self.ptr
         cdef mx.t_symbol* s = str_to_sym(sym)
-        mx.outlet_anything(self.ptr, s, 0, NULL)
+        with nogil:
+            mx.outlet_anything(o, s, 0, NULL)
 
     def list(self, values: list):
         """Send a list message."""
         if self.ptr is NULL:
             raise ValueError("Outlet is null")
-        cdef Atombuf atoms = Atombuf(values)
-        mx.outlet_list(self.ptr, NULL, <short>atoms.ptr.a_argc, atoms.ptr.a_argv)
+        cdef void* o = self.ptr
+        cdef Atombuf atoms = Atombuf(values) # kept alive until the call returns
+        cdef short ac = <short>atoms.ptr.a_argc
+        cdef mx.t_atom* av = atoms.ptr.a_argv
+        with nogil:
+            mx.outlet_list(o, NULL, ac, av)
 
     def anything(self, symbol: str, values: list):
         """Send an arbitrary message."""
         if self.ptr is NULL:
             raise ValueError("Outlet is null")
         cdef mx.t_symbol* s = str_to_sym(symbol)
-        cdef Atom atoms = Atom(values)
-        mx.outlet_anything(self.ptr, s, atoms.size, atoms.ptr)
+        cdef void* o = self.ptr
+        cdef Atom atoms = Atom(values) # kept alive until the call returns
+        cdef short ac = <short>atoms.size
+        cdef mx.t_atom* av = atoms.ptr
+        with nogil:
+            mx.outlet_anything(o, s, ac, av)
 
     def pointer(self) -> int:
         """Get the raw pointer value."""
@@ -6871,15 +6889,24 @@ cdef class PyExternal:
 
     cdef out_sym(self, str arg):
         """Send a symbol to the outlet."""
-        mx.outlet_anything(<void*>px.get_outlet(self.ptr), str_to_sym(arg), 0, NULL)
+        cdef void* o = <void*>px.get_outlet(self.ptr)
+        cdef mx.t_symbol* s = str_to_sym(arg)
+        with nogil: # downstream objects may wait on a thread that needs the GIL
+            mx.outlet_anything(o, s, 0, NULL)
 
     cdef out_float(self, float arg):
         """Send a float to the outlet."""
-        mx.outlet_float(<void*>px.get_outlet(self.ptr), <double>arg)
+        cdef void* o = <void*>px.get_outlet(self.ptr)
+        cdef double f = arg
+        with nogil:
+            mx.outlet_float(o, f)
 
     cdef out_int(self, int arg):
         """Send an integer to the outlet."""
-        mx.outlet_int(<void*>px.get_outlet(self.ptr), <long>arg)
+        cdef void* o = <void*>px.get_outlet(self.ptr)
+        cdef long n = arg
+        with nogil:
+            mx.outlet_int(o, n)
 
     cdef out_list(self, list arg):
         """Send a list to the outlet.
@@ -6898,8 +6925,12 @@ cdef class PyExternal:
                 atom.set_symbol(i, elem)
             else:
                 continue
-        mx.outlet_list(<void*>px.get_outlet(self.ptr),
-            mx.gensym("list"), atom.size, atom.ptr)
+        cdef void* o = <void*>px.get_outlet(self.ptr)
+        cdef mx.t_symbol* s = mx.gensym("list")
+        cdef short ac = <short>atom.size
+        cdef mx.t_atom* av = atom.ptr
+        with nogil:
+            mx.outlet_list(o, s, ac, av)
 
     cdef out_dict(self, dict arg):
         """Send a dictionary to the outlet.
@@ -6921,7 +6952,11 @@ cdef class PyExternal:
         """Send atoms to an outlet in your Max object, handling complex datatypes
         that may be present in those atoms.
         """
-        mx.dictobj_outlet_atoms(<void*>px.get_outlet(self.ptr), atoms.size, atoms.ptr)
+        cdef void* o = <void*>px.get_outlet(self.ptr)
+        cdef long ac = atoms.size
+        cdef mx.t_atom* av = atoms.ptr
+        with nogil: # downstream objects may wait on a thread that needs the GIL
+            mx.dictobj_outlet_atoms(o, ac, av)
 
     def out(self, arg: object):
         """Send an object to the outlet."""

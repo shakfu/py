@@ -357,11 +357,11 @@ cdef extern from "ext_proto.h":
     cdef void *bangout(void *x)
     cdef void *intout(void *x)
     cdef void *floatout(void *x)
-    cdef void *outlet_bang(void *o)
-    cdef void *outlet_int(void *o, t_atom_long n)
-    cdef void *outlet_float(void *o, double f)
-    cdef void *outlet_list(void *o, t_symbol *s, short ac, t_atom *av)
-    cdef void *outlet_anything(void *o, const t_symbol *s, short ac, const t_atom *av)
+    cdef void *outlet_bang(void *o) nogil
+    cdef void *outlet_int(void *o, t_atom_long n) nogil
+    cdef void *outlet_float(void *o, double f) nogil
+    cdef void *outlet_list(void *o, t_symbol *s, short ac, t_atom *av) nogil
+    cdef void *outlet_anything(void *o, const t_symbol *s, short ac, const t_atom *av) nogil
     cdef void *clock_new(void *obj, method fn)
     cdef void clock_delay(void *x, long n)
     cdef void clock_unset(void *x) nogil
@@ -538,7 +538,7 @@ cdef extern from "ext_dictobj.h":
     cdef t_dictionary *dictobj_findregistered_retain(t_symbol *name)
     cdef t_max_err dictobj_release(t_dictionary *d)
     cdef t_symbol *dictobj_namefromptr(t_dictionary *d)
-    cdef void dictobj_outlet_atoms(void *out, long argc, t_atom *argv)
+    cdef void dictobj_outlet_atoms(void *out, long argc, t_atom *argv) nogil
     cdef long dictobj_atom_safety(t_atom *a)
     ctypedef enum:
         DICTOBJ_ATOM_FLAGS_DEFAULT = 0

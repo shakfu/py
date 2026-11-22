@@ -3,6 +3,7 @@
 A background thread ticks every 10 ms. It only runs when the main thread
 releases the GIL, so `rate()` near 100 means py releases it while idle,
 and near 0 means the main thread holds it between messages.
+`rate_since_mark()` measures the same over an interval, such as an outlet call.
 """
 
 import threading
@@ -33,6 +34,22 @@ def start():
 def rate():
     """Return ticks per second since start()."""
     return ticks / max(time.time() - started, 1e-9)
+
+
+_mark = (0, 0.0)
+
+
+def mark():
+    """Record ticks and time for rate_since_mark(); returns 1."""
+    global _mark
+    _mark = (ticks, time.time())
+    return 1
+
+
+def rate_since_mark():
+    """Return ticks per second since mark()."""
+    n, t = _mark
+    return (ticks - n) / max(time.time() - t, 1e-9)
 
 
 def stop():

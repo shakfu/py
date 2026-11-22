@@ -13,7 +13,7 @@
 			100.0,
 			100.0,
 			960.0,
-			580.0
+			1060.0
 		],
 		"default_fontsize": 12.0,
 		"default_fontface": 0,
@@ -641,6 +641,588 @@
 					"numoutlets": 0,
 					"linecount": 1
 				}
+			},
+			{
+				"box": {
+					"id": "obj-36",
+					"maxclass": "comment",
+					"patching_rect": [
+						20.0,
+						600.0,
+						420.0,
+						80.0
+					],
+					"text": "3. Outlet release (Overdrive off; run 1a and 1b first)\nClick e. Max freezes for about a second while [uzi] runs.\ngil_thread prints 1, then the tick rate during the outlet call.\nOK: near 100. BUG: near 0 (the outlet held the GIL).",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 4
+				}
+			},
+			{
+				"box": {
+					"id": "obj-37",
+					"maxclass": "button",
+					"patching_rect": [
+						20.0,
+						690.0,
+						24.0,
+						24.0
+					],
+					"numinlets": 1,
+					"numoutlets": 1,
+					"outlettype": [
+						"bang"
+					],
+					"parameter_enable": 0
+				}
+			},
+			{
+				"box": {
+					"id": "obj-38",
+					"maxclass": "comment",
+					"patching_rect": [
+						50.0,
+						690.0,
+						20.0,
+						20.0
+					],
+					"text": "e",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 1
+				}
+			},
+			{
+				"box": {
+					"id": "obj-39",
+					"maxclass": "newobj",
+					"patching_rect": [
+						20.0,
+						725.0,
+						60.0,
+						22.0
+					],
+					"text": "t b b b",
+					"numinlets": 1,
+					"numoutlets": 3,
+					"outlettype": [
+						"bang",
+						"bang",
+						"bang"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-40",
+					"maxclass": "message",
+					"patching_rect": [
+						200.0,
+						760.0,
+						90.0,
+						22.0
+					],
+					"text": "eval mark()",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-41",
+					"maxclass": "message",
+					"patching_rect": [
+						110.0,
+						760.0,
+						70.0,
+						22.0
+					],
+					"text": "eval 1+1",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-42",
+					"maxclass": "message",
+					"patching_rect": [
+						20.0,
+						790.0,
+						160.0,
+						22.0
+					],
+					"text": "eval rate_since_mark()",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-43",
+					"maxclass": "newobj",
+					"patching_rect": [
+						110.0,
+						820.0,
+						130.0,
+						22.0
+					],
+					"text": "py @name gil_out",
+					"numinlets": 1,
+					"numoutlets": 3,
+					"outlettype": [
+						"",
+						"bang",
+						"bang"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-44",
+					"maxclass": "newobj",
+					"patching_rect": [
+						110.0,
+						850.0,
+						30.0,
+						22.0
+					],
+					"text": "t b",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"outlettype": [
+						"bang"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-45",
+					"maxclass": "newobj",
+					"patching_rect": [
+						110.0,
+						880.0,
+						100.0,
+						22.0
+					],
+					"text": "uzi 5000000",
+					"numinlets": 2,
+					"numoutlets": 3,
+					"outlettype": [
+						"bang",
+						"bang",
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-46",
+					"maxclass": "newobj",
+					"patching_rect": [
+						110.0,
+						910.0,
+						60.0,
+						22.0
+					],
+					"text": "counter",
+					"numinlets": 3,
+					"numoutlets": 4,
+					"outlettype": [
+						"int",
+						"",
+						"",
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-47",
+					"maxclass": "comment",
+					"patching_rect": [
+						460.0,
+						600.0,
+						460.0,
+						60.0
+					],
+					"text": "4. Re-entry (either Overdrive setting)\nf: py outputs 2, [sel 2] sends eval 3+3 back into the same py.\nOK: gil_re prints 6 and 2, with no error or hang.",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 3
+				}
+			},
+			{
+				"box": {
+					"id": "obj-48",
+					"maxclass": "message",
+					"patching_rect": [
+						460.0,
+						660.0,
+						70.0,
+						22.0
+					],
+					"text": "eval 1+1",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-49",
+					"maxclass": "comment",
+					"patching_rect": [
+						535.0,
+						660.0,
+						20.0,
+						20.0
+					],
+					"text": "f",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 1
+				}
+			},
+			{
+				"box": {
+					"id": "obj-50",
+					"maxclass": "newobj",
+					"patching_rect": [
+						460.0,
+						700.0,
+						130.0,
+						22.0
+					],
+					"text": "py @name gil_re",
+					"numinlets": 1,
+					"numoutlets": 3,
+					"outlettype": [
+						"",
+						"bang",
+						"bang"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-51",
+					"maxclass": "newobj",
+					"patching_rect": [
+						460.0,
+						735.0,
+						50.0,
+						22.0
+					],
+					"text": "sel 2",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-52",
+					"maxclass": "message",
+					"patching_rect": [
+						460.0,
+						765.0,
+						70.0,
+						22.0
+					],
+					"text": "eval 3+3",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-53",
+					"maxclass": "newobj",
+					"patching_rect": [
+						600.0,
+						735.0,
+						80.0,
+						22.0
+					],
+					"text": "print gil_re",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"outlettype": []
+				}
+			},
+			{
+				"box": {
+					"id": "obj-54",
+					"maxclass": "comment",
+					"patching_rect": [
+						460.0,
+						810.0,
+						460.0,
+						40.0
+					],
+					"text": "5. api outlets: g, then each of h to l\nOK: gil_api prints 7, 1.5, hi, 1 2, then bang, each without error.",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 2
+				}
+			},
+			{
+				"box": {
+					"id": "obj-55",
+					"maxclass": "newobj",
+					"patching_rect": [
+						460.0,
+						990.0,
+						130.0,
+						22.0
+					],
+					"text": "py @name gil_api",
+					"numinlets": 1,
+					"numoutlets": 3,
+					"outlettype": [
+						"",
+						"bang",
+						"bang"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-56",
+					"maxclass": "newobj",
+					"patching_rect": [
+						460.0,
+						1020.0,
+						90.0,
+						22.0
+					],
+					"text": "print gil_api",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"outlettype": []
+				}
+			},
+			{
+				"box": {
+					"id": "obj-57",
+					"maxclass": "message",
+					"patching_rect": [
+						460.0,
+						850.0,
+						250.0,
+						22.0
+					],
+					"text": "exec import api",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-58",
+					"maxclass": "comment",
+					"patching_rect": [
+						720.0,
+						850.0,
+						20.0,
+						20.0
+					],
+					"text": "g",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 1
+				}
+			},
+			{
+				"box": {
+					"id": "obj-59",
+					"maxclass": "message",
+					"patching_rect": [
+						460.0,
+						872.0,
+						250.0,
+						22.0
+					],
+					"text": "exec api.PyExternal().out(7)",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-60",
+					"maxclass": "comment",
+					"patching_rect": [
+						720.0,
+						872.0,
+						20.0,
+						20.0
+					],
+					"text": "h",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 1
+				}
+			},
+			{
+				"box": {
+					"id": "obj-61",
+					"maxclass": "message",
+					"patching_rect": [
+						460.0,
+						894.0,
+						250.0,
+						22.0
+					],
+					"text": "exec api.PyExternal().out(1.5)",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-62",
+					"maxclass": "comment",
+					"patching_rect": [
+						720.0,
+						894.0,
+						20.0,
+						20.0
+					],
+					"text": "i",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 1
+				}
+			},
+			{
+				"box": {
+					"id": "obj-63",
+					"maxclass": "message",
+					"patching_rect": [
+						460.0,
+						916.0,
+						250.0,
+						22.0
+					],
+					"text": "exec \"api.PyExternal().out('hi')\"",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-64",
+					"maxclass": "comment",
+					"patching_rect": [
+						720.0,
+						916.0,
+						20.0,
+						20.0
+					],
+					"text": "j",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 1
+				}
+			},
+			{
+				"box": {
+					"id": "obj-65",
+					"maxclass": "message",
+					"patching_rect": [
+						460.0,
+						938.0,
+						250.0,
+						22.0
+					],
+					"text": "exec \"api.PyExternal().out([1, 2])\"",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-66",
+					"maxclass": "comment",
+					"patching_rect": [
+						720.0,
+						938.0,
+						20.0,
+						20.0
+					],
+					"text": "k",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 1
+				}
+			},
+			{
+				"box": {
+					"id": "obj-67",
+					"maxclass": "message",
+					"patching_rect": [
+						460.0,
+						960.0,
+						250.0,
+						22.0
+					],
+					"text": "exec api.PyExternal().bang()",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-68",
+					"maxclass": "comment",
+					"patching_rect": [
+						720.0,
+						960.0,
+						20.0,
+						20.0
+					],
+					"text": "l",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"linecount": 1
+				}
 			}
 		],
 		"lines": [
@@ -856,6 +1438,270 @@
 					],
 					"destination": [
 						"obj-34",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-37",
+						0
+					],
+					"destination": [
+						"obj-39",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-39",
+						2
+					],
+					"destination": [
+						"obj-40",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-39",
+						1
+					],
+					"destination": [
+						"obj-41",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-39",
+						0
+					],
+					"destination": [
+						"obj-42",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-40",
+						0
+					],
+					"destination": [
+						"obj-3",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-42",
+						0
+					],
+					"destination": [
+						"obj-3",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-41",
+						0
+					],
+					"destination": [
+						"obj-43",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-43",
+						0
+					],
+					"destination": [
+						"obj-44",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-44",
+						0
+					],
+					"destination": [
+						"obj-45",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-45",
+						0
+					],
+					"destination": [
+						"obj-46",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-48",
+						0
+					],
+					"destination": [
+						"obj-50",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-50",
+						0
+					],
+					"destination": [
+						"obj-51",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-51",
+						0
+					],
+					"destination": [
+						"obj-52",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-52",
+						0
+					],
+					"destination": [
+						"obj-50",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-50",
+						0
+					],
+					"destination": [
+						"obj-53",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-55",
+						0
+					],
+					"destination": [
+						"obj-56",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-57",
+						0
+					],
+					"destination": [
+						"obj-55",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-59",
+						0
+					],
+					"destination": [
+						"obj-55",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-61",
+						0
+					],
+					"destination": [
+						"obj-55",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-63",
+						0
+					],
+					"destination": [
+						"obj-55",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-65",
+						0
+					],
+					"destination": [
+						"obj-55",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-67",
+						0
+					],
+					"destination": [
+						"obj-55",
 						0
 					]
 				}

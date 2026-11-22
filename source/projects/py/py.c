@@ -1413,14 +1413,37 @@ void py_metadata(t_py* x)
 /* Side-effects */
 
 /**
+ * @brief Release the GIL, if this thread holds it, before calling other Max objects.
+ *
+ * A downstream object can wait on a thread that needs the GIL: holding it deadlocks both.
+ * Do not touch Python objects until py_gil_attach.
+ *
+ * @return the detached thread state for py_gil_attach, or NULL
+ */
+static PyThreadState* py_gil_detach(void)
+{
+    return (Py_IsInitialized() && PyGILState_Check()) ? PyEval_SaveThread() : NULL;
+}
+
+/** @brief Retake the GIL released by py_gil_detach. */
+static void py_gil_attach(PyThreadState* tstate)
+{
+    if (tstate) {
+        PyEval_RestoreThread(tstate);
+    }
+}
+
+/**
  * @brief Output bang from left outlet.
  *
  * @param x pointer to object struct.
  */
 void py_bang(t_py* x)
 {
-    // just a passthrough: bang out the left outlet
+    // just a passthrough: bang out the left outlet; api calls it with the GIL held
+    PyThreadState* tstate = py_gil_detach();
     outlet_bang(x->p_outlet_left);
+    py_gil_attach(tstate);
 }
 
 /**
@@ -1428,14 +1451,24 @@ void py_bang(t_py* x)
  *
  * @param x pointer to object struct.
  */
-void py_bang_success(t_py* x) { outlet_bang(x->p_outlet_right); }
+void py_bang_success(t_py* x)
+{
+    PyThreadState* tstate = py_gil_detach();
+    outlet_bang(x->p_outlet_right);
+    py_gil_attach(tstate);
+}
 
 /**
  * @brief Output bang from middle outlet.
  *
  * @param x pointer to object struct.
  */
-void py_bang_failure(t_py* x) { outlet_bang(x->p_outlet_middle); }
+void py_bang_failure(t_py* x)
+{
+    PyThreadState* tstate = py_gil_detach();
+    outlet_bang(x->p_outlet_middle);
+    py_gil_attach(tstate);
+}
 
 /*--------------------------------------------------------------------------*/
 /* Time-based */
@@ -1600,7 +1633,9 @@ t_max_err py_handle_float_output(t_py* x, PyObject* pfloat)
             goto error;
         }
 
+        PyThreadState* tstate = py_gil_detach();
         outlet_float(x->p_outlet_left, float_result);
+        py_gil_attach(tstate);
         py_bang_success(x);
     }
     Py_XDECREF(pfloat);
@@ -1632,7 +1667,9 @@ t_max_err py_handle_long_output(t_py* x, PyObject* plong)
             goto error;
         }
 
+        PyThreadState* tstate = py_gil_detach();
         outlet_int(x->p_outlet_left, long_result);
+        py_gil_attach(tstate);
         py_bang_success(x);
     }
 
@@ -1664,7 +1701,10 @@ t_max_err py_handle_string_output(t_py* x, PyObject* pstring)
         if (unicode_result == NULL) {
             goto error;
         }
-        outlet_anything(x->p_outlet_left, gensym(unicode_result), 0, NIL);
+        t_symbol* sym = gensym(unicode_result); // reads pstring: needs the GIL
+        PyThreadState* tstate = py_gil_detach();
+        outlet_anything(x->p_outlet_left, sym, 0, NIL);
+        py_gil_attach(tstate);
         py_bang_success(x);
     }
 
@@ -1759,7 +1799,9 @@ t_max_err py_handle_list_output(t_py* x, PyObject* plist)
             goto error;
         }
 
+        PyThreadState* tstate = py_gil_detach();
         outlet_list(x->p_outlet_left, NULL, i, atoms);
+        py_gil_attach(tstate);
         atom_dynamic_end(atoms_static, atoms);
         py_bang_success(x);
     }
@@ -1912,7 +1954,10 @@ static t_max_err py_handle_call_result(t_py* x, PyObject* pval)
         py_bang_failure(x);
         return MAX_ERR_GENERIC;
     }
-    outlet_anything(x->p_outlet_left, gensym(unicode_result), 0, NIL);
+    t_symbol* sym = gensym(unicode_result); // reads pval: needs the GIL
+    PyThreadState* tstate = py_gil_detach();
+    outlet_anything(x->p_outlet_left, sym, 0, NIL);
+    py_gil_attach(tstate);
     Py_DECREF(pval);
     py_bang_success(x);
     return MAX_ERR_NONE;
@@ -3534,7 +3579,9 @@ t_max_err py_send(t_py* x, t_symbol* s, long argc, t_atom* argv)
         goto error;
     }
 
+    PyThreadState* tstate = py_gil_detach(); // held when called from api
     err = object_method_typed(obj, msg_sym, argc, argv, NULL);
+    py_gil_attach(tstate);
     if (err) {
         py_error(x, "failed to send message to object '%s'", obj_name);
         goto error;

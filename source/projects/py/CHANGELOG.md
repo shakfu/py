@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed outlet calls holding the GIL: `py` output, success and failure bangs, `send`, and `api` outlet calls ran downstream objects with it held. A downstream object waiting on a thread that needed the GIL deadlocked both, and Python threads stopped for the whole downstream chain. The GIL is now released for these calls only, after their atoms are built. `test_gil.maxpat` test 3 measures a Python thread ticking during a long outlet chain. `api.c` is regenerated with the same Cython (3.2.2); its diff is mostly shifted `.pyx` line numbers.
+
 - Fixed `eval`, `exec` and `cache` reading only their first argument, and only as a symbol: `eval 1` failed with `code string cannot be empty`, and `eval x + 1` evaluated `x`. Arguments are now joined with spaces. `cache` with no arguments also read past the empty argument list. A single symbol, as `py_code` sends, is still used verbatim, because joining could add quotes or escapes to code.
 
 - Fixed the main thread holding the GIL between messages: `py` never released it after initializing Python. A Python thread ran only while a `py` message was executing (0.38 ticks/s for a thread ticking every 10 ms, against 83), and with Overdrive on, a `py` call from the scheduler thread deadlocked Max. `patchers/tests/test_gil/test_gil.maxpat` reproduces both.
