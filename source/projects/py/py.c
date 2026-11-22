@@ -2086,7 +2086,35 @@ error:
 }
 
 /**
- * @brief Evaluate a max symbol as a python expression
+ * @brief Return the code text of a message's arguments.
+ *
+ * One symbol is used verbatim, as py_code sends it. Anything else, such as
+ * `eval 1` or `eval x + 1`, is all atoms joined with spaces.
+ *
+ * @param owned set to the text to free with sysmem_freeptr, or NULL
+ * @return the code, or NULL if conversion failed
+ */
+static const char* py_code_text(long argc, t_atom* argv, char** owned)
+{
+    *owned = NULL;
+    if (argc == 1 && atom_gettype(argv) == A_SYM) {
+        return atom_getsym(argv)->s_name;
+    }
+    long size = 0;
+    long flags = OBEX_UTIL_ATOM_GETTEXT_SYM_NO_QUOTE | OBEX_UTIL_ATOM_GETTEXT_NOESCAPE
+               | OBEX_UTIL_ATOM_GETTEXT_NUM_HI_RES;
+    if (atom_gettext(argc, argv, &size, owned, flags) != MAX_ERR_NONE || *owned == NULL) {
+        if (*owned) {
+            sysmem_freeptr(*owned);
+            *owned = NULL;
+        }
+        return NULL;
+    }
+    return *owned;
+}
+
+/**
+ * @brief Evaluate the message arguments as a python expression
  *
  * @param x pointer to object structure
  * @param s symbol of object to be evaluated
@@ -2105,32 +2133,44 @@ t_max_err py_eval(t_py* x, t_symbol* s, long argc, t_atom* argv)
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
-    char* py_argv = atom_getsym(argv)->s_name;
+    char* owned = NULL;
+    const char* py_argv = py_code_text(argc, argv, &owned);
+    PyObject* pval = NULL;
+    if (py_argv == NULL) {
+        py_error(x, "eval failed to convert its arguments to text");
+        goto error;
+    }
     py_debug(x, "%s %s", s->s_name, py_argv);
 
     // Input validation
     if (py_validate_code(x, py_argv) != MAX_ERR_NONE) {
         py_error(x, "eval input failed security validation");
-        PyGILState_Release(gstate);
-        py_bang_failure(x);
-        return MAX_ERR_GENERIC;
+        goto error;
     }
 
-    PyObject* pval = py_safe_run_string(x, py_argv, Py_eval_input);
+    pval = py_safe_run_string(x, py_argv, Py_eval_input);
 
     if (pval != NULL) {
         py_handle_output(x, pval);
         PyGILState_Release(gstate);
+        if (owned) {
+            sysmem_freeptr(owned);
+        }
         return MAX_ERR_NONE;
     }
     py_handle_error(x, "failed to evaluate: %s", py_argv);
+
+error:
     PyGILState_Release(gstate);
+    if (owned) {
+        sysmem_freeptr(owned);
+    }
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
 }
 
 /**
- * @brief Execute a max symbol as one to many lines of python code
+ * @brief Execute the message arguments as one to many lines of python code
  *
  * @param x pointer to object structure
  * @param s symbol
@@ -2149,11 +2189,14 @@ t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
+    char* owned = NULL;
     const char* py_argv = NULL;
     PyObject* pval = NULL;
 
-    py_argv = atom_getsym(argv)->s_name;
+    py_argv = py_code_text(argc, argv, &owned);
     if (py_argv == NULL) {
+        py_error(x, "exec failed to convert its arguments to text");
+        py_argv = "";
         goto error;
     }
 
@@ -2172,12 +2215,18 @@ t_max_err py_exec(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     py_bang_success(x);
     py_debug(x, "exec %s", py_argv);
+    if (owned) {
+        sysmem_freeptr(owned);
+    }
     return MAX_ERR_NONE;
 
 error:
     py_handle_error(x, "failed to execute: %s", py_argv);
     Py_XDECREF(pval);
     PyGILState_Release(gstate);
+    if (owned) {
+        sysmem_freeptr(owned);
+    }
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
 }
@@ -2248,7 +2297,7 @@ error:
 /* Cache Methods */
 
 /**
- * @brief Execute and cache a max symbol as one to many lines of python code
+ * @brief Execute and cache the message arguments as one to many lines of python code
  *
  * @param x pointer to object structure
  * @param s symbol
@@ -2258,24 +2307,33 @@ error:
  */
 t_max_err py_cache(t_py* x, t_symbol* s, long argc, t_atom* argv)
 {
+    if (argc < 1) {
+        py_error(x, "cache needs code to run");
+        py_bang_failure(x);
+        return MAX_ERR_GENERIC;
+    }
+
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
+    char* owned = NULL;
     const char* py_argv = NULL;
     PyObject* pval = NULL;
 
-    py_argv = atom_getsym(argv)->s_name;
+    py_argv = py_code_text(argc, argv, &owned);
     if (py_argv == NULL) {
+        py_error(x, "cache failed to convert its arguments to text");
+        py_argv = "";
         goto error;
     }
 
     // try to add function to cache if it looks like a python function
     psc_validate_result_t validate_result = psc_check_is_python_function(
-        x->python.cache, atom_getsym(argv)->s_name);
+        x->python.cache, py_argv);
 
     if (validate_result == PSC_VALIDATE_SUCCESS) {
         psc_result_t cache_result = psc_add_function(
-            x->python.cache, atom_getsym(argv)->s_name, "<pyfunc>");
+            x->python.cache, py_argv, "<pyfunc>");
 
         if (cache_result == PSC_SUCCESS) {
             py_debug(x, "cached function");
@@ -2309,12 +2367,18 @@ t_max_err py_cache(t_py* x, t_symbol* s, long argc, t_atom* argv)
 
     py_bang_success(x);
     py_debug(x, "exec %s", py_argv);
+    if (owned) {
+        sysmem_freeptr(owned);
+    }
     return MAX_ERR_NONE;
 
 error:
     py_handle_error(x, "failed to execute: %s", py_argv);
     Py_XDECREF(pval);
     PyGILState_Release(gstate);
+    if (owned) {
+        sysmem_freeptr(owned);
+    }
     py_bang_failure(x);
     return MAX_ERR_GENERIC;
 }

@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `eval`, `exec` and `cache` reading only their first argument, and only as a symbol: `eval 1` failed with `code string cannot be empty`, and `eval x + 1` evaluated `x`. Arguments are now joined with spaces. `cache` with no arguments also read past the empty argument list. A single symbol, as `py_code` sends, is still used verbatim, because joining could add quotes or escapes to code.
+
 - Fixed the main thread holding the GIL between messages: `py` never released it after initializing Python. A Python thread ran only while a `py` message was executing (0.38 ticks/s for a thread ticking every 10 ms, against 83), and with Overdrive on, a `py` call from the scheduler thread deadlocked Max. `patchers/tests/test_gil/test_gil.maxpat` reproduces both.
 
 - Fixed `@name` being applied after the object was registered, its module created and its scripting name set, so `[py @name foo]` stayed registered as `__main__` or `u...` and could not be found as `foo`. `name` can no longer change after creation: a rename would have to move the module while code and `api` lookups still use the old name. A name taken by another object, or by a module such as `json`, is refused, because the object would otherwise run in that module's namespace. A freed `py` removes its module from `sys.modules`, so a recreated `[py @name foo]` can take the name again.

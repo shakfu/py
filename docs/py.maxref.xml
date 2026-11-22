@@ -87,21 +87,21 @@
 
 		<method name="eval">
 			<arglist>
-				<arg name="expression" optional="0" type="symbol" />
+				<arg name="expression" optional="0" type="list" />
 			</arglist>
 			<digest>Evaluate a python expression</digest>
 			<description>
-				The <a>expression</a> is evaluated in the context of the <o>py</o> object namespace and outputs results to the left outlet and a bang from the right outlet to signal end of evaluation.
+				The <a>expression</a> is evaluated in the context of the <o>py</o> object namespace and outputs results to the left outlet and a bang from the right outlet to signal end of evaluation. A single symbol is used as is; other arguments, such as <m>eval 1 + 2</m>, are joined with spaces. Max splits a message at commas, so code containing commas must be quoted.
 			</description>
 		</method>
 
 		<method name="exec">
 			<arglist>
-				<arg name="statement" optional="0" type="symbol" />
+				<arg name="statement" optional="0" type="list" />
 			</arglist>
 			<digest>Execute a python statement into the object namespace</digest>
 			<description>
-				Can modify and inject new code and data into the namespace.
+				Can modify and inject new code and data into the namespace. Arguments are joined as for <m>eval</m>.
 			</description>
 		</method>
 
