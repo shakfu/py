@@ -177,6 +177,7 @@ void ext_main(void* module_ref)
     //------------------------------------------------------------------------
 
     CLASS_ATTR_SYM(c,       "name", 0,      t_py, obj.name);
+    CLASS_ATTR_ACCESSORS(c, "name", NULL,   py_name_attr_set);
     CLASS_ATTR_BASIC(c,     "name", 0);
 
     CLASS_ATTR_SYM(c,       "file", 0,     t_py,  editor.code_filepath);
@@ -261,6 +262,74 @@ void ext_main(void* module_ref)
 }
 
 /*--------------------------------------------------------------------------*/
+/* Object name */
+
+/* Return the last @name symbol in the creation arguments, else NULL. */
+static t_symbol* py_name_arg(long argc, t_atom* argv)
+{
+    t_symbol* name = NULL;
+    for (long i = attr_args_offset((short)argc, argv); i + 1 < argc; i++) {
+        if (atom_getsym(argv + i) == gensym("@name") && atom_gettype(argv + i + 1) == A_SYM) {
+            name = atom_getsym(argv + i + 1);
+        }
+    }
+    return name;
+}
+
+/* Free: nothing is registered under it, and no module other than __main__ uses it. Needs the GIL. */
+static int py_name_available(t_symbol* name)
+{
+    if (name == gensym("") || object_findregistered(CLASS_BOX, name)) {
+        return 0;
+    }
+    if (name == gensym("__main__")) {
+        return 1;
+    }
+    return PyDict_GetItemString(PyImport_GetModuleDict(), name->s_name) == NULL;
+}
+
+/* Drop the module key `name`. __main__ gets an empty module: CPython needs one. Needs the GIL. */
+static int py_module_release(t_symbol* name)
+{
+    PyObject* modules = PyImport_GetModuleDict(); // borrowed
+    if (name != gensym("__main__")) {
+        return PyDict_DelItemString(modules, name->s_name);
+    }
+    PyObject* fresh = PyModule_New("__main__");
+    if (fresh == NULL) {
+        return -1;
+    }
+    int err = PyDict_SetItemString(modules, "__main__", fresh);
+    Py_DECREF(fresh);
+    return err;
+}
+
+/**
+ * @brief Refuse any change to the name, which py_new fixes at creation.
+ *
+ * Also reports a creation-time @name that py_init replaced because it was taken.
+ */
+t_max_err py_name_attr_set(t_py* x, t_object* attr, long argc, t_atom* argv)
+{
+    t_symbol* name = (argc > 0 && atom_gettype(argv) == A_SYM) ? atom_getsym(argv) : gensym("");
+    if (name == x->obj.name) {
+        return MAX_ERR_NONE;
+    }
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    int available = py_name_available(name);
+    PyGILState_Release(gstate);
+
+    if (available) {
+        py_error(x, "name is fixed at creation: cannot rename '%s' to '%s'",
+                 x->obj.name->s_name, name->s_name);
+    } else {
+        py_error(x, "name '%s' is empty or taken by another object or module", name->s_name);
+    }
+    return MAX_ERR_GENERIC;
+}
+
+/*--------------------------------------------------------------------------*/
 /* Object new, init and free */
 
 /**
@@ -291,6 +360,11 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
             x->obj.name = gensym("__main__");
         } else {
             x->obj.name = symbol_unique();
+        }
+        // @name must apply before py_init registers the object and names its module
+        t_symbol* requested = py_name_arg(argc, argv);
+        if (requested) {
+            x->obj.name = requested;
         }
 
         // communication
@@ -343,17 +417,17 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
             error("py: failed to create box object");
         }
 
-        // create scripting name
-        if (x->obj.box && jbox_set_varname(x->obj.box, x->obj.name) != MAX_ERR_NONE) {
-            error("py: failed to set scripting name to box");
-        }
-
         // initialize python interpreter
         py_init(x);
         if (x->python.globals == NULL) {
             // py_free skips python cleanup when globals is NULL
             object_free(x);
             return NULL;
+        }
+
+        // create scripting name: py_init may have replaced a taken name
+        if (x->obj.box && jbox_set_varname(x->obj.box, x->obj.name) != MAX_ERR_NONE) {
+            error("py: failed to set scripting name to box");
         }
 
         post("initialized python version: %s", PY_VERSION);
@@ -365,7 +439,6 @@ void* py_new(t_symbol* s, long argc, t_atom* argv)
 
         t_dictionary* dict = (t_dictionary*)gensym("#D")->s_thing;
         if (dict) {
-            // dictionary_getsym(dict, gensym("name"), &x->obj.name);
             dictionary_getsym(dict, gensym("file"), &x->editor.code_filepath);
             dictionary_getsym(dict, gensym("pythonpath"), &x->python.pythonpath);
             t_atom_long autoload = 0;
@@ -436,6 +509,11 @@ void py_init(t_py* x)
             py_error(x, "failed to initialize Python interpreter");
             return;
         }
+    }
+
+    // a taken @name falls back here; the name setter then reports it once
+    if (!py_name_available(x->obj.name)) {
+        x->obj.name = symbol_unique();
     }
 
     // python init
@@ -517,6 +595,14 @@ void py_free(t_py* x)
         }
         systhread_mutex_unlock(py_global_obj_ref_mutex);
     }
+
+    // release the name so a new [py @name ...] can take it
+    object_unregister(x);
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    if (py_module_release(x->obj.name) != 0) {
+        PyErr_Clear();
+    }
+    PyGILState_Release(gstate);
 
     // destroy python cache
     psc_destroy_instance(x->python.cache);

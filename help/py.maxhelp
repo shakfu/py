@@ -9,7 +9,7 @@
             "modernui": 1
         },
         "classnamespace": "box",
-        "rect": [ 185.0, 97.0, 891.0, 775.0 ],
+        "rect": [ 185.0, 92.0, 891.0, 774.0 ],
         "showrootpatcherontab": 0,
         "showontab": 0,
         "boxes": [
@@ -29,7 +29,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 891.0, 749.0 ],
+                        "rect": [ 0.0, 26.0, 891.0, 748.0 ],
                         "showontab": 2,
                         "boxes": [
                             {
@@ -421,7 +421,7 @@
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
                                     "patching_rect": [ 31.0, 689.0, 48.0, 22.0 ],
-                                    "text": "21"
+                                    "text": "bob"
                                 }
                             }
                         ],
@@ -631,7 +631,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 891.0, 749.0 ],
+                        "rect": [ 0.0, 26.0, 891.0, 748.0 ],
                         "showontab": 2,
                         "boxes": [
                             {
@@ -988,7 +988,7 @@
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
                                     "patching_rect": [ 31.0, 689.0, 48.0, 22.0 ],
-                                    "text": "21"
+                                    "text": "bob"
                                 }
                             }
                         ],
@@ -1112,7 +1112,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 891.0, 749.0 ],
+                        "rect": [ 0.0, 26.0, 891.0, 748.0 ],
                         "showontab": 2,
                         "boxes": [
                             {
@@ -1450,7 +1450,7 @@
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
                                     "patching_rect": [ 23.0, 678.0, 158.0, 22.0 ],
-                                    "text": "21"
+                                    "text": "bob"
                                 }
                             },
                             {
@@ -1581,7 +1581,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 0.0, 26.0, 891.0, 749.0 ],
+                        "rect": [ 0.0, 26.0, 891.0, 748.0 ],
                         "showontab": 1,
                         "boxes": [
                             {
@@ -1908,7 +1908,7 @@
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
                                     "patching_rect": [ 376.0, 418.0, 302.0, 22.0 ],
-                                    "text": "21"
+                                    "text": "bob"
                                 }
                             },
                             {
@@ -2254,7 +2254,7 @@
                             "modernui": 1
                         },
                         "classnamespace": "box",
-                        "rect": [ 185.0, 123.0, 891.0, 749.0 ],
+                        "rect": [ 185.0, 118.0, 891.0, 748.0 ],
                         "showontab": 1,
                         "boxes": [
                             {
@@ -2899,8 +2899,8 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 35.0, 654.0, 140.0, 22.0 ],
-                                    "text": "send __main__ eval 1+1"
+                                    "patching_rect": [ 35.0, 654.0, 107.0, 22.0 ],
+                                    "text": "send bob eval 1+1"
                                 }
                             },
                             {
@@ -2910,8 +2910,8 @@
                                     "numinlets": 2,
                                     "numoutlets": 1,
                                     "outlettype": [ "" ],
-                                    "patching_rect": [ 206.5, 654.0, 121.0, 22.0 ],
-                                    "text": "send __main__ 1+20"
+                                    "patching_rect": [ 206.5, 654.0, 88.0, 22.0 ],
+                                    "text": "send bob 1+20"
                                 }
                             },
                             {
@@ -3341,7 +3341,7 @@
                                         "pythonpath": ""
                                     },
                                     "text": "py @name bob",
-                                    "varname": "__main__"
+                                    "varname": "bob"
                                 }
                             },
                             {

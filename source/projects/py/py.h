@@ -82,6 +82,7 @@ void py_init(t_py* x);
 t_max_err py_pythonpath_attr_get(t_py *x, t_object *attr, long *argc, t_atom **argv);
 t_max_err py_pythonpath_attr_set(t_py *x, t_object *attr, long argc, t_atom *argv);
 t_max_err py_pythonpath_add(t_py* x, t_symbol* path);
+t_max_err py_name_attr_set(t_py *x, t_object *attr, long argc, t_atom *argv);
 t_max_err py_get(t_py* x, t_symbol* s);
 
 /*--------------------------------------------------------------------------*/
